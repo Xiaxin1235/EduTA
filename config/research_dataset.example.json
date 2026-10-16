@@ -1,0 +1,11 @@
+{
+  "version": "custom-data-v1",
+  "estimand": "registered-school-year",
+  "data": {
+    "source": {"path": "../private/source.sqlite", "SHA256": "replace-with-file-sha256", "bytes": 0},
+    "base_v1": {"path": "../private/metadata.sqlite", "SHA256": "replace-with-file-sha256", "bytes": 0},
+    "mapping_v5": {"path": "../private/mapping.sqlite", "SHA256": "replace-with-file-sha256", "bytes": 0}
+  },
+  "registry": "geography_registry.example.json",
+  "application_years": ["2020", "2021", "2022", "2023"]
+}

@@ -1,0 +1,375 @@
+template:
+  name: "学校数字化评估 v1（真实问卷）"
+  school_year: "2020-2023"
+  version: 1
+  object_type: school
+  weight_total: 1.0
+
+dimensions:
+  - key: digital_resource
+    name: 数字资源
+    weight: 0.1667
+    description: 用于评估数字教育资源的建设和应用情况
+    metrics:
+      - id: 1
+        content: 学校拥有与教材完整配套数字教育资源的学科数量
+        level2: 资源规模
+        weight: 1.0
+      - id: 5
+        content: 学校开展的.三个课堂.应用的数量
+        level2: 资源应用
+        weight: 1.0
+      - id: 6
+        content: 学校开展.三个课堂.教学的应用模式有多少个
+        level2: 资源应用
+        weight: 1.0
+      - id: 7
+        content: 基于区.县级及以上教育云平台的学校网络学习空间常用功能有多少个
+        level2: 资源应用
+        weight: 1.0
+      - id: 8
+        content: 学校最常使用的网络空间支持平台有多少
+        level2: 资源应用
+        weight: 1.0
+      - id: 9
+        content: 学校校本数字资源库建设模式有几个
+        level2: 资源规模
+        weight: 1.0
+      - id: 10
+        content: 学校数字资源的主要来源有多少
+        level2: 资源规模
+        weight: 1.0
+      - id: 14
+        content: 学校开设人工智能课程的课程资源来源有多少
+        level2: 资源规模
+        weight: 1.0
+      - id: 45
+        content: 学校教师在区.县级及以上教育云平台中晒课数量
+        level2: 资源应用
+        weight: 1.0
+      - id: 46
+        content: 专递课堂教学中本学期平均每周主讲教室开课课时数
+        level2: 资源应用
+        weight: 1.0
+      - id: 47
+        content: 听课教室开课课时数
+        level2: 资源应用
+        weight: 1.0
+
+  - key: teaching
+    name: 教育教学
+    weight: 0.1667
+    description: 用于评估教学、评价等要素的数字化程度
+    metrics:
+      - id: 2
+        content: 学校利用信息技术辅助课堂教学实现常态化应用的学科数量
+        level2: 教学方式
+        weight: 1.0
+      - id: 3
+        content: 学校信息化教学系统常使用的功能有多少个
+        level2: 教学方式
+        weight: 1.0
+      - id: 11
+        content: 学校在信息技术支持下展开的信息化教学应用种类有几种
+        level2: 教学方式
+        weight: 1.0
+      - id: 12
+        content: 学校采取的教学组织模式有多少
+        level2: 教学方式
+        weight: 1.0
+      - id: 13
+        content: 学校人工智能课程开设的形式有多少
+        level2: 教学方式
+        weight: 1.0
+      - id: 49
+        content: 学校近一年已开展机考.在线考试的学科包括多少个
+        level2: 教学评价
+        weight: 1.0
+      - id: 50
+        content: 参与机考的班级数量
+        level2: 教学评价
+        weight: 1.0
+      - id: 51
+        content: 在落实.双减.工作中.学校采取了多少种措施
+        level2: 教学方式
+        weight: 1.0
+      - id: 52
+        content: 学校信息技术相关课程种类有多少个
+        level2: 教学方式
+        weight: 1.0
+      - id: 59
+        content: 达到常态化应用的学科教师比例
+        level2: 教学方式
+        weight: 1.0
+      - id: 77
+        content: 学校掌握的教师和学生伴随式数据.如课堂行为数据.生理数据等.的来源有多少种
+        level2: 教学评价
+        weight: 1.0
+      - id: 78
+        content: 学校掌握的教师和学生伴随式数据.如课堂行为数据.生理数据等.的应用场景有多少种
+        level2: 教学评价
+        weight: 1.0
+
+  - key: digital_literacy
+    name: 数字素养
+    weight: 0.1667
+    description: 用于评估学生在教育教学过程中的数字技术思维和应用能力
+    metrics:
+      - id: 4
+        content: 学校能够利用信息技术开展教学的学科教师比例
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 40
+        content: 最近一年参加教育信息化专项培训.区县级.含.以上.的教师比例
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 41
+        content: 学校组织的信息化校本培训次数
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 42
+        content: 分学科的信息化校本培训次数
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 43
+        content: 学校组织的信息化校本培训覆盖教师比例
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 44
+        content: 最近一年学校参加各级.区县级.含.以上.教育信息技术相关比赛.评比活动.包括优质课.信息化教学设计.课件制作.微课制作.人工智能科创等.的教师人数
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 56
+        content: 教师信息素养培训覆盖教师比例
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 57
+        content: 网络安全培训覆盖教师比例
+        level2: 教师数字素养
+        weight: 1.0
+      - id: 58
+        content: 近一年学校学生参与信息素养提升实践和展示活动.包括电脑制作.创客.机器人等.的学生人次
+        level2: 教师数字素养
+        weight: 1.0
+
+  - key: infrastructure
+    name: 基础设施
+    weight: 0.1667
+    description: 用于评估学校为师生数字化教学提供的技术支撑情况
+    metrics:
+      - id: 15
+        content: 教师在校教学用信息化终端设备的主要来源有多少种
+        level2: 终端
+        weight: 1.0
+      - id: 16
+        content: 学生在校学习用信息化终端设备的主要来源有多少
+        level2: 终端
+        weight: 1.0
+      - id: 17
+        content: 多媒体教室平均使用率
+        level2: 终端
+        weight: 1.0
+      - id: 18
+        content: 学校建有的智能学习空间共计有多少
+        level2: 教室
+        weight: 1.0
+      - id: 19
+        content: 学校建有的智能学习空间包括多少种
+        level2: 教室
+        weight: 1.0
+      - id: 20
+        content: 学校无线网络覆盖情况
+        level2: 网络
+        weight: 1.0
+      - id: 53
+        content: 经常使用.每周2.3次.的智能学习空间有哪些
+        level2: 教室
+        weight: 1.0
+      - id: 60
+        content: 学校网络出口总带宽（Mbps）
+        level2: 网络
+        weight: 1.0
+      - id: 61
+        content: 学校班级教室数
+        level2: 教室
+        weight: 1.0
+      - id: 62
+        content: 含有交互式多媒体设备.如电子白板.一体机等.的教室数
+        level2: 教室
+        weight: 1.0
+      - id: 63
+        content: 学校统一配备的学生用台式机数量
+        level2: 终端
+        weight: 1.0
+      - id: 64
+        content: 学校统一配备的学生用移动终端数量
+        level2: 终端
+        weight: 1.0
+      - id: 65
+        content: 学校统一配备的学生用笔记本数量
+        level2: 终端
+        weight: 1.0
+      - id: 66
+        content: 学校统一配备的学生用平板电脑数量
+        level2: 终端
+        weight: 1.0
+      - id: 67
+        content: 学校统一配备的教师用台式机数量
+        level2: 终端
+        weight: 1.0
+      - id: 68
+        content: 学校统一配备的教师用移动终端数量
+        level2: 终端
+        weight: 1.0
+      - id: 69
+        content: 学校统一配备的教师用笔记本电脑数量
+        level2: 终端
+        weight: 1.0
+      - id: 70
+        content: 学校统一配备的教师用平板电脑数量
+        level2: 终端
+        weight: 1.0
+
+  - key: governance
+    name: 教育治理
+    weight: 0.1667
+    description: 学校利用数字化改革赋能校园治理现代化
+    metrics:
+      - id: 21
+        content: 学校教学.管理类信息系统的主要部署方式有多少
+        level2: 学校治理
+        weight: 1.0
+      - id: 22
+        content: 学校常用管理信息系统间是否实现统一身份认证
+        level2: 学校治理
+        weight: 1.0
+      - id: 23
+        content: 学校信息管理系统实现数据统筹管理的包括多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 24
+        content: 现有管理信息基础数据应用范畴有多少个
+        level2: 学校治理
+        weight: 1.0
+      - id: 25
+        content: 校园卡.含一卡通.已经实现的功能有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 26
+        content: 校园卡是否实现了一卡通
+        level2: 学校治理
+        weight: 1.0
+      - id: 27
+        content: 学校安全监控系统校园覆盖范围有多少种
+        level2: 网络安全
+        weight: 1.0
+      - id: 48
+        content: 网络安全费用约占最近一年学校信息化经费总计投入
+        level2: 网络安全
+        weight: 1.0
+      - id: 54
+        content: 学校使用物联网技术及各类智能感知设备的应用场景有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 55
+        content: 学校校园安防具备的功能有多少种
+        level2: 网络安全
+        weight: 1.0
+      - id: 71
+        content: 学校实现学生类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 72
+        content: 学校实现教师类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 73
+        content: 学校实现规划与决策类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 74
+        content: 学校实现教务类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 75
+        content: 学校实现教学类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 76
+        content: 学校实现总务类教育数字化管理的工作内容有多少种
+        level2: 学校治理
+        weight: 1.0
+      - id: 83
+        content: 学校实现学校及资产类教育数字化管理的工作内容
+        level2: 学校治理
+        weight: 1.0
+
+  - key: support
+    name: 保障机制
+    weight: 0.1665
+    description: 用于评估教育数字化保障能力
+    metrics:
+      - id: 28
+        content: 最近一年.校级领导参加的信息化相关培训有多少种
+        level2: 组织保障
+        weight: 1.0
+      - id: 29
+        content: 最近一年.校级领导参加的信息化相关培训总计人次
+        level2: 组织保障
+        weight: 1.0
+      - id: 30
+        content: 学校为促进信息技术在教育教学中的常态应用.采取了多少种措施
+        level2: 组织保障
+        weight: 1.0
+      - id: 31
+        content: 最近一年学校信息化经费总计投入.含国家财政拨款.社会捐助.学校收入.占本校同期教育总经费.不含人员经费.支出的比例
+        level2: 财力保障
+        weight: 1.0
+      - id: 32
+        content: 网络建设与设备购置.经费占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 33
+        content: 系统软件和应用软件经费占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 34
+        content: 教学平台和教学资源费用占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 35
+        content: 培训费用占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 36
+        content: 运行与维护费用占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 37
+        content: 研究及其他费用占比
+        level2: 财力保障
+        weight: 1.0
+      - id: 38
+        content: 学校信息技术课程教师人数
+        level2: 人力保障
+        weight: 1.0
+      - id: 39
+        content: 由其他学科教师兼任信息技术课程教师人数
+        level2: 人力保障
+        weight: 1.0
+      - id: 79
+        content: 学校数字化主管校领导级别
+        level2: 组织保障
+        weight: 1.0
+      - id: 80
+        content: 学校数字化工作部门的专任数字化工作人员总数
+        level2: 人力保障
+        weight: 1.0
+      - id: 81
+        content: 兼任数字化工作人员总数
+        level2: 人力保障
+        weight: 1.0
+      - id: 82
+        content: 学校是否制定数字化工作和管理的相关制度.规章.办法等
+        level2: 组织保障
+        weight: 1.0

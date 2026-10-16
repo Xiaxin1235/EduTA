@@ -1,0 +1,3515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学校数字化评价分析系统</title>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<style>
+  :root {
+    --primary: #c96442;         /* 暖陶土主色 */
+    --primary-hover: #b35334;
+    --primary-light: #faeee9;
+    --accent: #d97706;          /* 暖琥珀色 */
+    --danger: #b91c1c;          /* 警示暖红 */
+    --warn: #b45309;            /* 柔和赭石 */
+    --ok: #276b32;              /* 舒缓叶绿 */
+    --bg: #f9f8f6;              /* 温暖米白底色 */
+    --card: #ffffff;            /* 纯白卡片 */
+    --card-subtle: #fcfbf9;     /* 浅温底 */
+    --surface-soft: #f2efe9;    /* 柔和温润表面灰 */
+    --line: #e8e6df;            /* 极轻淡暖灰边框 */
+    --line-subtle: #f0eee8;     /* 极细分隔线 */
+    --text-main: #201f1d;       /* 柔和炭黑 */
+    --text-muted: #6f6c65;      /* 暖铅灰色 */
+    --text-light: #9c978e;      /* 提示文字弱化 */
+    --radius-xl: 18px;          /* 大圆角 */
+    --radius-lg: 14px;
+    --radius-md: 10px;
+    --radius-sm: 6px;
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02), 0 6px 18px -4px rgba(0, 0, 0, 0.03);
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-main);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .header {
+    background: #ffffff;
+    color: var(--text-main);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header h1 .brand-badge {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-weight: 600;
+  }
+  .header .sub {
+    color: var(--text-muted);
+    font-size: 12.5px;
+  }
+  .header .apiDot {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-soft);
+    padding: 4px 12px;
+    border-radius: 9999px;
+    border: 1px solid var(--line);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .header .apiDot.on {
+    background: #eef7ee;
+    color: var(--ok);
+    border-color: #d1ead2;
+    font-weight: 500;
+  }
+  .container {
+    max-width: 1060px;
+    margin: 28px auto;
+    padding: 0 24px;
+  }
+  .tabs {
+    display: inline-flex;
+    gap: 4px;
+    margin-bottom: 22px;
+    background: #eeebe4;
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid #e2ded5;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 8px 18px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+  }
+  .tab:hover {
+    color: var(--text-main);
+  }
+  .tab.active {
+    background: #ffffff;
+    color: var(--text-main);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    padding: 26px 30px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-card);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  input[type=text], input[type=password], select {
+    padding: 10px 14px;
+    border: 1px solid #dedbd2;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    color: var(--text-main);
+    background: #ffffff;
+    flex: 1;
+    min-width: 180px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input[type=text]:focus, input[type=password]:focus, select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.12);
+  }
+  input::placeholder {
+    color: var(--text-light);
+  }
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--primary);
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  button:hover {
+    background: var(--primary-hover);
+    transform: translateY(-0.5px);
+  }
+  button:active {
+    transform: translateY(0);
+  }
+  button.secondary {
+    background: #eeebe4;
+    color: var(--text-main);
+    border: 1px solid #ded9cd;
+  }
+  button.secondary:hover {
+    background: #e4e0d5;
+  }
+  button.ghost {
+    background: #ffffff;
+    color: var(--text-muted);
+    border: 1px solid #dedbd2;
+  }
+  button.ghost:hover {
+    background: #faf9f6;
+    color: var(--text-main);
+    border-color: #cfccc2;
+  }
+  .banner {
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    margin: 14px 0;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .banner.red {
+    background: #fdf3f1;
+    color: #a12d1f;
+    border: 1px solid #fae0dc;
+  }
+  .banner.warn {
+    background: #fdf9ee;
+    color: #92580a;
+    border: 1px solid #faeed1;
+  }
+  .banner.ok {
+    background: #f0f7f0;
+    color: #216a2b;
+    border: 1px solid #d8ebd9;
+  }
+  .banner.disclaimer {
+    background: #f6f5f0;
+    color: var(--text-muted);
+    border: 1px solid #ebe8df;
+    font-size: 12.5px;
+  }
+  .statGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 14px;
+    margin: 18px 0;
+  }
+  .stat {
+    text-align: center;
+    padding: 16px 14px;
+    background: #faf9f6;
+    border-radius: var(--radius-md);
+    border: 1px solid #f0eee6;
+  }
+  .stat .v {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--primary);
+    letter-spacing: -0.01em;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .section {
+    margin: 14px 0;
+    padding: 18px 22px;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--radius-md);
+    background: #faf9f6;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text-main);
+  }
+  .ev {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: #ffffff;
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    display: inline-block;
+    margin: 3px 4px 3px 0;
+    border: 1px solid #eae8e1;
+  }
+  .gap {
+    font-size: 12px;
+    color: var(--warn);
+    margin-top: 4px;
+  }
+  .redline {
+    font-weight: 600;
+    color: var(--danger);
+  }
+  #radar {
+    width: 100%;
+    max-width: 520px;
+    margin: 12px auto;
+  }
+  .chart-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .chart-action-button {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .chart-action-button:hover {
+    background: transparent;
+    color: var(--primary-hover);
+    transform: none;
+    text-decoration: underline;
+  }
+  .chart-action-link {
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .chart-action-link:hover { color: var(--primary-hover); text-decoration: underline; }
+  .chart-preview-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .chart-preview-modal[hidden] { display: none; }
+  .chart-preview-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(24, 22, 19, 0.78);
+    pointer-events: none;
+  }
+  .chart-preview-dismiss-area {
+    position: absolute;
+    z-index: 2;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    box-shadow: none;
+    transition: none;
+  }
+  .chart-preview-dismiss-area:hover,
+  .chart-preview-dismiss-area:active,
+  .chart-preview-dismiss-area:focus {
+    background: transparent;
+    transform: none;
+  }
+  .chart-preview-dismiss-top { top: 0; right: 0; left: 0; height: 24px; }
+  .chart-preview-dismiss-bottom { right: 0; bottom: 0; left: 0; height: 24px; }
+  .chart-preview-dismiss-left { top: 24px; bottom: 24px; left: 0; width: 24px; }
+  .chart-preview-dismiss-right { top: 24px; right: 0; bottom: 24px; width: 24px; }
+  .chart-preview-dismiss-area:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: -4px;
+  }
+  .chart-preview-dialog {
+    position: relative;
+    z-index: 3;
+    width: min(1400px, 96vw);
+    max-height: 94vh;
+    overflow: auto;
+    background: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  }
+  .chart-preview-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--line);
+  }
+  .chart-preview-title { font-size: 14px; font-weight: 600; }
+  .chart-preview-close { padding: 7px 12px; }
+  .chart-preview-body { padding: 18px; text-align: center; }
+  .chart-preview-status {
+    padding: 18px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .chart-preview-status.error { color: var(--danger); }
+  .chart-preview-image {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+  }
+  body.chart-preview-open { overflow: hidden; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 12px;
+    background: #faf9f6;
+  }
+  td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line-subtle);
+    text-align: left;
+  }
+  tr.clickable {
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  tr.clickable:hover {
+    background: #f7f6f1;
+  }
+  #loading {
+    display: none;
+    text-align: center;
+    color: var(--primary);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 24px;
+  }
+  .mockNote {
+    font-size: 12.5px;
+    color: var(--text-light);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    background: #f0eee6;
+    color: #403d35;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #e4e1d7;
+  }
+  .ep {
+    font-size: 12.5px;
+    color: var(--text-main);
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 860px) {
+    .split { grid-template-columns: 1fr; }
+    .header { padding: 14px 20px; }
+    .container { padding: 0 16px; margin: 16px auto; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="datasetNotice" role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">请先接入自己的数据，或运行合成数据生成器。查询结果取决于所接数据的范围和定义。</div>
+<div class="header">
+  <h1>学校数字化评价分析系统</h1>
+  <span class="sub">自然语言查询 · 确定性计算 · 数据与图表</span>
+  <span class="apiDot" id="dbDot" style="margin-left:auto">数据库：未检测</span>
+  <span class="apiDot" id="contractDot">契约：未检测</span>
+  <span class="apiDot" id="apiDot">接口：未检测</span>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" data-tab="chat">对话台</div>
+    <div class="tab" data-tab="profile">简介查询</div>
+    <div class="tab" data-tab="api">模型密钥</div>
+  </div>
+
+  <div id="tab-chat">
+    <div class="card">
+      <div class="row">
+        <select id="queryMode" style="max-width:185px;min-width:165px" title="选择普通提问台的识别方式">
+          <option value="semantic" selected>智能语义识别</option>
+          <option value="rule">规则词面识别（对照）</option>
+
+
+        </select>
+        <input type="text" id="question" placeholder="例如：示例市2020年的数字资源怎么样？示例一小学2023年给老师配了多少平板？">
+        <button id="btnAsk">提问 / 评估</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">快捷示例：</span>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2020年的数字化水平怎么样？">示例市2020年总体</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2020年的数字资源怎么样？">示例市2020年数字资源</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年给老师配了多少平板？只说数量，不要图。">示例一小学教师平板</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年给学生配了多少平板？只说数量。">示例一小学学生平板</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年平板有多少？">平板歧义澄清</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市 2021 数字化大盘怎么样？">示例市 2021 数字化大盘</button>
+      </div>
+      <div class="mockNote">智能语义支持区域总体/单维/单题归一均值、区域中位数、单校总体/单维、学校单题事实，以及同校同年双题项原始值与简单计算，并按所问范围定向呈现；跨校或多于两题的题集仍需进一步支持。规则词面识别仅作显式对照，其结果会明确标注为规则路径。</div>
+    </div>
+    <div id="loading" class="card">评估与分析中，请稍候…</div>
+    <div id="chatResult">
+      <div class="card" style="text-align:center;padding:48px 24px;color:var(--text-muted);">
+        <div style="font-size:14px;font-weight:700;letter-spacing:1px;color:var(--primary);margin-bottom:12px;background:var(--primary-light);display:inline-block;padding:3px 12px;border-radius:9999px;">智能问答与视导系统</div>
+        <h3 style="font-size:17px;font-weight:600;color:var(--text-main);margin:0 0 8px;">准备就绪，等待提问</h3>
+        <p style="font-size:13.5px;max-width:540px;margin:0 auto 16px;line-height:1.65;color:var(--text-muted);">
+          系统支持开放式自然语言提问与多轮对话。您可以在上方输入具体学校、教师或区域的数字化问题，按回车或点击「提问 / 评估」开始。
+        </p>
+        <div style="font-size:12.5px;color:var(--text-muted);background:var(--surface-soft);display:inline-block;padding:6px 14px;border-radius:9999px;border:1px solid var(--line);">
+          提示：初次登入不会自动发起查询，不消耗任何模型 API 额度
+        </div>
+      </div>
+    </div>
+    <details id="requestHistoryCard" class="card" style="padding:12px 16px;">
+      <summary style="cursor:pointer;font-weight:700;color:var(--text-main);">请求与迟到响应历史 <span id="requestHistoryCount" style="font-weight:400;color:var(--text-muted);">0条</span></summary>
+      <div id="requestHistoryState" data-late-count="0" data-latest-request-seq="0" data-latest-rendered-seq="0" style="margin-top:10px;font-size:12.5px;color:var(--text-muted);">尚无请求。</div>
+      <div style="overflow:auto;margin-top:8px;"><table><thead><tr><th>序号</th><th>问题</th><th>基线</th><th>业务/修订</th><th>呈现处理</th></tr></thead><tbody id="requestHistoryRows"></tbody></table></div>
+    </details>
+  </div>
+
+  <div id="tab-profile" style="display:none">
+    <div class="split">
+      <div class="card">
+        <h3 style="margin-top:0">示例教师档案（演示库）</h3>
+        <div class="row">
+          <select id="profileTeacher"></select>
+          <button id="btnTeacherProfile">查看教师档案</button>
+        </div>
+        <div class="mockNote">内置 T001–T004 典型学科示例教师档案（脱敏模拟），已汉化姓名、任教组别与职称信息。</div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">学校简介（已接入数字化库）</h3>
+        <div class="row">
+          <input type="text" id="schoolQ" placeholder="学校名关键词，如 示例二小学">
+          <input type="text" id="schoolYear" placeholder="年份，如 2020" style="max-width:120px;min-width:100px">
+          <button id="btnSchoolSearch">检索</button>
+        </div>
+        <div class="mockNote">按名称和年度检索已接入的学校记录。</div>
+      </div>
+    </div>
+    <div id="profileResult"></div>
+  </div>
+
+  <div id="tab-api" style="display:none">
+    <div class="card">
+      <h3 style="margin-top:0">模型 API（官方或中转）</h3>
+      <p class="mockNote">由本人填写 HTTPS 模型地址和密钥。密钥保存到 Windows 当前用户绑定的加密存储，页面不回显；旧明文配置不会自动读取或迁移，请本人重新保存。此服务仅供本机使用。</p>
+      <div class="row">
+        <select id="llmProvider" style="max-width:180px">
+          <option value="deepseek">DeepSeek 官方</option>
+          <option value="qwen">通义千问（DashScope）</option>
+          <option value="kimi">Kimi / Moonshot</option>
+          <option value="openai">OpenAI 官方</option>
+          <option value="custom">自定义中转（OpenAI 兼容）</option>
+        </select>
+        <input type="text" id="llmBase" placeholder="API 地址（由你的模型服务商提供）">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input type="password" id="llmKey" placeholder="API Key（sk-... 或中转密钥）" autocomplete="off">
+        <button class="secondary" id="btnDiscoverModels">识别可用模型</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <select id="llmModelSel" style="flex:1">
+          <option value="">先填地址和密钥，再点「识别可用模型」</option>
+        </select>
+        <input type="text" id="llmModel" placeholder="或手动填写模型名" style="max-width:220px">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="llmProfileName" placeholder="配置名称，如 官方DeepSeek / 单位中转">
+        <button id="btnSaveLlm">另存为新配置</button>
+        <button class="secondary" id="btnOverwriteLlm">覆盖当前配置</button>
+        <button class="secondary" id="btnPingLlm">探测连通</button>
+      </div>
+      <p class="mockNote">换一个名称再点「另存为新配置」会新增一套，不会改已有配置。只有同名或点「覆盖当前配置」才会改旧的。</p>
+      <div class="row" style="margin-top:10px">
+        <select id="llmProfileSel" style="flex:1">
+          <option value="">尚无已保存配置</option>
+        </select>
+        <button class="secondary" id="btnLoadProfile">切换使用</button>
+        <button class="ghost" id="btnDeleteProfile">删除此配置</button>
+      </div>
+      <div id="apiStatus"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">模型地址安全说明</h3>
+      <div class="ep">安全包不预置任何模型服务商或中转站地址。</div>
+      <div class="ep">请从服务商控制台复制 OpenAI 兼容的 API 根地址；通常以 <code>/v1</code> 结尾。</div>
+      <p class="mockNote">智能语义模式由当前活动模型完成意图映射，再由本地契约工具计算与核验；模型不能改写工具数值。未配置模型时请先保存配置，或显式切换到规则对照模式。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+
+
+const localNativeFetch = globalThis.fetch.bind(globalThis);
+let localSessionPromise;
+function localBrowserSession() {
+  if (!localSessionPromise) {
+    localSessionPromise = localNativeFetch('/api/v1/local/session', {credentials:'same-origin', cache:'no-store'})
+      .then(async response => {
+        if (!response.ok) throw new Error('本机安全会话不可用，请从本机地址重新打开页面。');
+        return (await response.json()).csrf_token;
+      });
+  }
+  return localSessionPromise;
+}
+globalThis.fetch = async function(input, init = {}) {
+  const target = new URL(typeof input === 'string' ? input : input.url, location.href);
+  if (target.origin === location.origin && (target.pathname.startsWith('/api/') || target.pathname === '/health')) {
+    const token = await localBrowserSession();
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init.headers || {}).forEach((value, name) => headers.set(name, value));
+    headers.set('X-TeacherEval-CSRF', token);
+    return localNativeFetch(input, {...init, headers, credentials:'same-origin', cache:'no-store'});
+  }
+  return localNativeFetch(input, init);
+};
+const MOCK = {};
+const MOCK_TREND = {};
+const MOCK_TEACHERS = [];
+const TEACHER_NAME_MAP = {};
+
+const TEACHER_TITLE_MAP = {
+  "高级": "高级教师 (正高/副高级职称)",
+  "中级": "一级教师 (中级职称)",
+  "初级": "二级/初级教师"
+};
+
+const TEACHER_SOURCE_DESC_MAP = {
+  "course_period": { name: "课时排课记录表", desc: "日常授课周课时、所教班级与学年排课底册" },
+  "lesson_plan": { name: "备课教案设计表", desc: "单元教案教学设计完成度与备课提交审核记录" },
+  "class_observation": { name: "随堂听课评议表", desc: "专家督导与同行组内随堂听课评分与实录评议" },
+  "exam_score": { name: "期末学业成绩库", desc: "任教班级期末成绩综合表现及及格率相对年级增值" },
+  "research_record": { name: "教科研成果表", desc: "国家/省/市/校各级教研论文发表、课题及获奖" },
+  "student_survey": { name: "学生评教问卷表", desc: "任教班级学生匿名教学满意度评价多维打分" },
+  "complaint_record": { name: "信访投诉核实表", desc: "师德违规信访举报核查结果记录（查实触发红线）" },
+  "discipline_record": { name: "师德处分记录表", desc: "行政处分与违规纪律档案（师德师风一票否决）" }
+};
+
+const DATA_SOURCE_MAP = {
+  "course_period": "课时排课记录表",
+  "lesson_plan": "备课教案设计表",
+  "class_observation": "随堂听课评议表",
+  "exam_score": "期末学业成绩库",
+  "student_survey": "学生评教问卷表",
+  "research_record": "教科研成果表",
+  "complaint_record": "信访投诉核实表",
+  "discipline_record": "师德处分记录表",
+  "teacher_info": "教师基础人事档案",
+  "lesson_plan_coverage": "教案覆盖度",
+  "observation_score": "课堂听课评分",
+  "pass_rate_improvement": "及格率增值",
+  "survey_avg": "学生评教均分",
+  "research_score": "教科研成果积分",
+  "redline": "师德红线检查",
+  "school_answers": "学校数字化问卷作答库",
+  "schools": "学校年度信息库",
+  "questions": "数字化评估指标题库",
+  "answers.normalized_value": "问卷作答归一值 (0~1)"
+};
+
+const FIELD_MAP = {
+  province: "所属省份",
+  city: "所属地市",
+  district: "所属区县",
+  school_area_type: "城乡性质分类",
+  class_num: "班级总数",
+  teacher_num: "专任教师人数",
+  student_num: "在校生总数",
+  same_name_years: "建档历史学年"
+};
+
+function formatSourceName(src) {
+  if (!src) return "";
+  if (DATA_SOURCE_MAP[src]) return DATA_SOURCE_MAP[src];
+  let res = String(src);
+  Object.entries(DATA_SOURCE_MAP).forEach(([en, zh]) => {
+    res = res.split(en).join(zh);
+  });
+  return res;
+}
+
+function formatFormula(f) {
+  let s = String(f || "");
+  s = s.replace(/avg of (\d+) observations/g, "共采集 $1 次随堂听课评分均值");
+  s = s.replace(/avg of (\d+) responses, 1-5 scale -> x20/g, "共采集 $1 份学生评教问卷(5分制换算百分制)");
+  s = s.replace(/class_pass_rate - cohort_baseline_pass_rate/g, "任教班级及格率相对年级基准线增值");
+  s = s.replace(/normalized_value × 100/g, "问卷原始归一值 × 100 折算分");
+  s = s.replace(/sum\(level_score \* count\)/g, "各级教科研成果加权累计得分");
+  s = s.replace(/查实投诉=(\d+), 查实违规=(\d+)/g, "查实信访投诉=$1起，查实纪律违规=$2起");
+  return s;
+}
+
+function formatEvidenceText(e) {
+  if (typeof e === "object" && e !== null) {
+    const label = DATA_SOURCE_MAP[e.metric] || e.label || e.metric || "指标依据";
+    const src = formatSourceName(e.source || "");
+    const rawVal = e.raw != null ? e.raw : "-";
+    const f = formatFormula(e.formula || "");
+    const period = Array.isArray(e.period) ? e.period.join(", ") : (e.period || "");
+    let parts = [`证据: ${label}`];
+    if (period) parts.push(`学年: ${period}`);
+    if (src) parts.push(`数据源: ${src}`);
+    if (f) parts.push(`核算说明: ${f}`);
+    else parts.push(`数值: ${rawVal}`);
+    return `[${parts.join(" | ")}]`;
+  }
+  let s = String(e || "");
+
+  s = s.replace(/\['(\d{4}-\d{4})'\]/g, "$1 学年");
+  s = s.replace(/\['([^']+)'\]/g, "$1");
+
+  s = s.replace(/avg of (\d+) observations/g, "共 $1 次随堂听课评分均值");
+  s = s.replace(/avg of (\d+) responses, 1-5 scale -> x20/g, "共 $1 份学生评教问卷均分(5分制换算百分制)");
+  s = s.replace(/class_pass_rate - cohort_baseline_pass_rate/g, "任教班级及格率相对年级基准线增值");
+  s = s.replace(/sum\(level_score \* count\)/g, "各级教科研成果加权累计积分");
+  s = s.replace(/verified complaints=(\d+)/g, "查实违规/投诉=$1起");
+  s = s.replace(/查实投诉=(\d+),\s*查实违规=(\d+)/g, "查实信访投诉=$1起，查实纪律处分=$2起");
+  s = s.replace(/answers\.normalized_value/g, "学校问卷作答库(归一值)");
+  s = s.replace(/normalized_value × 100/g, "问卷原始归一值 × 100 折算分");
+  return s;
+}
+
+function getApiBase() {
+  try { localStorage.removeItem("te_api_base"); } catch (e) {}
+  return ""; // 永远打本机同源 /api，不要用官方/中转地址当本机基址
+}
+async function downloadChart(link) {
+  if (link.dataset.downloadStatus === 'fetching') return;
+  link.dataset.downloadStatus = 'fetching';
+  try {
+    const response = await fetch(link.href, {credentials:'same-origin', cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const blob = await response.blob();
+    if (!blob.size || blob.type !== 'image/png') throw new Error('图表文件格式无效');
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = link.download || 'chart.png';
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    link.dataset.downloadStatus = 'browser_started';
+  } catch (error) {
+    link.dataset.downloadStatus = 'failed';
+    link.textContent = '下载失败，点击重试';
+    link.title = String(error);
+  }
+}
+
+function apiUrl(path) {
+  if (path.startsWith("http")) return path;
+  return path;
+}
+function fetchErrorHint(err) {
+  const msg = String((err && err.message) || err || "");
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return "浏览器没连上本机程序（不是模型官网回的错）。请确认：① 黑窗口里的 TeacherEval 还在运行；② 地址栏是 127.0.0.1:8610 而不是官方 API 网址；③ 用 Ctrl+F5 刷新。原始错误：" + msg;
+  }
+  return msg;
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+function radarChart(el, data, compData, names) {
+  if (!el) return;
+  if (typeof echarts === "undefined") { el.innerHTML = '<p class="mockNote">安全包不连接外部图表脚本；请使用结果中已核验的服务端图表。</p>'; return; }
+  const ch = echarts.init(el);
+  const dims = Object.keys(data || {});
+  const n1 = (names && names[0]) || "得分";
+  const n2 = (names && names[1]) || "全区均分";
+
+  const seriesData = [{
+    value: dims.map(d => data[d] ?? 0),
+    name: n1,
+    itemStyle: { color: "#c96442" },
+    lineStyle: { color: "#c96442", width: 2 },
+    areaStyle: { color: "rgba(201, 100, 66, 0.18)" }
+  }];
+
+  if (compData && Object.keys(compData).length) {
+    seriesData.push({
+      value: dims.map(d => compData[d] ?? 0),
+      name: n2,
+      itemStyle: { color: "#3b82f6" },
+      lineStyle: { color: "#3b82f6", width: 2, type: "dashed" },
+      areaStyle: { color: "rgba(59, 130, 246, 0.10)" }
+    });
+  }
+
+  ch.setOption({
+    tooltip: {
+      backgroundColor: "#201f1d",
+      borderColor: "#201f1d",
+      textStyle: { color: "#ffffff", fontSize: 12 }
+    },
+    legend: (compData && Object.keys(compData).length) ? {
+      data: [n1, n2],
+      top: 0,
+      textStyle: { color: "#6f6c65", fontSize: 12 }
+    } : undefined,
+    radar: {
+      indicator: dims.map(d => ({ name: d, max: 100 })),
+      splitArea: {
+        areaStyle: {
+          color: ['rgba(250, 249, 245, 0.6)', 'rgba(243, 240, 234, 0.6)']
+        }
+      },
+      axisLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.08)' } },
+      splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.08)' } },
+      axisName: {
+        color: '#6f6c65',
+        fontSize: 12,
+        fontWeight: 500
+      }
+    },
+    series: [{
+      type: "radar",
+      data: seriesData
+    }]
+  });
+}
+
+function renderAgentVisuals(report) {
+  const charts = report.charts || [];
+  const toolCalls = report.tool_calls || [];
+  if (!charts.length && !toolCalls.length) return "";
+
+  let html = '<div class="section" style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">';
+  html += '<div style="font-size:15px;font-weight:600;color:var(--text-main);display:flex;align-items:center;gap:6px;">'
+    + '<span style="display:inline-block;width:8px;height:8px;background:var(--primary);border-radius:50%;"></span>'
+    + 'Agent 本地工具调用与数据可视化'
+    + '</div>';
+  html += '<div style="font-size:12px;color:var(--primary);background:var(--primary-light);padding:3px 10px;border-radius:9999px;font-weight:500;">Python 3.12 · Matplotlib 高清绘图</div>';
+  html += '</div>';
+
+  charts.forEach((ch, idx) => {
+    let src = "";
+    if (ch.base64) {
+      src = ch.base64.startsWith("data:") ? ch.base64 : ("data:image/png;base64," + ch.base64);
+    } else if (ch.filename) {
+      src = apiUrl("/api/v1/charts/" + encodeURIComponent(ch.filename));
+    } else if (ch.url) {
+      src = apiUrl(ch.url);
+    }
+    const downloadUrl = ch.filename ? apiUrl("/api/v1/charts/" + encodeURIComponent(ch.filename) + "?download=1") : src;
+    const title = ch.title || ("可视化分析图 #" + (idx + 1));
+    html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-card);margin-bottom:16px;">';
+    html += '<div style="padding:10px 16px;background:var(--card-subtle);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-wrap:gap;gap:6px;">';
+    html += '<span style="font-size:13.5px;font-weight:600;color:var(--text-main);">' + esc(title) + '</span>';
+    html += '<span class="chart-actions">'
+      + '<button type="button" class="chart-action-button" data-chart-src="' + esc(src) + '" data-chart-title="' + esc(title) + '" onclick="openChartPreview(this.dataset.chartSrc, this.dataset.chartTitle)">查看原图</button>'
+      + '<a class="chart-action-link" href="' + esc(downloadUrl) + '" download="' + esc(ch.filename || "chart.png") + '" onclick="event.preventDefault();downloadChart(this)">下载</a>'
+      + '</span>';
+    html += '</div>';
+    html += '<div style="padding:16px;text-align:center;background:#ffffff;">';
+    html += '<img src="' + esc(src) + '" alt="' + esc(title) + '" style="max-width:100%;height:auto;border-radius:var(--radius-md);display:block;margin:0 auto;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:zoom-in;" onclick="openChartPreview(this.src, this.alt)">';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  toolCalls.forEach((tc) => {
+    const isOk = tc.success;
+    const dur = tc.duration_ms ? tc.duration_ms + 'ms' : '';
+    const code = (tc.data && tc.data.code) || '';
+    const stdout = tc.stdout || '';
+    html += '<details style="margin-top:10px;background:#faf8f5;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;">';
+    html += '<summary style="font-size:12.5px;color:var(--text-muted);cursor:pointer;user-select:none;font-weight:500;display:flex;align-items:center;justify-content:space-between;">';
+    html += '<span><b>[' + esc(tc.tool || 'python_interpreter') + ']</b> ' + (isOk ? '执行成功' : '<span style="color:var(--danger)">执行异常</span>') + ' · 查看 Agent 编写的 Python 绘图代码与输出</span>';
+    html += '<span style="font-size:11.5px;color:var(--text-light);">' + esc(dur) + '</span>';
+    html += '</summary>';
+    html += '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">';
+    if (code) {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">Agent 执行的 Python 脚本：</div>';
+      html += '<pre style="background:#1e1e1e;color:#d4d4d4;padding:12px 14px;border-radius:8px;font-size:12px;overflow-x:auto;line-height:1.55;font-family:Consolas,Monaco,monospace;margin:0 0 10px 0;"><code>' + esc(code) + '</code></pre>';
+    }
+    if (stdout) {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">控制台输出日志：</div>';
+      html += '<pre style="background:#f0eee8;color:#201f1d;padding:8px 12px;border-radius:6px;font-size:11.5px;overflow-x:auto;margin:0;"><code>' + esc(stdout) + '</code></pre>';
+    }
+    if (tc.error) {
+      html += '<div style="color:var(--danger);font-size:12px;margin-top:6px;">错误信息: ' + esc(tc.error) + '</div>';
+    }
+    html += '</div></details>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function ensureChartPreview() {
+  let modal = document.getElementById("chartPreviewModal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "chartPreviewModal";
+  modal.className = "chart-preview-modal";
+  modal.hidden = true;
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "chartPreviewTitle");
+  modal.innerHTML = '<div class="chart-preview-backdrop" aria-hidden="true"></div>'
+    + '<button type="button" class="chart-preview-dismiss-area chart-preview-dismiss-top" data-chart-preview-close="true" data-chart-preview-dismiss="top" aria-label="点击上方背景关闭图表原图预览"></button>'
+    + '<button type="button" class="chart-preview-dismiss-area chart-preview-dismiss-bottom" data-chart-preview-close="true" data-chart-preview-dismiss="bottom" aria-label="点击下方背景关闭图表原图预览"></button>'
+    + '<button type="button" class="chart-preview-dismiss-area chart-preview-dismiss-left" data-chart-preview-close="true" data-chart-preview-dismiss="left" aria-label="点击左侧背景关闭图表原图预览"></button>'
+    + '<button type="button" class="chart-preview-dismiss-area chart-preview-dismiss-right" data-chart-preview-close="true" data-chart-preview-dismiss="right" aria-label="点击右侧背景关闭图表原图预览"></button>'
+    + '<div class="chart-preview-dialog">'
+    + '<div class="chart-preview-header">'
+    + '<span class="chart-preview-title" id="chartPreviewTitle"></span>'
+    + '<button type="button" class="secondary chart-preview-close" data-chart-preview-close="true">关闭</button>'
+    + '</div>'
+    + '<div class="chart-preview-body">'
+    + '<div class="chart-preview-status" role="status" aria-live="polite">正在加载原图…</div>'
+    + '<img class="chart-preview-image" alt="" hidden>'
+    + '</div>'
+    + '</div>';
+  modal.addEventListener("click", (event) => {
+    const target = event.target;
+    const dialog = modal.querySelector(".chart-preview-dialog");
+    const closeControl = target && typeof target.closest === "function"
+      ? target.closest('[data-chart-preview-close="true"]')
+      : null;
+
+
+    if (closeControl || target === modal || (dialog && !dialog.contains(target))) {
+      closeChartPreview();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) closeChartPreview();
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openChartPreview(src, title) {
+  const safeSrc = String(src || "").trim();
+  if (!safeSrc) return;
+  const modal = ensureChartPreview();
+  const image = modal.querySelector(".chart-preview-image");
+  const titleNode = modal.querySelector(".chart-preview-title");
+  const statusNode = modal.querySelector(".chart-preview-status");
+  image.alt = String(title || "图表原图");
+  titleNode.textContent = image.alt;
+  statusNode.classList.remove("error");
+  statusNode.textContent = "正在加载原图…";
+  statusNode.hidden = false;
+  image.hidden = true;
+  image.onload = () => {
+    image.hidden = false;
+    statusNode.hidden = true;
+  };
+  image.onerror = () => {
+    image.hidden = true;
+    statusNode.hidden = false;
+    statusNode.classList.add("error");
+    statusNode.textContent = "图表原图加载失败，未将本次查看标记为成功。";
+  };
+  image.removeAttribute("src");
+  image.src = safeSrc;
+  modal.hidden = false;
+  document.body.classList.add("chart-preview-open");
+  const closeButton = modal.querySelector(".chart-preview-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeChartPreview() {
+  const modal = document.getElementById("chartPreviewModal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("chart-preview-open");
+}
+
+function fallbackNotice(report) {
+  const reason = String(report._llmFallbackReason || "").trim();
+  const finish = String(report._llmFinishReason || "").trim();
+  const attempts = Array.isArray(report._llmAttempts) ? report._llmAttempts : [];
+  const isTimeout = /超时|timed out|timeout/i.test(reason);
+  const tag = isTimeout ? "上游响应超时" : (finish === "length" ? "上游输出预算被耗尽" : "上游返回空正文");
+  let trace = "";
+  if (attempts.length) {
+    trace = "调用轨迹：" + attempts.map(function (a, i) {
+      return "第 " + (i + 1) + " 次 max_tokens=" + (a.max_tokens || "-")
+        + "、finish_reason=" + (a.finish_reason || "无")
+        + "、正文 " + (a.content_chars || 0) + " 字";
+    }).join("；") + "。";
+  }
+  return { tag: tag, detail: (reason || "上游模型未返回可用的正文内容。") + (trace ? " " + trace : "") };
+}
+
+function registeredUnitPresentation(report, text) {
+  const affected = (report.task_outputs || []).some(n => String(n.unit_display || '').includes('单位含义待核'));
+  if (!affected) return String(text || '');
+  const seen = new Set();
+  return String(text || '').replace(/（原字段登记值）\s*（原字段登记值；单位含义待核）/g, '（原字段登记值）')
+    .split(/\n+/).filter(line => {
+      if (!line.startsWith('原字段：') || !line.includes('单位含义待核，不能据此解释')) return true;
+      if (seen.has(line)) return false;
+      seen.add(line); return true;
+    }).join('\n');
+}
+function registeredUnitAnalysis(report) {
+  const body = registeredUnitPresentation(report, report._llmText);
+  return registeredUnitPresentation(report, report.task_analysis)
+    .replace(/原字段：“[^”]+”。以上标为原字段登记值的数字仅表示该字段的登记数值；单位含义待核，不能据此解释为课时、次数或其他计量单位。/g,
+      notice => body.includes(notice) ? '' : notice).trim();
+}
+
+function renderLlmSection(report, title) {
+  if (!report._llmText) return "";
+  const txt = registeredUnitPresentation(report, report._llmText);
+  const isFallback = Boolean(report._llmIsFallback);
+  const experimentMode = String(report._llmExperimentMode || report._experimentMode || "");
+  const queryMode = String(report._llmQueryMode || (report._queryMode && report._queryMode.active_mode) || "");
+  const isErr = !isFallback && (txt.startsWith("模型未调用：") || txt.startsWith("调用失败") || txt.includes("temporarily unavailable") || txt.includes("502") || txt.includes("503") || txt.includes("504") || txt.includes("overloaded") || txt.includes("timed out") || txt.includes("超时"));
+
+  if (experimentMode === "g0_rule") {
+    return '<div class="section llm-box" style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+      + '<h3 style="color:#166534;margin:0 0 8px 0;font-size:15px;">'
+      + esc(title || "规则基线解读")
+      + '<span style="font-size:11.5px;font-weight:normal;color:#166534;background:#dcfce7;padding:2px 8px;border-radius:12px;margin-left:8px;">G0 · 全链路模型调用 0</span>'
+      + '</h3>'
+      + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#14532d;">' + esc(txt) + '</div>'
+      + '<div style="margin-top:9px;font-size:12px;color:#166534;">本段由规则模板生成；实验模式下不提供云端模型重试入口。</div>'
+      + '</div>';
+  }
+
+  if (["g1_llm_unconstrained", "g2_llm_constrained", "a1_no_execution_verification", "a2_no_output_verification_or_repair", "a3_no_answer_repair"].includes(experimentMode)) {
+    const constrained = experimentMode !== "g1_llm_unconstrained";
+    const badges = {
+      g1_llm_unconstrained: "G1 · 同模型共同工具 · 所提约束关闭",
+      g2_llm_constrained: "G2 · 执行/输出核验与答复修复开启",
+      a1_no_execution_verification: "A1 · 关闭执行核验",
+      a2_no_output_verification_or_repair: "A2 · 关闭输出核验与答复修复",
+      a3_no_answer_repair: "A3 · 关闭答复修复"
+    };
+    const badge = badges[experimentMode];
+    const color = constrained ? "#6d28d9" : "#075985";
+    const border = constrained ? "#8b5cf6" : "#0ea5e9";
+    const background = constrained ? "#faf5ff" : "#f0f9ff";
+    return '<div class="section llm-box" style="background:' + background + ';border-left:4px solid ' + border + ';border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+      + '<h3 style="color:' + color + ';margin:0 0 8px 0;font-size:15px;">'
+      + esc(title || "实验模型答复")
+      + '<span style="font-size:11.5px;font-weight:normal;color:' + color + ';padding:2px 8px;border:1px solid ' + border + ';border-radius:12px;margin-left:8px;">' + esc(badge) + '</span>'
+      + '</h3>'
+      + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#1e293b;">' + esc(txt) + '</div>'
+      + '<div style="margin-top:9px;font-size:12px;color:' + color + ';">实验模式禁止页面另发解释请求；本段来自当前chat的共同写作路径。</div>'
+      + '</div>';
+  }
+
+  if (queryMode === "product_semantic_constrained" || queryMode === "semantic") {
+    const deterministic = report._llmModelInvoked === false;
+    const badge = deterministic
+      ? "可信语义映射 · 契约核验 · 确定性直答"
+      : "可信语义映射 · 契约/重放/AnswerSpec约束";
+    return '<div class="section llm-box" style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+      + '<h3 style="color:#6d28d9;margin:0 0 8px 0;font-size:15px;">'
+      + esc(title || "智能语义定向答复")
+      + '<span style="font-size:11.5px;font-weight:normal;color:#6d28d9;padding:2px 8px;border:1px solid #8b5cf6;border-radius:12px;margin-left:8px;">' + esc(badge) + '</span>'
+      + '</h3>'
+      + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#1e293b;">' + esc(txt) + '</div>'
+      + '<div style="margin-top:9px;font-size:12px;color:#6d28d9;">本段只使用本次AnswerSpec范围内的已核验事实；解析失败不会静默回退到规则模式。</div>'
+      + '</div>';
+  }
+
+  if (isFallback) {
+    const notice = fallbackNotice(report);
+    return '<div class="section llm-box" style="background:#f8fafc;border-left:4px solid #2563eb;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">'
+      + '<h3 style="color:#1d4ed8;margin:0;font-size:15px;display:flex;align-items:center;gap:6px;">'
+      + esc(title || "智能对比研判与互鉴建议")
+      + '<span style="font-size:11.5px;font-weight:normal;color:#1e40af;background:#dbeafe;padding:2px 8px;border-radius:12px;">本地专家规则引擎驱动 · 数据同源</span>'
+      + '</h3>'
+      + '<button class="ghost btnRetryLlm" style="padding:3px 10px;font-size:12px;color:#2563eb;border-color:#bfdbfe;background:#fff;cursor:pointer;" title="重试调用云端大模型">重试云端大模型</button>'
+      + '</div>'
+      + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#1e293b;">' + esc(txt) + '</div>'
+      + '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #cbd5e1;font-size:12px;color:#64748b;">'
+      + '回退原因（' + esc(notice.tag) + '）：' + esc(notice.detail)
+      + '<br>以上建议由本地规则引擎生成，与正式报告使用同一份底层数据库计算结果。'
+      + '如需云端模型撰写，可点击右上角「重试云端大模型」。'
+      + '</div>'
+      + '</div>';
+  }
+
+  if (isErr) {
+    let cleanErr = txt.replace(/^模型未调用：/, "").trim();
+    return '<div class="section llm-box" style="background:#fffaf0;border-left:4px solid #f59e0b;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+      + '<h3 style="color:#d97706;margin:0;font-size:15px;display:flex;align-items:center;gap:6px;">'
+      + esc(title || "智能 AI 诊断与解读")
+      + '<span style="font-size:11.5px;font-weight:normal;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:12px;">模型服务瞬时繁忙</span>'
+      + '</h3>'
+      + '<button class="ghost btnRetryLlm" style="padding:4px 12px;font-size:12.5px;color:#d97706;border-color:#fcd34d;background:#fff;cursor:pointer;">重新解读</button>'
+      + '</div>'
+      + '<div style="font-size:13.5px;color:#92400e;line-height:1.6;margin-top:8px;">'
+      + esc(cleanErr) + '<br>'
+      + '<span style="font-size:12px;color:#78350f;opacity:0.9;">提示：本报告所有统计得分、维度均分、梯队排位及 Matplotlib 综合图表均直接由本地 SQLite 数据库计算生成，可结合数据来源和查询证据核对。</span>'
+      + '</div>'
+      + '</div>';
+  }
+
+  return '<div class="section llm-box" style="background:#faf8f5;border-left:4px solid var(--primary);border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">'
+    + '<h3 style="color:var(--primary);margin:0;font-size:15px;display:flex;align-items:center;gap:6px;">'
+    + esc(title || "智能 AI 诊断与建议")
+    + '</h3>'
+    + '<button class="ghost btnRetryLlm" style="padding:3px 10px;font-size:12px;color:var(--text-muted);border-color:var(--line);cursor:pointer;" title="重新请求大模型解读">刷新解读</button>'
+    + '</div>'
+    + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#201f1d;">' + esc(txt) + '</div>'
+    + '</div>';
+}
+
+function bindRetryLlm(report, into) {
+  const container = into || document.getElementById("chatResult");
+  if (!container) return;
+  container.querySelectorAll(".btnRetryLlm").forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = "正在发起解读...";
+      try {
+        const resp = await fetch(apiUrl("/api/v1/llm/interpret"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            markdown: report.markdown || "",
+            question: report._question || document.getElementById("question").value.trim(),
+            result: report.overview || report
+          })
+        });
+        if (resp.ok) {
+          const res = await resp.json();
+          if (res.text) {
+            report._llmText = res.text;
+            report._llmIsFallback = Boolean(res.is_fallback);
+            report._llmFallbackReason = res.fallback_reason || "";
+            report._llmFinishReason = res.finish_reason || "";
+            report._llmAttempts = res.attempts || null;
+            report._llmProvider = res.provider || "";
+            report._llmModel = res.model || "";
+            report._llmExperimentMode = res.experiment_mode || "";
+          } else if (res.error) {
+            report._llmText = "模型未调用：" + res.error;
+            report._llmIsFallback = false;
+          }
+          renderReport(report, container);
+          attachContractPanel(report, container);
+        } else {
+          btn.textContent = "重试未成功";
+          setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+        }
+      } catch (e) {
+        btn.textContent = "网络连接异常";
+        setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+      }
+    };
+  });
+}
+function renderAuditAndMetricsSection(report) {
+  const audit = report.audit || {};
+
+  const auditVerdict = String(audit.verdict || audit.status || "NOT_CHECKED").toUpperCase();
+  const auditSkipped = auditVerdict === "NOT_APPLICABLE_UNCONSTRAINED" || auditVerdict === "NOT_APPLICABLE";
+  const metrics = report.system_metrics || {};
+
+  const m1 = metrics.acc_q2i || { name: "查询解析与实体映射线索分 (Conf_Q2I)", symbol: "Conf_{Q2I}", value: null, unit: "%", desc: "当前响应没有可展示的解析线索", status: "NOT_CHECKED" };
+  const m2 = metrics.acc_calc || { name: "符号数学验算与防篡改 (Sym_calc)", symbol: "Sym_{calc}", value: null, unit: "%", desc: "底层数据库独立重算与残差验算", status: "NOT_CHECKED" };
+  const m3 = metrics.sr_chart || { name: "图表物料生成与有效画布 (Active_chart)", symbol: "Active_{chart}", value: null, unit: "%", desc: "图表生成与有效画布检测", status: "NOT_APPLICABLE" };
+  const m4 = metrics.rel_q2mm || { name: "多模态语义对齐度 (Align_MM)", symbol: "Align_{MM}", value: null, unit: "%", desc: "问答文本与多模态图表语义互锁", status: "NOT_CHECKED" };
+
+  const duration = audit.audit_duration_ms != null ? audit.audit_duration_ms + "ms" : "-";
+  const checklist = audit.checklist || [
+    { item: "数据底座真实性溯源", status: "NOT_CHECKED", desc: "本次响应没有可展示的审计结果" },
+    { item: "计算防篡改双向验算", status: "NOT_CHECKED", desc: "本次响应没有可展示的审计结果" },
+    { item: "零数值与事实幻觉核验", status: "NOT_CHECKED", desc: "本次响应没有可展示的审计结果" },
+    { item: "跨模态图文数值互锁", status: "NOT_CHECKED", desc: "本次响应没有可展示的审计结果" }
+  ];
+  const evidenceChain = (audit.provenance && audit.provenance.evidence_chain) || [];
+  const mathDetails = (audit.computation && audit.computation.details) || [];
+
+  let html = '<div class="section audit-panel" style="background:#fcfbf9;border:1px solid #e7e2d8;border-radius:var(--radius-lg);padding:18px 20px;margin-top:20px;box-shadow:0 2px 8px rgba(0,0,0,0.02);">';
+
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;border-bottom:1px solid #ede8de;padding-bottom:12px;">';
+  html += '<div style="display:flex;align-items:center;gap:8px;">';
+  html += '<span style="font-size:11.5px;font-weight:700;color:var(--primary);border:1.5px solid var(--primary);border-radius:4px;padding:2px 6px;letter-spacing:0.5px;">AUDIT</span>';
+  html += '<div>';
+  html += '<h3 style="margin:0;font-size:15px;color:var(--text-main);font-weight:700;">资料真实性审计与单次质检状态 (Data Verification & Inspection Status)</h3>';
+  html += '<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">' + (auditSkipped ? '本模式未执行独立输出审计' : '独立质检审计 Agent (DataAuditAgent) · 耗时 ' + esc(duration)) + '</div>';
+  html += '</div>';
+  html += '</div>';
+  html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+  const badgeColor = auditVerdict === "PASS" ? "#1e7e34" : (auditVerdict === "FAIL" ? "#b91c1c" : auditSkipped ? "#4b5563" : "#92400e");
+  const badgeBg = auditVerdict === "PASS" ? "#eef7ee" : (auditVerdict === "FAIL" ? "#fef2f2" : auditSkipped ? "#f3f4f6" : "#fffbeb");
+  const badgeBorder = auditVerdict === "PASS" ? "#c8e6c9" : (auditVerdict === "FAIL" ? "#fecaca" : auditSkipped ? "#ded9ce" : "#fef3c7");
+  html += '<span style="background:' + badgeBg + ';color:' + badgeColor + ';border:1px solid ' + badgeBorder + ';font-size:12px;font-weight:600;padding:4px 10px;border-radius:9999px;display:inline-flex;align-items:center;gap:4px;">';
+  html += esc(auditSkipped ? '未执行 · 不适用' : audit.verdict_badge || (auditVerdict === "PASS" ? "审计通过" : auditVerdict === "FAIL" ? "审计未通过" : "审计结论未确认")) + '</span>';
+  const hallCount = audit.hallucination && audit.hallucination.hallucination_count != null ? audit.hallucination.hallucination_count : '未检验';
+  const hasViolationCount = audit.hallucination && audit.hallucination.violation_count != null;
+  const textCount = hasViolationCount ? audit.hallucination.violation_count : hallCount;
+  html += '<span style="background:#f5f3ef;color:var(--text-muted);font-size:11.5px;padding:4px 8px;border-radius:9999px;border:1px solid #ded9ce;">' + (hasViolationCount ? '文本违例: ' : '幻觉检出: ') + textCount + (typeof textCount === 'number' ? (hasViolationCount ? ' 项' : ' 处') : '') + '</span>';
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div style="margin-bottom:16px;">';
+  html += '<div style="font-size:12.5px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">';
+  html += '<span><b>单次问答质检与置信度状态</b> (针对当前结果的实时核查)</span>';
+  html += '<span style="font-size:11px;color:var(--text-light);">计算结果可通过数据卡片和查询证据核对</span>';
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">';
+
+  const metricList = [m1, m2, m3, m4];
+  metricList.forEach(m => {
+    const hasVal = (m.value != null);
+    const rawVal = hasVal ? m.value : "N/A";
+    const statusText = m.status || (hasVal ? "PASS" : "NOT_APPLICABLE");
+    let tagBg = "#f3f4f6";
+    let tagColor = "#4b5563";
+    if (statusText === "PERFECT" || statusText === "EXCELLENT" || statusText === "PASS") {
+      tagBg = "#eef7ee";
+      tagColor = "#1e7e34";
+    } else if (statusText === "FAIL") {
+      tagBg = "#fef2f2";
+      tagColor = "#b91c1c";
+    }
+    const formattedSym = esc(m.symbol || '').replace(/_\{([^}]+)\}/g, '<sub>$1</sub>');
+    html += '<div style="background:#ffffff;border:1px solid #ede8de;border-radius:var(--radius-md);padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">';
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">';
+    html += '<span style="font-size:12px;color:var(--text-muted);font-weight:600;">' + esc(m.name.split(' ')[0]) + '</span>';
+    html += '<span style="font-size:11px;background:#faeee9;color:var(--primary);padding:1px 6px;border-radius:4px;font-weight:600;">' + formattedSym + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:6px;">';
+    html += '<span style="font-size:22px;font-weight:700;color:var(--primary);">' + rawVal + '</span>';
+    if (hasVal) {
+      html += '<span style="font-size:12px;font-weight:600;color:var(--text-muted);">' + esc(m.unit || '%') + '</span>';
+    }
+    html += '<span style="font-size:11px;color:' + tagColor + ';background:' + tagBg + ';padding:1px 6px;border-radius:4px;margin-left:auto;font-weight:500;">' + esc(statusText) + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:var(--text-light);line-height:1.4;">' + esc(m.desc) + '</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  html += '<div style="background:#ffffff;border:1px solid #ede8de;border-radius:var(--radius-md);padding:12px 16px;margin-bottom:12px;">';
+  html += '<div style="font-size:12.5px;font-weight:600;color:var(--text-muted);margin-bottom:8px;"><b>质检审计 Agent 核心核验流水线</b></div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:8px;">';
+  checklist.forEach(item => {
+    let itemBadge = '';
+    const st = String(item.status || "PASS").toUpperCase();
+    if (st === "PASS") {
+      itemBadge = '<span style="color:#1e7e34;font-weight:700;font-size:11px;background:#eef7ee;border:1px solid #c8e6c9;padding:1px 5px;border-radius:4px;flex-shrink:0;">[通过]</span>';
+    } else if (st === "FAIL") {
+      itemBadge = '<span style="color:#b91c1c;font-weight:700;font-size:11px;background:#fef2f2;border:1px solid #fecaca;padding:1px 5px;border-radius:4px;flex-shrink:0;">[未通过]</span>';
+    } else if (st === "NOT_APPLICABLE") {
+      itemBadge = '<span style="color:#666;font-weight:700;font-size:11px;background:#f5f3ef;border:1px solid #ded9ce;padding:1px 5px;border-radius:4px;flex-shrink:0;">[不适用]</span>';
+    } else if (st === "UNCONFIRMED") {
+      itemBadge = '<span style="color:#92400e;font-weight:700;font-size:11px;background:#fffbeb;border:1px solid #f3e6bf;padding:1px 5px;border-radius:4px;flex-shrink:0;">[未决]</span>';
+    } else {
+      itemBadge = '<span style="color:#666;font-weight:700;font-size:11px;background:#f5f3ef;border:1px solid #ded9ce;padding:1px 5px;border-radius:4px;flex-shrink:0;">[未检验]</span>';
+    }
+    html += '<div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;">';
+    html += itemBadge;
+    html += '<div>';
+    html += '<span style="font-weight:600;color:var(--text-main);">' + esc(item.item) + '：</span>';
+    html += '<span style="color:var(--text-muted);">' + esc(item.desc) + '</span>';
+    html += '</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  html += '<details style="font-size:12px;color:var(--text-muted);">';
+  html += '<summary style="cursor:pointer;user-select:none;font-weight:500;color:var(--primary);display:inline-flex;align-items:center;gap:4px;">';
+  html += '<span>[明细] 查看审计证据链与底层数据库 (SQLite) 物理匹配明细</span>';
+  html += '</summary>';
+  html += '<div style="margin-top:8px;background:#f5f3ee;padding:10px 14px;border-radius:6px;font-family:Consolas,Monaco,monospace;font-size:11.5px;line-height:1.6;">';
+  html += '<div><b>[物理证据源]</b>: ' + esc((audit.provenance && audit.provenance.source) || "SQLite 指标定义与问卷作答库") + '</div>';
+  if (evidenceChain.length) {
+    html += '<div style="margin-top:4px;"><b>[实体与题库物理匹配]</b>:</div>';
+    evidenceChain.forEach(ec => { html += '<div>  • ' + esc(ec) + '</div>'; });
+  }
+  if (mathDetails.length) {
+    html += '<div style="margin-top:4px;"><b>[数学双向验算日志]</b>:</div>';
+    mathDetails.forEach(md => { html += '<div>  • ' + esc(md) + '</div>'; });
+  }
+  const auditConclusion = auditVerdict === "PASS"
+    ? "本次审计通过；具体范围以本面板列出的检查和证据为准。"
+    : (auditVerdict === "FAIL"
+      ? "本次审计未通过；请按失败检查项处理，不能将部分通过扩大为完整通过。"
+      : auditSkipped ? "本模式未执行独立输出审计，不据此宣称审计通过。" : "本次响应未形成完整审计结论，不能据此宣称通过。");
+  const auditConclusionColor = auditVerdict === "PASS" ? "#1e7e34" : (auditVerdict === "FAIL" ? "#b91c1c" : "#92400e");
+  html += '<div style="margin-top:4px;color:' + auditConclusionColor + ';"><b>[审计结论]</b>: ' + esc(auditConclusion) + '</div>';
+  html += '</div></details>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderSchoolFactItemBadge(o) {
+  if (!o.question_id) return '';
+  const metricDimension = typeof o.metric_dimension === 'string' ? o.metric_dimension.trim() : '';
+  return '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:8px;">已接入题项第 '
+    + esc(o.question_id) + ' 题' + (metricDimension ? ' · ' + esc(metricDimension) : '') + '</div>';
+}
+
+function renderComputedWins(o, report, side) {
+  const scope = o.answer_scope || report.answer_scope || report._answerSpec || {};
+  if (scope.granularity && (!scope.include_dimensions || scope.granularity !== 'overall')) return '';
+  const rows = o.dimensions_comparison || report.dimensions_comparison || [];
+  const expected = ['数字资源','教育教学','数字素养','基础设施','教育治理','保障机制'];
+  if (rows.length !== expected.length || !expected.every(d => rows.some(r => r.dimension === d))) return '';
+  if (!rows.every(r => r.score_a != null && r.score_b != null && Number.isFinite(Number(r.score_a)) && Number.isFinite(Number(r.score_b)))) return '';
+  const count = rows.filter(r => side === 'a' ? Number(r.score_a) > Number(r.score_b) : Number(r.score_b) > Number(r.score_a)).length;
+  return '<div style="margin-top:10px;font-size:12px;">所展示的六个维度中，领先 ' + count + ' 项</div>';
+}
+
+function renderReport(report, into) {
+  const o = report.overview || report;
+  const objType = o.object_type || "teacher";
+  if (objType === "structured_task") {
+    const outputs = report.task_outputs || [];
+    let html = '<div class="card"><h2>查询结果</h2><table id="taskFacts"><thead><tr><th>对象/范围</th><th>值</th><th>单位</th><th>名次</th><th>状态</th></tr></thead><tbody>';
+    outputs.forEach(node => {
+      const value = node.delivery_unresolved ? '相关计算未决' : node.value == null ? '无数据' : (typeof node.value === 'number' ? Number(node.value.toPrecision(12)) : JSON.stringify(node.value));
+      if (Array.isArray(node.value)) {
+        node.value.forEach(row => {
+          html += '<tr><td>' + esc(node.label) + ' / ' + esc(row.school_name) + '</td><td>' + esc(row.score) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(row.rank) + '</td><td>' + esc(node.unit_display ? '单位含义待核' : node.status) + '</td></tr>';
+        });
+      } else {
+        html += '<tr><td>' + esc(node.label) + '</td><td>' + esc(value) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(node.rank ?? '—') + '</td><td>' + esc(node.unit_display || node.delivery_unresolved ? '单位含义待核' : node.status) + '</td></tr>';
+      }
+    });
+    html += '</tbody></table><div id="taskAnalysis">';
+    const analysis = registeredUnitAnalysis(report);
+    if (analysis) html += '<p>' + esc(analysis) + '</p>';
+    const verification = report._llmAnswerVerification || {};
+    if (verification.status === 'UNCONFIRMED') html += '<p class="answer-verification-unconfirmed" style="color:#92400e;">正文核验：UNCONFIRMED（未确认；不代表完整通过）</p>';
+    html += '</div>' + renderLlmSection(report, "结果说明") + renderAgentVisuals(report) + '</div>';
+    into.innerHTML = html;
+    return;
+  }
+
+  if (objType === "region_longitudinal") {
+    const regName = o.region_name || "区域大盘";
+    const yA = o.year_a || (o.school_years && o.school_years[0]) || "基准年";
+    const yB = o.year_b || (o.school_years && o.school_years[1]) || "目标年";
+    const scoreA = o.comparison_value_a ?? o.total_score_a ?? o.score_a ?? "-";
+    const scoreB = o.comparison_value_b ?? o.total_score_b ?? o.score_b ?? "-";
+    const unit = o.value_unit || "分";
+    const diff = o.diff ?? 0;
+    const diffSign = (diff > 0 ? "+" + diff : diff);
+    const pct = o.pct_change != null
+      ? ((o.pct_change > 0 ? "+" : "") + o.pct_change + "%")
+      : null;
+    const trend = o.trend || "变动";
+    const schoolsA = o.school_count_a ?? o.count_a;
+    const schoolsB = o.school_count_b ?? o.count_b;
+    const answersA = o.answer_count_a;
+    const answersB = o.answer_count_b;
+    const rawSchoolsA = o.total_unfiltered_count_a;
+    const rawSchoolsB = o.total_unfiltered_count_b;
+    const denominatorA = [];
+    const denominatorB = [];
+    if (rawSchoolsA != null) denominatorA.push('原始学校 ' + esc(rawSchoolsA) + ' 所');
+    if (rawSchoolsB != null) denominatorB.push('原始学校 ' + esc(rawSchoolsB) + ' 所');
+    if (schoolsA != null) denominatorA.push('有效学校 ' + esc(schoolsA) + ' 所');
+    if (schoolsB != null) denominatorB.push('有效学校 ' + esc(schoolsB) + ' 所');
+    if (answersA != null) denominatorA.push('有效作答 ' + esc(answersA) + ' 条');
+    if (answersB != null) denominatorB.push('有效作答 ' + esc(answersB) + ' 条');
+    const isGainer = diff >= 0;
+
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">区域两期重复截面变化</span>';
+    if (o.school_filter) {
+      html += '<span style="background:#eef7ee;color:var(--ok);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">群体过滤 · ' + esc(o.school_filter) + '</span>';
+    }
+    html += '<span style="font-size:13px;color:var(--text-muted);">基期/末期：' + esc(yA) + ' 年 → ' + esc(yB) + ' 年</span>';
+    html += '</div>';
+
+    html += '<h2 style="margin:0 0 8px;font-size:20px;font-weight:600;">' + esc(regName) + ' · 两期年度截面变化</h2>';
+    html += '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;">两个年度样本可不同；本结果不表示追踪同一批学校。</div>';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
+
+    html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow-card);">';
+    html += '<div style="font-size:12.5px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">前期基准 (' + esc(yA) + ' 年)</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(regName) + '</div>';
+    if (denominatorA.length) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + denominatorA.join(' · ') + '</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:var(--text-main);line-height:1;">' + esc(scoreA) + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">' + esc(unit) + '</span>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div style="background:' + (isGainer ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isGainer ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+    html += '<span style="position:absolute;top:12px;right:14px;background:' + (isGainer ? 'var(--primary)' : 'var(--warn)') + ';color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[' + esc(trend) + ' ' + esc(diffSign) + ' ' + esc(unit) + ']</span>';
+    html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:4px;">末期截面 (' + esc(yB) + ' 年)</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(regName) + '</div>';
+    if (denominatorB.length) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + denominatorB.join(' · ') + '</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:var(--primary);line-height:1;">' + esc(scoreB) + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">' + esc(unit) + '</span>';
+    html += '</div>';
+    if (pct !== null) html += '<div style="margin-top:10px;font-size:12px;color:' + (isGainer ? 'var(--ok)' : 'var(--danger)') + ';border-top:1px dashed var(--line);padding-top:6px;font-weight:600;">相对变化：' + esc(pct) + '</div>';
+    html += '</div>';
+
+    html += '</div>';
+
+    if (o.direct_answer) {
+      html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
+      html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">两期截面核查结论</div>';
+      html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;">' + esc(o.direct_answer) + '</div>';
+      html += '</div>';
+    }
+
+    if (Object.keys(report.radar_data || {}).length) html += '<div id="radar"></div>';
+
+    const deltas = report.dimension_deltas || [];
+    if (deltas.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">六大维度跨期变动明细</h3>';
+      html += '<table><tr><th>监测维度</th><th>' + esc(yA) + ' 年得分</th><th>' + esc(yB) + ' 年得分</th><th>变动分差</th><th>变动走势</th></tr>';
+      deltas.forEach(d => {
+        const dDiff = d.diff != null ? (d.diff >= 0 ? '+' + d.diff : d.diff) : '-';
+        const dColor = d.diff > 0 ? 'var(--ok)' : (d.diff < 0 ? 'var(--danger)' : 'var(--text-muted)');
+        const trendBadge = d.diff > 0 ? '<span style="color:var(--ok);font-weight:600;background:#eef7ee;padding:2px 8px;border-radius:9999px;font-size:12px;">上升 +' + d.diff + '</span>' : (d.diff < 0 ? '<span style="color:var(--danger);font-weight:600;background:#fef2f2;padding:2px 8px;border-radius:9999px;font-size:12px;">下降 ' + d.diff + '</span>' : '<span style="color:var(--text-muted);font-size:12px;">持平</span>');
+        html += '<tr><td><b>' + esc(d.dimension) + '</b></td>'
+          + '<td>' + d.score_a + ' 分</td>'
+          + '<td><b>' + d.score_b + ' 分</b></td>'
+          + '<td style="color:' + dColor + ';font-weight:600;">' + dDiff + ' 分</td>'
+          + '<td>' + trendBadge + '</td></tr>';
+      });
+      html += '</table></div>';
+    }
+
+    html += renderLlmSection(report, "智能两期截面变化研判与视导建议");
+
+    html += renderAgentVisuals(report);
+
+    html += renderAuditAndMetricsSection(report);
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本结果比较两个年度独立截面，仅描述观测变化，不代表同批学校追踪、因果效应或趋势外推。") + '</div>';
+
+    html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
+    html += '<button class="secondary" id="btnEvalRegStart" data-name="' + esc(regName) + '" data-year="' + esc(yA) + '">查看【' + esc(regName) + '】' + esc(yA) + ' 年大盘</button>';
+    html += '<button class="secondary" id="btnEvalRegEnd" data-name="' + esc(regName) + '" data-year="' + esc(yB) + '">查看【' + esc(regName) + '】' + esc(yB) + ' 年大盘</button>';
+    html += '</div>';
+
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+
+    const radarNode = document.getElementById("radar");
+    if (radarNode && Object.keys(report.radar_data || {}).length) {
+      radarChart(radarNode, report.radar_data || {}, report.radar_comp_data || {}, [yB + "年得分", yA + "年得分"]);
+    }
+
+    const bStart = document.getElementById("btnEvalRegStart");
+    if (bStart) {
+      bStart.onclick = () => {
+        document.getElementById("question").value = bStart.dataset.name + " " + bStart.dataset.year + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bEnd = document.getElementById("btnEvalRegEnd");
+    if (bEnd) {
+      bEnd.onclick = () => {
+        document.getElementById("question").value = bEnd.dataset.name + " " + bEnd.dataset.year + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "region_compare") {
+    const regA = report.region_a || report.region_a_detail || {};
+    const regB = report.region_b || report.region_b_detail || {};
+    const nameA = o.region_name_a || "区域A";
+    const nameB = o.region_name_b || "区域B";
+    const scoreA = o.total_score_a ?? "-";
+    const scoreB = o.total_score_b ?? "-";
+    const schoolsA = o.school_count_a ?? "-";
+    const schoolsB = o.school_count_b ?? "-";
+    const isWinA = o.winner === "A";
+    const isWinB = o.winner === "B";
+    const scopedDimension = o.answer_scope?.granularity === 'dimension';
+    const countOnly = o.target_stat === 'count' || o.answer_scope?.output_focus === 'school_count';
+    const valueLabel = countOnly ? '所 (有效学校数)' : (scopedDimension ? '分 (' + esc(o.target_dimension || '指定维度') + '学校等权均分)' : '分 (大盘均分)');
+    const dimensionLabel = o.target_dimension || '指定维度';
+    const showSchools = !scopedDimension || (o.school_count_a != null && o.school_count_b != null);
+
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">' + (scopedDimension ? esc(dimensionLabel) + '维度得分' : '双区域宏观横向比对') + '</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">监测学年：' + esc(o.year_desc || (o.school_years || []).join(", ") || o.year || '') + '</span>';
+    html += '</div>';
+
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(nameA) + ' <span style="color:var(--text-light);font-size:16px;">VS</span> ' + esc(nameB) + '</h2>';
+
+    if (o.sample_representation_note || report.sample_representation_note) {
+      const repNote = o.sample_representation_note || report.sample_representation_note;
+      html += '<div style="background:#fffbeb;border:1px solid #fef3c7;border-left:4px solid var(--warn);padding:12px 16px;border-radius:var(--radius-md);margin-bottom:16px;font-size:13px;line-height:1.6;color:#92400e;">';
+      html += '<b>[样本代表性提示]</b> ' + esc(repNote);
+      html += '</div>';
+    }
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
+
+    html += '<div style="background:' + (isWinA ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinA ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+    if (isWinA) {
+      if (!scopedDimension && !countOnly) html += '<span style="position:absolute;top:12px;right:14px;background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合均分领先]</span>';
+    }
+    html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:4px;">标的区域 A</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(nameA) + '</div>';
+    if (showSchools) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">监测覆盖：' + esc(schoolsA) + ' 所学校</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:var(--primary);line-height:1;">' + scoreA + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">' + valueLabel + '</span>';
+    html += '</div>';
+    html += renderComputedWins(o, report, 'a');
+    html += '</div>';
+
+    html += '<div style="background:' + (isWinB ? 'linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinB ? '#d0e5ff' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+    if (isWinB) {
+      if (!scopedDimension && !countOnly) html += '<span style="position:absolute;top:12px;right:14px;background:#2563eb;color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合均分领先]</span>';
+    }
+    html += '<div style="font-size:12.5px;color:#2563eb;font-weight:600;margin-bottom:4px;">标的区域 B</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(nameB) + '</div>';
+    if (showSchools) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">监测覆盖：' + esc(schoolsB) + ' 所学校</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:#2563eb;line-height:1;">' + scoreB + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">' + valueLabel + '</span>';
+    html += '</div>';
+    html += renderComputedWins(o, report, 'b');
+    html += '</div>';
+
+    html += '</div>';
+
+    if (o.direct_answer) {
+      html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
+      html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">核心比对结论</div>';
+      html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;">' + esc(o.direct_answer) + '</div>';
+      html += '</div>';
+    }
+
+    if (!scopedDimension) html += '<div id="radar"></div>';
+
+    const dims = report.dimensions_comparison || [];
+    if (dims.length) {
+      const showDiff = o.answer_scope
+        ? (o.answer_scope.requested_result_statistics || []).includes('difference')
+        : dims.some(d => d.diff != null);
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">维度得分</h3>';
+      html += '<table><tr><th>监测维度</th><th>' + esc(nameA) + ' (均分)</th><th>' + esc(nameB) + ' (均分)</th>'
+        + (showDiff ? '<th>分差 (A - B)</th><th>领先归属</th>' : '') + '</tr>';
+      dims.forEach(d => {
+        const delta = d.diff == null ? null : Number(d.diff);
+        const hasDelta = delta != null && Number.isFinite(delta);
+        const dDiff = hasDelta ? (delta >= 0 ? '+' + delta : delta) : '-';
+        let leadBadge = '';
+        if (hasDelta && delta > 0) {
+          leadBadge = '<span style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:2px 8px;border-radius:9999px;font-size:12px;">[领先] ' + esc(nameA) + '</span>';
+        } else if (hasDelta && delta < 0) {
+          leadBadge = '<span style="color:#2563eb;font-weight:600;background:#eff6ff;padding:2px 8px;border-radius:9999px;font-size:12px;">[领先] ' + esc(nameB) + '</span>';
+        } else if (hasDelta) {
+          leadBadge = '<span style="color:var(--text-muted);font-size:12px;">两地持平</span>';
+        } else {
+          leadBadge = '<span style="color:var(--text-muted);font-size:12px;">无法判定</span>';
+        }
+        html += '<tr><td><b>' + esc(d.dimension) + '</b></td>'
+          + '<td><b>' + d.score_a + ' 分</b></td>'
+          + '<td><b>' + d.score_b + ' 分</b></td>'
+          + (showDiff ? '<td style="color:' + (hasDelta && delta > 0 ? 'var(--primary)' : (hasDelta && delta < 0 ? '#2563eb' : 'var(--text-muted)')) + ';font-weight:600;">' + dDiff + (hasDelta ? ' 分' : '') + '</td>'
+            + '<td>' + leadBadge + '</td>' : '') + '</tr>';
+      });
+      html += '</table>';
+      if (showDiff && o.difference_basis === 'raw_means_then_round') {
+        html += '<div class="hint">均分显示为两位小数；分差由未舍入均值相减后保留两位。</div>';
+      }
+      html += '</div>';
+    }
+
+    html += renderLlmSection(report, scopedDimension ? "智能答复" : "智能宏观对比研判与视导建议");
+
+    html += renderAgentVisuals(report);
+
+    html += renderAuditAndMetricsSection(report);
+
+    if (!scopedDimension) html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本横向对比报告基于两区域全量中小学在国家/省级教育数字化问卷填报的实际作答均分折算聚合生成，供宏观教育统筹与区域对标视导参考。") + '</div>';
+
+    if (!scopedDimension) {
+      html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
+      html += '<button class="secondary" id="btnEvalRegA" data-name="' + esc(nameA) + '" data-year="' + esc(o.year_a || o.year || '') + '">深入视导【' + esc(nameA) + '】大盘</button>';
+      html += '<button class="secondary" id="btnEvalRegB" data-name="' + esc(nameB) + '" data-year="' + esc(o.year_b || o.year || '') + '">深入视导【' + esc(nameB) + '】大盘</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+
+    if (!scopedDimension) radarChart(
+      document.getElementById("radar"),
+      report.radar_data || report.radar_data_a || {},
+      report.radar_comp_data || report.radar_data_b || {},
+      [nameA, nameB]
+    );
+
+    const bA = document.getElementById("btnEvalRegA");
+    if (bA) {
+      bA.onclick = () => {
+        document.getElementById("question").value = bA.dataset.name + " " + (bA.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bB = document.getElementById("btnEvalRegB");
+    if (bB) {
+      bB.onclick = () => {
+        document.getElementById("question").value = bB.dataset.name + " " + (bB.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "school_compare") {
+    const schA = report.school_a || {};
+    const schB = report.school_b || {};
+    const nameA = o.school_name_a || "学校A";
+    const nameB = o.school_name_b || "学校B";
+    const scoreA = o.total_score_a ?? "-";
+    const scoreB = o.total_score_b ?? "-";
+    const isWinA = o.winner === "A";
+    const isWinB = o.winner === "B";
+
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">双校智能比对</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">监测周期：' + esc(o.year_desc || (o.school_years || []).join(", ")) + '</span>';
+    html += '</div>';
+
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(nameA) + ' <span style="color:var(--text-light);font-size:16px;">VS</span> ' + esc(nameB) + '</h2>';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
+
+    html += '<div style="background:' + (isWinA ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinA ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+    if (isWinA) {
+      html += '<span style="position:absolute;top:12px;right:14px;background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合领先]</span>';
+    }
+    html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:4px;">标的学校 A</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(nameA) + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + esc(schA.teacher_dept || '') + ' · ' + esc(schA.school_years ? schA.school_years[0] + '年' : '') + '</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:var(--primary);line-height:1;">' + scoreA + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">分</span>';
+    html += '</div>';
+    html += renderComputedWins(o, report, 'a');
+    html += '</div>';
+
+    html += '<div style="background:' + (isWinB ? 'linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinB ? '#d0e5ff' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+    if (isWinB) {
+      html += '<span style="position:absolute;top:12px;right:14px;background:#2563eb;color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合领先]</span>';
+    }
+    html += '<div style="font-size:12.5px;color:#2563eb;font-weight:600;margin-bottom:4px;">标的学校 B</div>';
+    html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(nameB) + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + esc(schB.teacher_dept || '') + ' · ' + esc(schB.school_years ? schB.school_years[0] + '年' : '') + '</div>';
+    html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+    html += '<span style="font-size:36px;font-weight:700;color:#2563eb;line-height:1;">' + scoreB + '</span>';
+    html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">分</span>';
+    html += '</div>';
+    html += renderComputedWins(o, report, 'b');
+    html += '</div>';
+
+    html += '</div>';
+
+    if (o.direct_answer) {
+      html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
+      html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">核心比对结论</div>';
+      html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;">' + esc(o.direct_answer) + '</div>';
+      html += '</div>';
+    }
+
+    html += '<div id="radar"></div>';
+
+    const dims = report.dimensions_comparison || [];
+    if (dims.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">所选维度量化得分逐项比对</h3>';
+      html += '<table><tr><th>监测维度</th><th>' + esc(nameA) + '</th><th>' + esc(nameB) + '</th><th>分差 (A - B)</th><th>领先归属</th></tr>';
+      dims.forEach(d => {
+        const delta = d.diff == null ? null : Number(d.diff);
+        const hasDelta = delta != null && Number.isFinite(delta);
+        const dDiff = hasDelta ? (delta >= 0 ? '+' + delta : delta) : '-';
+        let leadBadge = '';
+        if (hasDelta && delta > 0) {
+          leadBadge = '<span style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:2px 8px;border-radius:9999px;font-size:12px;">[领先] ' + esc(nameA) + '</span>';
+        } else if (hasDelta && delta < 0) {
+          leadBadge = '<span style="color:#2563eb;font-weight:600;background:#eff6ff;padding:2px 8px;border-radius:9999px;font-size:12px;">[领先] ' + esc(nameB) + '</span>';
+        } else if (hasDelta) {
+          leadBadge = '<span style="color:var(--text-muted);font-size:12px;">两校持平</span>';
+        } else {
+          leadBadge = '<span style="color:var(--text-muted);font-size:12px;">无法判定</span>';
+        }
+        html += '<tr><td><b>' + esc(d.dimension) + '</b></td>'
+          + '<td><b>' + d.score_a + ' 分</b></td>'
+          + '<td><b>' + d.score_b + ' 分</b></td>'
+          + '<td style="color:' + (hasDelta && delta > 0 ? 'var(--primary)' : (hasDelta && delta < 0 ? '#2563eb' : 'var(--text-muted)')) + ';font-weight:600;">' + dDiff + (hasDelta ? ' 分' : '') + '</td>'
+          + '<td>' + leadBadge + '</td></tr>';
+      });
+      html += '</table></div>';
+    }
+
+    html += renderLlmSection(report, "智能对比研判与互鉴建议");
+
+    html += renderAgentVisuals(report);
+
+    html += renderAuditAndMetricsSection(report);
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本横向对比报告基于两校在国家/省级教育数字化问卷填报作答的真实评估得分生成，供学校对标互鉴与教育视导参考。") + '</div>';
+
+    html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
+    html += '<button class="secondary" id="btnEvalSchoolA" data-name="' + esc(nameA) + '" data-year="' + esc(o.year_a || '') + '">深入评估【' + esc(nameA) + '】</button>';
+    html += '<button class="secondary" id="btnEvalSchoolB" data-name="' + esc(nameB) + '" data-year="' + esc(o.year_b || '') + '">深入评估【' + esc(nameB) + '】</button>';
+    html += '</div>';
+
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+
+    radarChart(
+      document.getElementById("radar"),
+      report.radar_data || {},
+      report.radar_comp_data || {},
+      [nameA, nameB]
+    );
+
+    const bA = document.getElementById("btnEvalSchoolA");
+    if (bA) {
+      bA.onclick = () => {
+        document.getElementById("question").value = bA.dataset.name + " " + (bA.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bB = document.getElementById("btnEvalSchoolB");
+    if (bB) {
+      bB.onclick = () => {
+        document.getElementById("question").value = bB.dataset.name + " " + (bB.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "school_fact") {
+    const answerScope = o.answer_scope || report.answer_scope || report._answerSpec || {};
+    if (answerScope.granularity === "item_set") {
+      const rows = Array.isArray(o.item_results) ? o.item_results : [];
+      const derived = o.derived_result || null;
+      let html = '<div class="card">';
+      html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">问卷双题项 · ' + esc(o.year || '') + ' 年</div>';
+      html += '<h2 style="margin:0 0 16px;font-size:20px;">' + esc(o.school_name || '该校') + '</h2>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">';
+      rows.forEach(item => {
+        const hasValue = item.target_value !== null && item.target_value !== undefined;
+        const unit = item.coding_status === 'source_missing' ? '' : (item.unit || '');
+        html += '<div style="border:1px solid var(--line);border-radius:var(--radius-md);padding:14px;">';
+        html += '<div style="font-size:13px;color:var(--text-muted);">第 ' + esc(item.question_id) + ' 题 · ' + esc(item.metric_name || '') + '</div>';
+        html += '<div style="font-size:26px;font-weight:700;color:var(--primary);margin-top:8px;">' + (hasValue ? esc(item.target_value) + esc(unit) : '无数据') + '</div></div>';
+      });
+      html += '</div>';
+      const derivedLabels = {
+        subtract: '前者减后者', add: '两者相加', sum: '两者相加',
+        divide_percent: '前者除以后者', divide: '前者除以后者', ratio: '前者除以后者'
+      };
+      const derivedLabel = derived && Object.prototype.hasOwnProperty.call(derivedLabels, derived.operation)
+        ? derivedLabels[derived.operation] : null;
+      if (derivedLabel && derived.value !== null && derived.value !== undefined) {
+        html += '<div style="margin-top:14px;font-weight:600;">' + esc(derivedLabel) + '：' + esc(derived.value) + esc(derived.unit || '') + '</div>';
+      }
+      html += '<div style="margin-top:14px;line-height:1.65;">' + esc(o.direct_answer || '') + '</div>';
+      html += renderLlmSection(report, "模型回答");
+      if (answerScope.chart_requested) html += renderAgentVisuals(report);
+      if (report._showFactDebugAudit && report.audit && report.system_metrics) html += renderAuditAndMetricsSection(report);
+      html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校接入问卷作答库，供核查参考。") + '</div></div>';
+      into.innerHTML = html;
+      return;
+    }
+    const itemScoped = answerScope.granularity === "item";
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">指标事实问答</span>';
+    if (itemScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">智能语义定向 · 契约核验</span>';
+    const loc = [o.province, o.city, o.district].filter(Boolean).join(" · ");
+    if (loc) html += '<span style="font-size:13px;color:var(--text-muted);">' + esc(loc) + '</span>';
+    if (o.school_type) html += '<span style="font-size:13px;color:var(--text-muted);">· ' + esc(o.school_type) + '</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">· 监测年份：' + esc((o.school_years || [o.year || '2023']).join(", ")) + '</span>';
+    html += '</div>';
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(o.school_name) + ' · ' + esc(o.metric_name || "指标核查") + '</h2>';
+
+    html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:18px;">';
+    html += renderSchoolFactItemBadge(o);
+    html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px;">';
+    html += '<span style="font-size:42px;font-weight:700;color:var(--primary);line-height:1;">' + (o.target_value ?? '-') + '</span>';
+    html += '<span style="font-size:16px;font-weight:500;color:var(--text-muted);">' + esc(o.coding_status === 'source_missing' ? '' : (o.unit || '台')) + '</span>';
+    if (o.normalized_score != null && answerScope.value_view !== "normalized_score") {
+      html += '<span style="font-size:13px;color:var(--text-light);margin-left:8px;">(问卷归一得分折算: ' + o.normalized_score + ' 分)</span>';
+    }
+    html += '</div>';
+    html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:10px;">' + esc(o.direct_answer || '') + '</div>';
+    html += '</div>';
+
+    const contextFacts = itemScoped ? [] : (report.context_facts || []);
+    if (contextFacts.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">关联规模与配置背景</h3>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;margin-top:10px;">';
+      contextFacts.forEach(c => {
+        html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;">';
+        html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">' + esc(c.label) + '</div>';
+        html += '<div style="font-size:16px;font-weight:600;color:var(--text-main);">' + esc(c.value) + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    const history = itemScoped ? [] : (report.history || []);
+    if (history.length > 1) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">历史年度登记追踪</h3>';
+      html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">';
+      history.forEach(h => {
+        const isCur = String(h.year) === String(o.year || (o.school_years || [])[0]);
+        html += '<div style="background:' + (isCur ? 'var(--primary-light)' : '#ffffff') + ';border:1px solid ' + (isCur ? 'var(--primary)' : 'var(--line)') + ';border-radius:var(--radius-md);padding:8px 16px;text-align:center;min-width:90px;">';
+        html += '<div style="font-size:12px;color:' + (isCur ? 'var(--primary)' : 'var(--text-muted)') + ';">' + esc(h.year) + ' 年' + (isCur ? ' (本期)' : '') + '</div>';
+        html += '<div style="font-size:16px;font-weight:600;color:' + (isCur ? 'var(--primary)' : 'var(--text-main)') + ';">' + esc(h.value) + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    html += renderLlmSection(report, "模型回答");
+    if (!itemScoped) {
+      html += renderAgentVisuals(report);
+      html += renderAuditAndMetricsSection(report);
+    } else if (answerScope.chart_requested) {
+      html += renderAgentVisuals(report);
+    }
+    if (itemScoped && report.audit && report.system_metrics) {
+      html += renderAuditAndMetricsSection(report);
+    }
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校在国家/省级教育数字化问卷的接入问卷作答库，供核查参考。") + '</div>';
+    if (!itemScoped) {
+      html += '<div style="margin-top:16px;display:flex;gap:10px;">';
+      html += '<button class="secondary" id="btnEvalWholeSchool" data-name="' + esc(o.school_name) + '" data-year="' + esc(o.year || '') + '">综合评估该校数字化发展水平</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+    const btn = document.getElementById("btnEvalWholeSchool");
+    if (btn) {
+      btn.onclick = () => {
+        document.getElementById("question").value = btn.dataset.name + " " + (btn.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "school_ranking") {
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">区域排位与对比</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">' + esc(o.region_name || "") + '</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">· 监测学年：' + esc((o.school_years || [o.year || '2023']).join(", ")) + '</span>';
+    html += '</div>';
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(o.school_name) + ' · 区域排位与综合对比</h2>';
+
+    html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:18px;">';
+    html += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap;">';
+    html += '<span style="font-size:38px;font-weight:700;color:var(--primary);line-height:1;">第 ' + (o.rank ?? '-') + ' 名</span>';
+    html += '<span style="font-size:16px;font-weight:500;color:var(--text-muted);">/ 全区共 ' + (o.total_schools ?? '-') + ' 所学校</span>';
+    html += '<span style="background:#faeee9;color:var(--primary);padding:3px 10px;border-radius:9999px;font-size:13px;font-weight:600;">前 ' + (o.top_pct ?? '-') + '%</span>';
+    html += '<span style="background:#eef7ee;color:var(--ok);padding:3px 10px;border-radius:9999px;font-size:13px;font-weight:600;">超越全区 ' + (o.beat_pct ?? '-') + '%</span>';
+    html += '</div>';
+    html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:10px;">' + esc(o.direct_answer || '') + '</div>';
+    html += '</div>';
+
+    const diffVal = o.diff != null ? (o.diff >= 0 ? '+' + o.diff : o.diff) : '-';
+    const diffColor = (o.diff != null && o.diff >= 0) ? 'var(--ok)' : 'var(--danger)';
+    html += '<div class="statGrid">'
+      + '<div class="stat"><div class="v">' + (o.total_score ?? "-") + ' 分</div><div class="l">本校综合均分</div></div>'
+      + '<div class="stat"><div class="v">' + (o.region_avg ?? "-") + ' 分</div><div class="l">全区综合均分</div></div>'
+      + '<div class="stat"><div class="v" style="color:' + diffColor + ';">' + diffVal + ' 分</div><div class="l">相对均分差额</div></div>'
+      + '<div class="stat"><div class="v" style="font-size:18px;">第 ' + (o.rank ?? "-") + ' / ' + (o.total_schools ?? "-") + '</div><div class="l">全区排位</div></div>'
+      + '</div>';
+
+    html += '<div id="radar"></div>';
+
+    const dims = report.dimensions_comparison || [];
+    if (dims.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">六大维度相对全区均值对照</h3>';
+      html += '<table><tr><th>评估维度</th><th>本校得分</th><th>全区均分</th><th>差值</th><th>表现状态</th></tr>';
+      dims.forEach(d => {
+        const dDiff = d.diff != null ? (d.diff >= 0 ? '+' + d.diff : d.diff) : '-';
+        const tag = d.is_lead ? '<span style="color:var(--ok);font-weight:600;">领先</span>' : '<span style="color:var(--warn);font-weight:600;">待提升</span>';
+        html += '<tr><td><b>' + esc(d.dimension) + '</b></td>'
+          + '<td><b>' + d.school_score + ' 分</b></td>'
+          + '<td>' + d.region_avg + ' 分</td>'
+          + '<td style="color:' + (d.is_lead ? 'var(--ok)' : 'var(--danger)') + ';font-weight:600;">' + dDiff + ' 分</td>'
+          + '<td>' + tag + '</td></tr>';
+      });
+      html += '</table></div>';
+    }
+
+    const peers = report.peer_schools || [];
+    if (peers.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">区域临近梯队学校对照</h3>';
+      html += '<table><tr><th>名次</th><th>学校名称</th><th>学段</th><th>数字化均分</th><th>状态</th><th>操作</th></tr>';
+      peers.forEach(p => {
+        const isSelf = p.is_target;
+        const rowBg = isSelf ? ' style="background:#fff7f3;"' : '';
+        html += '<tr' + rowBg + '><td><b>' + p.rank + '</b></td>'
+          + '<td><b>' + esc(p.school_name) + '</b></td>'
+          + '<td>' + esc(p.school_type || '中小学') + '</td>'
+          + '<td><span style="color:var(--primary);font-weight:600;">' + p.score + ' 分</span></td>'
+          + '<td>' + (isSelf ? '<span style="background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">当前本校</span>' : '<span style="color:var(--text-muted);font-size:12px;">对比参照</span>') + '</td>'
+          + '<td><button class="ghost btnPeerEval" data-name="' + esc(p.school_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">深入评估</button></td></tr>';
+      });
+      html += '</table></div>';
+    }
+
+    html += renderLlmSection(report, "智能排位研判与提升建议");
+
+    html += renderAgentVisuals(report);
+
+    html += renderAuditAndMetricsSection(report);
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本排名基于区域全量中小学在国家/省数字化问卷接入问卷作答折算均分，供教育视导与学校定位参考。") + '</div>';
+    html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
+    html += '<button class="secondary" id="btnRankToFact" data-name="' + esc(o.school_name) + '">查看该校设备配置事实</button>';
+    html += '<button class="secondary" id="btnRankToRegion" data-region="' + esc(o.region_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">查看全区数字化大盘</button>';
+    html += '<button class="ghost" id="btnRankToWholeSchool" data-name="' + esc(o.school_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">整校数字化六维深度评估</button>';
+    html += '</div>';
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+
+    radarChart(
+      document.getElementById("radar"),
+      report.radar_data || {},
+      report.radar_region_data || {},
+      ["本校六维得分", (o.short_name || o.region_name || "全区") + "均分"]
+    );
+
+    document.querySelectorAll(".btnPeerEval").forEach(b => {
+      b.onclick = () => {
+        document.getElementById("question").value = b.dataset.name + " " + b.dataset.year + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    });
+    const bFact = document.getElementById("btnRankToFact");
+    if (bFact) {
+      bFact.onclick = () => {
+        document.getElementById("question").value = bFact.dataset.name + " 给老师配置了多少台平板电脑？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bReg = document.getElementById("btnRankToRegion");
+    if (bReg) {
+      bReg.onclick = () => {
+        document.getElementById("question").value = bReg.dataset.region + " " + bReg.dataset.year + " 数字化大盘怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bWhole = document.getElementById("btnRankToWholeSchool");
+    if (bWhole) {
+      bWhole.onclick = () => {
+        document.getElementById("question").value = bWhole.dataset.name + " " + bWhole.dataset.year + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "region") {
+    const isRegionRanking = o.analysis_operation === "region_ranking";
+    const answerScope = o.answer_scope || report.answer_scope || report._answerSpec || {};
+    const semanticScoped = Boolean(answerScope.granularity);
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">' + (isRegionRanking ? '区域学校排名' : '区域数字化大盘') + '</span>';
+    if (semanticScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">智能语义定向 · AnswerSpec</span>';
+    if (o.target_rank) {
+      const shownRank = (o.target_school && o.target_school.rank) || o.target_rank;
+      html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">精准位次 · 第 ' + shownRank + ' 名</span>';
+    } else if (o.target_top_n) {
+      html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">榜单 · 前 ' + o.target_top_n + ' 名</span>';
+    }
+    if (o.target_dimensions && o.target_dimensions.length >= 2) {
+      html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">目标维度 · ' + esc(o.target_dimensions.join(' 与 ')) + '</span>';
+    } else if (o.target_dimension) {
+      html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">目标维度 · ' + esc(o.target_dimension) + '</span>';
+    }
+    if (o.target_stat) {
+      const statLabel = o.target_stat === 'count' ? '学校数' : o.target_stat === 'median' ? '中位数' : (o.target_stat === 'max' ? '最高分' : (o.target_stat === 'min' ? '最低分' : '均值'));
+      html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">统计指标 · ' + esc(statLabel) + '</span>';
+    }
+    if (o.school_filter) {
+      const countNote = o.total_unfiltered_count ? ' (' + (o.school_count || 0) + ' 所 / 全区共 ' + o.total_unfiltered_count + ' 所)' : '';
+      html += '<span style="background:#eef7ee;color:var(--ok);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">群体过滤 · ' + esc(o.school_filter) + countNote + '</span>';
+    }
+    html += '<span style="font-size:13px;color:var(--text-muted);">监测学年：' + esc((o.school_years || []).join(", ")) + '</span>';
+    html += '</div>';
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(o.region_name) + (isRegionRanking ? ' · 学校数字化排名' : ' · 数字化发展大盘') + '</h2>';
+
+    if (o.direct_answer) {
+      html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:18px;">';
+      let title = "核心核查结论";
+      if (o.target_rank && o.target_school) {
+        title = "区域位次核查结果";
+      } else if (o.target_dimensions && o.target_dimensions.length >= 2) {
+        title = "【" + esc(o.target_dimensions.join('与')) + "】并列维度统计核查结果";
+      } else if (o.target_dimension) {
+        title = "【" + esc(o.target_dimension) + "】维度统计核查结果";
+      } else if (o.target_stat) {
+        const statLabel = o.target_stat === 'count' ? '学校数' : o.target_stat === 'median' ? '中位数' : (o.target_stat === 'max' ? '最高分' : (o.target_stat === 'min' ? '最低分' : '均值'));
+        title = "【" + esc(statLabel) + "】核心指标统计结果";
+      }
+      html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">' + title + '</div>';
+      if (o.target_rank && o.target_school) {
+        html += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap;">';
+        html += '<span style="font-size:24px;font-weight:700;color:var(--primary);">' + esc(o.target_school.school_name) + '</span>';
+        html += '<span style="font-size:16px;font-weight:700;color:var(--text-main);">第 ' + o.target_school.rank + ' 名</span>';
+        html += '<span style="font-size:14px;font-weight:600;color:var(--primary);">(综合得分: ' + o.target_school.score + ' 分)</span>';
+        if (o.target_school.school_type) {
+          html += '<span style="font-size:12.5px;color:var(--text-muted);">' + esc(o.target_school.school_type) + '</span>';
+        }
+        html += '</div>';
+        html += '<div style="font-size:14.5px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:8px;">' + esc(o.direct_answer) + '</div>';
+      } else if (o.target_dimensions_detail && o.target_dimensions_detail.length >= 2) {
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:12px;">';
+        o.target_dimensions_detail.forEach(td => {
+          html += '<div style="background:#ffffff;border:1px solid #f6ded5;border-radius:var(--radius-md);padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">';
+          html += '<div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">【' + esc(td.dimension) + '】维度均分</div>';
+          html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+          html += '<span style="font-size:30px;font-weight:700;color:var(--primary);line-height:1;">' + td.score + '</span>';
+          html += '<span style="font-size:14px;font-weight:500;color:var(--text-muted);">分</span>';
+          if (Number.isInteger(td.rank) && td.rank > 0) {
+            html += '<span style="font-size:11.5px;background:#faeee9;color:var(--primary);padding:2px 8px;border-radius:4px;margin-left:auto;font-weight:600;">区域位列第 ' + td.rank + ' 名</span>';
+          }
+          html += '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '<div style="font-size:14.5px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:8px;">' + esc(o.direct_answer) + '</div>';
+      } else {
+        html += '<div style="font-size:14.5px;color:var(--text-main);line-height:1.65;">' + esc(o.direct_answer) + '</div>';
+      }
+      html += '</div>';
+    }
+
+    const requestedStat = answerScope.target_stat || o.target_stat;
+    const extremumField = requestedStat === 'max' ? 'max_score' : requestedStat === 'min' ? 'min_score' : null;
+    const firstStatVal = extremumField ? (o[extremumField] ?? '-') : answerScope.granularity === 'item'
+      ? (o.target_value ?? o.normalized_score ?? "-")
+      : (answerScope.granularity === 'dimension'
+        ? (requestedStat === 'median' ? (o.target_dimension_median_score ?? o.median_score ?? "-") : (o.target_dimension_score ?? o.total_score ?? "-"))
+        : ((requestedStat === 'median' && o.median_score != null) ? o.median_score : (o.total_score ?? "-")));
+    const firstStatLabel = extremumField ? (requestedStat === 'max' ? '最高值' : '最低值') : answerScope.granularity === 'item'
+      ? ((o.question_id ? ('第' + o.question_id + '题') : '目标题项') + (answerScope.value_view === 'normalized_score' ? '归一均分' : '数值'))
+      : (answerScope.granularity === 'dimension'
+        ? ((o.target_dimension || '目标') + (requestedStat === 'median' ? '维度中位数' : '维度得分'))
+        : ((requestedStat === 'median') ? "区域中位数得分" : "区域综合均分"));
+    if (semanticScoped) {
+      html += '<div class="statGrid">';
+      if (answerScope.output_focus !== 'school_count') {
+        html += '<div class="stat"><div class="v">' + esc(firstStatVal) + '</div><div class="l">' + esc(firstStatLabel) + '</div></div>';
+        if (requestedStat === 'mean_and_median' && o.median_score != null) {
+          html += '<div class="stat"><div class="v">' + esc(o.median_score) + '</div><div class="l">学校得分中位数</div></div>';
+        }
+        if (requestedStat === 'mean_and_median' && o.mean_median_difference != null) {
+          html += '<div class="stat"><div class="v">' + esc(o.mean_median_difference) + '</div><div class="l">均值减中位数</div></div>';
+        }
+      }
+      if (o.school_count != null) html += '<div class="stat"><div class="v">' + esc(o.school_count) + '</div><div class="l">有效学校样本</div></div>';
+      if (answerScope.granularity === 'item' && o.answer_count != null) html += '<div class="stat"><div class="v">' + esc(o.answer_count) + '</div><div class="l">有效作答样本</div></div>';
+      html += '</div>';
+      if (answerScope.granularity === 'overall' && (report.dimensions || []).length) {
+        html += '<div class="section"><h3 style="margin-top:0;">六维精简概况</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">';
+        (report.dimensions || []).forEach(d => {
+          html += '<div style="border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:#fff;"><div style="font-size:12px;color:var(--text-muted);">' + esc(d.dimension || '-') + '</div><div style="font-size:18px;font-weight:700;color:var(--primary);">' + esc(d.score ?? '-') + ' 分</div></div>';
+        });
+        html += '</div></div>';
+      }
+    } else {
+      html += '<div class="statGrid">'
+        + '<div class="stat"><div class="v">' + firstStatVal + '</div><div class="l">' + firstStatLabel + '</div></div>'
+        + '<div class="stat"><div class="v">' + (o.school_count ?? "-") + (o.total_unfiltered_count ? ' <span style="font-size:12px;font-weight:normal;color:var(--text-light);">/ 全区 ' + o.total_unfiltered_count + ' 所</span>' : '') + '</div><div class="l">' + (o.school_filter ? '过滤后学校样本' : '监测学校总数') + '</div></div>'
+        + '<div class="stat"><div class="v" style="font-size:18px;">' + (o.max_score ?? "-") + ' / ' + (o.min_score ?? "-") + '</div><div class="l">最高/最低分</div></div>'
+        + '<div class="stat"><div class="v" style="font-size:14px;color:var(--ok);">' + esc(o.strongest_dim || "-") + '</div><div class="l">相对优势维度</div></div>'
+        + '<div class="stat"><div class="v" style="font-size:14px;color:var(--warn);">' + esc(o.weakest_dim || "-") + '</div><div class="l">主要瓶颈短板</div></div>'
+        + '</div>';
+    }
+
+    if (o.conclusion && !semanticScoped) {
+      html += '<div class="section" style="background:#fbfaf7;border-left:3px solid var(--accent);">';
+      html += '<h3 style="margin:0 0 6px;color:var(--accent);">区域宏观诊断结论</h3>';
+      html += '<div style="font-size:14.5px;line-height:1.65;">' + esc(o.conclusion) + '</div>';
+      html += '</div>';
+    }
+
+    if (!semanticScoped) html += '<div id="radar"></div>';
+
+    const tiers = report.tiers || [];
+    if (tiers.length) {
+      html += '<div class="section">';
+      html += '<h3 style="margin-top:0;">区域学校发展梯队结构</h3>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;margin-top:10px;">';
+      tiers.forEach(t => {
+        html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;">';
+        html += '<div style="font-size:12px;color:var(--text-muted);">' + esc(t.tier) + '</div>';
+        html += '<div style="font-size:18px;font-weight:600;color:var(--text-main);margin-top:2px;">' + t.count + ' 所 <span style="font-size:13px;font-weight:normal;color:var(--text-light);">(' + t.pct + ')</span></div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    const topSchools = report.top_schools || [];
+    if (topSchools.length) {
+      html += '<div class="section">';
+      const rankingHeading = o.target_top_n
+        ? '区域学校排名（前 ' + Math.min(o.target_top_n, o.school_count || o.target_top_n) + ' 名）'
+        : (o.target_rank ? '区域学校精准名次结果' : '区域学校排名结果');
+      html += '<h3 style="margin-top:0;">' + (isRegionRanking ? rankingHeading : '标杆示范学校 (Top 5)') + '</h3>';
+      html += '<table><tr><th>名次</th><th>学校名称</th><th>学段</th><th>数字化均分</th><th>操作</th></tr>';
+      topSchools.forEach(s => {
+        const isTgt = Boolean(s.is_target || (o.target_rank && s.rank === o.target_rank));
+        const rowBg = isTgt ? ' style="background:#fff7f3;"' : '';
+        const tag = isTgt ? '<span style="background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;margin-left:8px;">[目标第' + s.rank + '名]</span>' : '';
+        html += '<tr' + rowBg + '><td><b>' + s.rank + '</b></td><td><b>' + esc(s.school_name) + '</b>' + tag + '</td><td>' + esc(s.school_type) + '</td><td><span style="color:var(--primary);font-weight:600;">' + s.score + ' 分</span></td>';
+        html += '<td><button class="ghost btnTopSchoolEval" data-name="' + esc(s.school_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">深入评估</button></td></tr>';
+      });
+      html += '</table></div>';
+    }
+
+    if (isRegionRanking && o.ranking_spec) {
+      const rs = o.ranking_spec;
+      const rankingPopulationCount = (o.ranking_population && o.ranking_population.eligible_school_count) ?? o.school_count;
+      html += '<div class="banner disclaimer" style="margin-top:12px;">排名口径：各校非空标准化作答均值 × 100，按未舍入得分降序；同分按学校 ID 升序形成唯一序号；页面得分保留 '
+        + esc(rs.display_precision ?? 2) + ' 位小数。'
+        + (rankingPopulationCount != null ? '有效排名总体：' + esc(rankingPopulationCount) + ' 所。' : '')
+        + '</div>';
+    }
+
+    if (o.target_school) {
+      html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
+      html += '<button class="secondary" id="btnEvalTargetSchool" data-name="' + esc(o.target_school.school_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">综合评估【' + esc(o.target_school.school_name) + '】</button>';
+      html += '<button class="ghost" id="btnFactTargetSchool" data-name="' + esc(o.target_school.school_name) + '">查看该校设备配置事实</button>';
+      html += '</div>';
+    }
+
+    if (!semanticScoped || report._llmModelInvoked !== false) {
+      html += renderLlmSection(report, semanticScoped ? "智能语义定向答复" : "智能区域宏观诊断与建议");
+    }
+    if (!semanticScoped || answerScope.chart_requested) {
+      html += renderAgentVisuals(report);
+    }
+    if (!semanticScoped || (report.audit && report.system_metrics)) {
+      html += renderAuditAndMetricsSection(report);
+    }
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本报告由区域全量中小学数字化作答数据统计聚合生成，仅供教育行政主管部门决策参考。") + '</div>';
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+    radarChart(document.getElementById("radar"), report.radar_data || {});
+    document.querySelectorAll(".btnTopSchoolEval").forEach(b => {
+      b.onclick = () => {
+        document.getElementById("question").value = b.dataset.name + " " + b.dataset.year + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    });
+    const bTgtEval = document.getElementById("btnEvalTargetSchool");
+    if (bTgtEval) {
+      bTgtEval.onclick = () => {
+        document.getElementById("question").value = bTgtEval.dataset.name + " " + (bTgtEval.dataset.year || "") + " 数字化水平怎么样？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    const bTgtFact = document.getElementById("btnFactTargetSchool");
+    if (bTgtFact) {
+      bTgtFact.onclick = () => {
+        document.getElementById("question").value = bTgtFact.dataset.name + " 给老师配置了多少台平板电脑？";
+        document.getElementById("btnAsk").click();
+      };
+    }
+    return;
+  }
+
+  if (objType === "national_ranking") {
+    const year = o.year || "2022";
+    const totalProv = o.total_provinces || 0;
+    const lgChamp = o.large_champion || report.large_champion || {};
+    const nmChamp = o.normal_champion || report.normal_champion || {};
+    const allChamp = o.overall_champion || report.overall_champion || {};
+    const rankings = report.rankings || [];
+    const largeTier = report.large_scale_rankings || [];
+    const normalTier = report.normal_scale_rankings || [];
+    const smallTier = report.small_scale_rankings || [];
+
+    let html = '<div class="card">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">全国省域排行榜</span>';
+    html += '<span style="font-size:13px;color:var(--text-muted);">监测学年：' + esc(year) + ' 年 · 在册省份 ' + esc(String(totalProv)) + ' 个</span>';
+    html += '</div>';
+
+    html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">全国教育数字化 ' + esc(year) + ' 年度宏观发展大盘与排行榜</h2>';
+
+    const da = o.direct_answer || report.direct_answer || "";
+    if (da) {
+      html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
+      html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">核心结论</div>';
+      html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;white-space:pre-line;">' + esc(da) + '</div>';
+      html += '</div>';
+    }
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-bottom:18px;">';
+
+    if (lgChamp.province) {
+      html += '<div style="background:linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);border:1px solid #fef3c7;border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+      html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:#92400e;color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">TOP 1</span>';
+      html += '<div style="font-size:11px;color:#92400e;font-weight:600;margin-bottom:4px;">规模化样本冠军（≥1000所）</div>';
+      html += '<div style="font-size:18px;font-weight:700;color:var(--text-main);margin-bottom:4px;">' + esc(lgChamp.province) + '</div>';
+      html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+      html += '<span style="font-size:32px;font-weight:700;color:var(--primary);line-height:1;">' + (lgChamp.score ?? "-") + '</span>';
+      html += '<span style="font-size:13px;color:var(--text-muted);">分</span>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">在册学校 ' + (lgChamp.school_count ?? "-") + ' 所</div>';
+      html += '</div>';
+    }
+
+    if (nmChamp.province) {
+      html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+      html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:var(--primary);color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">TOP 1</span>';
+      html += '<div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:4px;">常态化样本最优（100~999所）</div>';
+      html += '<div style="font-size:18px;font-weight:700;color:var(--text-main);margin-bottom:4px;">' + esc(nmChamp.province) + '</div>';
+      html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+      html += '<span style="font-size:32px;font-weight:700;color:var(--primary);line-height:1;">' + (nmChamp.score ?? "-") + '</span>';
+      html += '<span style="font-size:13px;color:var(--text-muted);">分</span>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">在册学校 ' + (nmChamp.school_count ?? "-") + ' 所</div>';
+      html += '</div>';
+    }
+
+    if (allChamp.province && allChamp.province !== (lgChamp.province || "")) {
+      html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
+      html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:var(--text-muted);color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">NO.1</span>';
+      html += '<div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">全样本名义榜首' + (allChamp.sample_tier === "小微样本" ? '（小微样本）' : '') + '</div>';
+      html += '<div style="font-size:18px;font-weight:700;color:var(--text-main);margin-bottom:4px;">' + esc(allChamp.province) + '</div>';
+      html += '<div style="display:flex;align-items:baseline;gap:6px;">';
+      html += '<span style="font-size:32px;font-weight:700;color:var(--text-muted);line-height:1;">' + (allChamp.score ?? "-") + '</span>';
+      html += '<span style="font-size:13px;color:var(--text-muted);">分</span>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">在册学校 ' + (allChamp.school_count ?? "-") + ' 所</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    function renderTierTable(title, tierData, tierColor) {
+      if (!tierData || !tierData.length) return '';
+      let t = '<div class="section" style="margin-bottom:16px;">';
+      t += '<h3 style="margin-top:0;font-size:15px;display:flex;align-items:center;gap:8px;">' + esc(title);
+      t += '<span style="background:' + tierColor + ';color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;">' + tierData.length + ' 个省域</span></h3>';
+      t += '<table><tr><th>排名</th><th>省份/直辖市</th><th>综合均分</th><th>在册学校</th><th>样本梯次</th></tr>';
+      tierData.forEach(function(p, i) {
+        const medal = '';
+        t += '<tr><td style="font-weight:600;">' + (p.rank || (i+1)) + medal + '</td>';
+        t += '<td><b>' + esc(p.province) + '</b></td>';
+        t += '<td style="font-weight:600;color:var(--primary);">' + (p.score ?? "-") + ' 分</td>';
+        t += '<td>' + (p.school_count ?? "-") + ' 所</td>';
+        t += '<td><span style="font-size:12px;padding:2px 8px;border-radius:9999px;background:' + tierColor + '22;color:' + tierColor + ';font-weight:600;">' + esc(p.sample_tier || "") + '</span></td></tr>';
+      });
+      t += '</table></div>';
+      return t;
+    }
+
+    html += renderTierTable('规模化监测省域（在册学校 ≥ 1000 所）', largeTier, '#059669');
+    html += renderTierTable('常态化监测省域（100 ~ 999 所）', normalTier, '#2563eb');
+    html += renderTierTable('小微样本省域（< 100 所）', smallTier, '#d97706');
+
+    if (rankings.length) {
+      html += '<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-weight:600;color:var(--primary);font-size:14px;padding:8px 0;">展开全量排行总表（' + rankings.length + ' 个省域）</summary>';
+      html += '<table><tr><th>排名</th><th>省份/直辖市</th><th>综合均分</th><th>在册学校</th><th>样本梯次</th></tr>';
+      rankings.forEach(function(p) {
+        const tierBg = p.sample_tier === "规模化" ? '#05966922' : (p.sample_tier === "常态化" ? '#2563eb22' : '#d9770622');
+        const tierFg = p.sample_tier === "规模化" ? '#059669' : (p.sample_tier === "常态化" ? '#2563eb' : '#d97706');
+        html += '<tr><td style="font-weight:600;">' + (p.rank ?? "-") + '</td>';
+        html += '<td><b>' + esc(p.province) + '</b></td>';
+        html += '<td style="font-weight:600;color:var(--primary);">' + (p.score ?? "-") + ' 分</td>';
+        html += '<td>' + (p.school_count ?? "-") + ' 所</td>';
+        html += '<td><span style="font-size:12px;padding:2px 8px;border-radius:9999px;background:' + tierBg + ';color:' + tierFg + ';font-weight:600;">' + esc(p.sample_tier || "") + '</span></td></tr>';
+      });
+      html += '</table></details>';
+    }
+
+    html += renderLlmSection(report, "智能全国宏观研判与视导建议");
+
+    html += renderAgentVisuals(report);
+
+    html += renderAuditAndMetricsSection(report);
+
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本榜单基于各省在册中小学在全国教育数字化监测平台的接入问卷作答折算均分，供宏观教育决策与视导参考。") + '</div>';
+
+    html += '</div>';
+    into.innerHTML = html;
+    bindRetryLlm(report, into);
+    return;
+  }
+
+  const name = o.school_name || o.teacher_id || "";
+  const teacherAlias = o.teacher_id && TEACHER_NAME_MAP[o.teacher_id] ? `（${TEACHER_NAME_MAP[o.teacher_id]}·模拟）` : "";
+  let html = '<div class="card">';
+  if (o.redline_flagged) html += '<div class="banner red">红线标记已触发：本报告总分不参与评分，请转独立人事流程。</div>';
+  if ((o.data_coverage ?? 1) < 0.6) html += '<div class="banner warn">数据覆盖不足（' + o.data_coverage + '），以下结论仅供参考。</div>';
+  const department = o.teacher_dept ? '（' + esc(o.teacher_dept) + '）' : '';
+  html += '<div class="row"><b>' + (o.teacher_id ? '教师 ' : '') + esc(name) + esc(teacherAlias) + department + '</b>';
+  html += "<span>评估学年：" + esc((o.school_years||[]).join(", ")) + "</span><span>" + esc(o.template||"") + "</span></div>";
+  html += '<div class="statGrid">'
+    + '<div class="stat"><div class="v">' + (o.total_score??"-") + '</div><div class="l">综合得分</div></div>'
+    + (o.data_coverage != null ? '<div class="stat"><div class="v">' + esc(o.data_coverage) + '</div><div class="l">数据覆盖率</div></div>' :
+       (o.answered != null && o.total_metrics != null ? '<div class="stat"><div class="v">' + esc(o.answered) + '/' + esc(o.total_metrics) + '</div><div class="l">有效指标数 / 指标总数</div></div>' : ''))
+    + (o.overall_confidence != null ? '<div class="stat"><div class="v">' + esc(o.overall_confidence) + '</div><div class="l">综合置信度</div></div>' : '')
+    + "</div>";
+  html += '<div id="radar"></div>';
+  const sections = report.sections || report.dimensions || [];
+  sections.forEach(s => {
+    if (s.is_redline) {
+      html += '<div class="section"><h3>' + esc(s.dimension||"红线") + '</h3><span class="redline">' + esc(s.conclusion || (s.flagged ? "已触发红线" : "未触发")) + "</span>";
+    } else {
+      const sectionText = s.conclusion || (s.score != null ? '得分 ' + s.score + ' 分' : '暂无有效分数');
+      html += '<div class="section"><h3>' + esc(s.dimension||"") + "</h3><div>" + esc(sectionText) + "</div>";
+    }
+    (s.evidence_refs||s.evidence||[]).forEach(e => {
+      const txt = formatEvidenceText(e);
+      html += '<div class="ev">' + esc(txt) + "</div>";
+    });
+    (s.gaps||s.gap||[]).forEach(g => html += '<div class="gap">缺口：' + esc(g) + "</div>");
+    html += "</div>";
+  });
+    html += renderAgentVisuals(report);
+  html += renderLlmSection(report, "智能综合诊断与建议");
+  html += renderAuditAndMetricsSection(report);
+  html += "</div>";
+  into.innerHTML = html;
+  bindRetryLlm(report, into);
+  radarChart(document.getElementById("radar"), radardata(report));
+}
+
+function radardata(report) {
+  const d = {};
+  (report.sections||report.dimensions||[]).forEach(s => { if (s.score != null && !s.is_redline) d[s.dimension] = s.score; });
+  return d;
+}
+
+function kvTable(obj) {
+  let html = "<table><tr><th>指标项</th><th>采集数值</th></tr>";
+  Object.entries(obj||{}).forEach(([k,v]) => {
+    if (v && typeof v === "object") v = JSON.stringify(v);
+    const label = FIELD_MAP[k] || k;
+    html += "<tr><td><b>" + esc(label) + "</b> <span style='font-size:11px;color:var(--text-light)'>(" + esc(k) + ")</span></td><td>" + esc(v == null || v === "" ? "-" : v) + "</td></tr>";
+  });
+  return html + "</table>";
+}
+
+function contractPanelHtml(report) {
+  const contract = report && report._contract;
+  const store = report && report._contractStore;
+  const receipt = report && report._executionReceipt;
+  const verification = report && report._contractVerification;
+  const presentation = report && report._presentationVerification;
+  const pending = report && report._pendingClarification;
+  const revisionControl = report && report._revisionControl;
+  const mode = (report && report._contractMode) || (contract ? "enforced" : "");
+  let storeHtml = "";
+  if (store && store.status === "unavailable") {
+    storeHtml = '<details class="contract-evidence" open style="margin:0 0 14px;padding:10px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;font-size:12.5px;">'
+      + '<summary style="cursor:pointer;font-weight:700;color:#b91c1c;">契约状态库 · UNAVAILABLE</summary>'
+      + '<div style="margin-top:8px;line-height:1.7;word-break:break-all;">'
+      + '<div><b>error_code：</b><code>' + esc(store.error_code || "contract_store_unavailable") + '</code></div>'
+      + '<div><b>目标文件：</b><code>' + esc(store.preferred_file || store.active_file || "-") + '</code></div>'
+      + '<div><b>路径信息：</b>' + (store.paths_redacted ? "已脱敏" : "-") + '</div>'
+      + '<div><b>路径策略：</b>' + (store.fallback_used ? "已使用回退" : "未使用回退") + '</div>'
+      + '</div></details>';
+  }
+  let presentationHtml = "";
+  if (presentation && presentation.chart_requested) {
+    const presentationStatus = String(presentation.status || "NOT_CHECKED").toUpperCase();
+    const presentationFailed = presentationStatus === "FAIL";
+    const presentationPassed = presentationStatus === "PASS";
+    const pBorder = presentationFailed ? "#fecaca" : (presentationPassed ? "#c8e6c9" : "#fde68a");
+    const pBg = presentationFailed ? "#fef2f2" : (presentationPassed ? "#eef7ee" : "#fffbeb");
+    const pColor = presentationFailed ? "#b91c1c" : (presentationPassed ? "#1e7e34" : "#92400e");
+    const failures = (presentation.failures || []).join("；") || "-";
+    presentationHtml = '<details class="contract-evidence" ' + (presentationFailed ? 'open ' : '')
+      + 'style="margin:0 0 14px;padding:10px 14px;border:1px solid ' + pBorder
+      + ';border-radius:8px;background:' + pBg + ';font-size:12.5px;">'
+      + '<summary style="cursor:pointer;font-weight:700;color:' + pColor + ';">图表展示交付 · '
+      + esc(presentationStatus) + '</summary>'
+      + '<div style="margin-top:8px;line-height:1.7;word-break:break-all;">'
+      + '<div><b>图表请求/要求：</b>' + esc(Boolean(presentation.chart_requested)) + ' / '
+      + esc(Boolean(presentation.chart_required)) + '；<b>交付数量：</b>' + esc(presentation.chart_count ?? 0) + '</div>'
+      + '<div><b>绑定：</b>revision ' + esc(presentation.contract_revision ?? "-")
+      + '；execution_id <code>' + esc(presentation.execution_id || "-") + '</code></div>'
+      + '<div><b>原因：</b><code>' + esc(presentation.reason || "-") + '</code>；<b>失败项：</b>' + esc(failures) + '</div>'
+      + '<div><b>边界：</b>该状态只描述结果展示与图表交付；计算契约状态单独列示。</div>'
+      + '</div></details>';
+  }
+  let pendingHtml = "";
+  if (pending && pending.pending_id) {
+    pendingHtml = '<details class="contract-evidence" open style="margin:0 0 14px;padding:10px 14px;border:1px solid #fde68a;border-radius:8px;background:#fffbeb;font-size:12.5px;">'
+      + '<summary style="cursor:pointer;font-weight:700;color:#92400e;">待澄清任务 · ' + esc(pending.status || "UNKNOWN") + '</summary>'
+      + '<div style="margin-top:8px;line-height:1.7;word-break:break-all;">'
+      + '<div><b>pending_id：</b><code>' + esc(pending.pending_id) + '</code></div>'
+      + '<div><b>原因：</b>' + esc(pending.reason || "-") + '；<b>基线修订：</b>' + esc(pending.base_revision ?? "-") + '</div>'
+      + '<div><b>恢复/应用：</b>' + esc(Boolean(pending.restored)) + ' / ' + esc(Boolean(pending.applied)) + '</div>'
+      + (pending.resolution ? '<div><b>处理：</b>' + esc(pending.resolution) + '</div>' : '')
+      + '</div></details>';
+  }
+  let revisionHtml = "";
+  if (revisionControl && revisionControl.request_id) {
+    const rejected = revisionControl.outcome === "REJECTED_STALE_BASE";
+    const auditOnly = revisionControl.outcome === "COMMITTED_AUDIT_ONLY";
+    const failed = rejected || (auditOnly && Boolean(revisionControl.failure_stage));
+    revisionHtml = '<details class="contract-evidence" ' + (failed ? 'open ' : '')
+      + 'style="margin:0 0 14px;padding:10px 14px;border:1px solid ' + (failed ? '#fecaca' : '#bfdbfe')
+      + ';border-radius:8px;background:' + (failed ? '#fef2f2' : '#eff6ff') + ';font-size:12.5px;">'
+      + '<summary style="cursor:pointer;font-weight:700;color:' + (failed ? '#b91c1c' : '#1d4ed8')
+      + ';">基线修订控制 · ' + esc(revisionControl.outcome || "UNKNOWN") + '</summary>'
+      + '<div style="margin-top:8px;line-height:1.7;word-break:break-all;">'
+      + '<div><b>request_id：</b><code>' + esc(revisionControl.request_id) + '</code></div>'
+      + '<div><b>客户端基线：</b>' + esc(revisionControl.provided_base_revision ?? "-")
+      + '；<b>接受基线：</b>' + esc(revisionControl.accepted_base_revision ?? "-")
+      + '；<b>当前/提交：</b>' + esc(revisionControl.current_revision ?? "-") + ' / '
+      + esc(revisionControl.committed_revision ?? "-") + '</div>'
+      + (auditOnly ? '<div><b>提交状态：</b>' + esc(revisionControl.commit_status || "COMMITTED")
+        + '；<b>结果状态：</b>' + esc(revisionControl.result_status || (failed ? "FAILED" : "NOT_CHECKED"))
+        + '；<b>失败阶段：</b>' + esc(revisionControl.failure_stage || "-")
+        + '；<b>可作为可信焦点：</b>' + esc(Boolean(revisionControl.focus_eligible)) + '</div>' : '')
+      + (revisionControl.conflict_attempt_id ? '<div><b>冲突审计：</b><code>'
+        + esc(revisionControl.conflict_attempt_id) + '</code></div>' : '')
+      + '</div></details>';
+  }
+  if (!mode && !contract) return presentationHtml + revisionHtml + storeHtml + pendingHtml;
+  if (mode !== "enforced" || !contract) {
+    const experimentMode = String((report && (report._llmExperimentMode || report._experimentMode)) || "");
+    const isG1 = mode === "experiment_unconstrained" || experimentMode === "g1_llm_unconstrained";
+    const isA1 = mode === "experiment_execution_unverified" || experimentMode === "a1_no_execution_verification";
+    const notice = mode === "enforced"
+      ? '<div class="contract-evidence banner warn" style="margin-bottom:14px;">契约状态：请求在提交前被拒绝，可信任务焦点未改变。</div>'
+      : (isG1
+        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：G1 · experiment_unconstrained；所提任务契约、独立重放与答复约束按设计关闭。</div>'
+        : isA1
+        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：A1 · 执行绑定与独立重放未检查；公开范围投影和输出核验保留。</div>'
+        : mode === "public_composition_verified_no_revision"
+        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#eef7ee;border-color:#c8e6c9;color:#1e7e34;">公共组合：执行绑定与独立重放已通过；输出核验状态见审计记录。此路径没有生产契约修订。</div>'
+        : mode === "public_composition_unverified"
+        ? '<div class="contract-evidence banner warn" style="margin-bottom:14px;">公共组合：执行核验未通过或尚未确认；此路径没有生产契约修订。</div>'
+        : '<div class="contract-evidence banner warn" style="margin-bottom:14px;">契约状态：兼容路径，尚未启用强制任务绑定与独立重放（legacy_unverified）。</div>');
+    return notice + presentationHtml + revisionHtml + storeHtml + pendingHtml;
+  }
+  const verificationStatus = (verification && verification.status) || "NOT_CHECKED";
+  const verificationLabel = verification && verification.status_scope === "trusted_data_and_computation"
+    ? "计算契约"
+    : "任务契约";
+  const passed = verificationStatus === "PASS";
+  const neutral = verificationStatus === "NOT_APPLICABLE" || verificationStatus === "NOT_CHECKED";
+  const borderColor = passed ? '#c8e6c9' : (neutral ? '#fde68a' : '#fecaca');
+  const backgroundColor = passed ? '#eef7ee' : (neutral ? '#fffbeb' : '#fef2f2');
+  const statusColor = passed ? '#1e7e34' : (neutral ? '#92400e' : '#b91c1c');
+  const checks = ((verification && verification.checks) || [])
+    .map(c => esc(c.name) + "=" + esc(c.status)).join("；");
+  const sources = contract.sources || {};
+  const sourceFields = contract.operation === "school_fact"
+    ? ["entity_id", "period", "metric_key"]
+    : (contract.operation === "region_compare"
+      ? ["entity_id", "secondary_entity_id", "period", "dimension", "statistic", "aggregation", "school_filter"]
+      : (contract.operation === "school_compare"
+        ? ["entity_id", "secondary_entity_id", "period", "metric_key", "statistic", "aggregation"]
+        : (contract.operation === "region_longitudinal"
+          ? ["entity_id", "period", "secondary_period", "temporal_mode", "dimension", "statistic", "aggregation", "school_filter"]
+          : (contract.operation === "region_ranking"
+            ? ["entity_id", "period", "target_rank", "target_top_n", "statistic", "aggregation", "school_filter"]
+            : ["entity_id", "period", "dimension", "statistic", "aggregation", "school_filter"]))));
+  const sourceSummary = sourceFields
+    .map(k => k + "=" + ((sources[k] && sources[k].origin) || "-"))
+    .join("；");
+  let html = '<details class="contract-evidence" open style="margin:0 0 14px;padding:10px 14px;border:1px solid '
+    + borderColor + ';border-radius:8px;background:' + backgroundColor + ';font-size:12.5px;">';
+  html += '<summary style="cursor:pointer;font-weight:700;color:' + statusColor
+    + ';">' + esc(verificationLabel) + ' · ' + esc(verificationStatus)
+    + ' · ' + esc((report && report._businessStatus) || "UNKNOWN")
+    + ' · revision ' + esc(contract.revision) + '</summary>';
+  html += '<div style="margin-top:8px;line-height:1.7;word-break:break-all;">';
+  html += '<div><b>task_id：</b><code>' + esc(contract.task_id || "-") + '</code></div>';
+  html += '<div><b>execution_id：</b><code>' + esc((receipt && receipt.execution_id) || "-") + '</code></div>';
+  if (contract.revision_action === "RESTORE") html += '<div><b>修订动作：</b>RESTORE；<b>恢复来源：</b>revision '
+    + esc(contract.restored_from_revision ?? "-") + '；<b>新父修订：</b>' + esc(contract.parent_revision ?? "-") + '</div>';
+  const contractEntityLabel = (contract.operation === "region_compare" || contract.operation === "school_compare")
+    ? (esc(contract.entity_id || "-") + ' VS ' + esc(contract.secondary_entity_id || "-"))
+    : esc(contract.entity_id || "-");
+  const contractPeriodLabel = contract.operation === "region_longitudinal"
+    ? (esc(contract.period || "-") + ' → ' + esc(contract.secondary_period || "-"))
+    : esc(contract.period || "-");
+  html += '<div><b>操作：</b>' + esc(contract.operation || "region_evaluation")
+    + '；<b>对象/时期：</b>' + contractEntityLabel + ' / ' + contractPeriodLabel + '</div>';
+  if (contract.operation === "region_longitudinal") html += '<div><b>时间语义：</b>'
+    + esc(contract.temporal_mode || "-") + '（年度重复截面，不是同校队列）</div>';
+  if (contract.operation === "region_ranking") {
+    const rankingSpec = contract.ranking_spec || {};
+    const targetLabel = contract.target_rank != null
+      ? (contract.target_rank === -1 ? '倒数第1名' : '第' + contract.target_rank + '名')
+      : '前' + contract.target_top_n + '名';
+    html += '<div><b>排名目标：</b>' + esc(targetLabel)
+      + '；<b>排序/同分：</b>' + esc(rankingSpec.direction || '-') + ' / ' + esc(rankingSpec.tie_policy || '-')
+      + '；<b>展示精度：</b>' + esc(rankingSpec.display_precision ?? '-') + '</div>';
+  }
+  if (contract.operation === "school_fact") {
+    html += '<div><b>学校 ID：</b>' + esc(contract.school_id ?? "-")
+      + '；<b>事实指标：</b>' + esc(contract.metric_name || contract.metric_key || "-")
+      + '（<code>' + esc(contract.metric_key || "-") + '</code>）</div>';
+  } else if (contract.operation === "school_compare") {
+    html += '<div><b>学校 ID：</b>' + esc(contract.school_id ?? "-") + ' VS '
+      + esc(contract.secondary_school_id ?? "-") + '；<b>比较模板：</b>'
+      + esc(contract.metric_name || contract.metric_key || "-") + '</div>';
+    html += '<div><b>统计/聚合：</b>' + esc(contract.statistic || "-") + ' / '
+      + esc(contract.aggregation || "-") + '</div>';
+  } else {
+    html += '<div><b>统计/聚合：</b>' + esc(contract.statistic || "mean") + ' / '
+      + esc(contract.aggregation || "-") + '</div>';
+  }
+  html += '<div><b>dataset_version：</b><code>' + esc(contract.dataset_version || "-") + '</code></div>';
+  if (receipt) html += '<div><b>一致读：</b>' + esc(receipt.read_consistency || "unverified")
+    + '；<b>snapshot_id：</b><code>' + esc(receipt.snapshot_id || "-") + '</code>'
+    + '；<b>data_version：</b>' + esc(receipt.sqlite_data_version ?? "-") + '</div>';
+  if (receipt && receipt.connection_token) html += '<div><b>连接标识：</b><code>' + esc(receipt.connection_token) + '</code></div>';
+  if (receipt && (receipt.transaction_trace || []).length) {
+    const traceSummary = receipt.transaction_trace.map(e => {
+      const label = e.sql_role || e.stage || "event";
+      return esc(e.seq) + ':' + esc(label) + (e.transaction_active ? '@TX' : '@NO_TX');
+    }).join(' → ');
+    html += '<div><b>事务序列：</b><code>' + traceSummary + '</code></div>';
+  }
+  html += '<div><b>字段来源：</b>' + esc(sourceSummary) + '</div>';
+  if (store) html += '<div><b>契约状态库：</b><code>' + esc(store.source || "-") + ' · ' + esc(store.file || store.path || "-") + '</code></div>';
+  if (checks) html += '<div><b>检查：</b>' + checks + '</div>';
+  html += '</div></details>';
+  return html + presentationHtml + revisionHtml + storeHtml + pendingHtml;
+}
+
+function attachContractPanel(report, into) {
+  const card = into && into.firstElementChild;
+  if (!card || card.querySelector('.contract-evidence')) return;
+  const html = contractPanelHtml(report);
+  if (html) card.insertAdjacentHTML('afterbegin', html);
+}
+
+let currentSessionId = "sess-" + Math.random().toString(36).substring(2, 10);
+let currentBaseRevision = 0;
+const chatRequestHistory = [];
+let latestRenderedSeq = 0;
+let inFlightAskCount = 0;
+let presentationTestEnabled = false;
+globalThis.__teacherEvalRequestHistory = chatRequestHistory;
+
+function newRequestId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
+  return "req-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 10);
+}
+
+function boundedInteger(value, fallback, maximum) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.min(parsed, maximum);
+}
+
+function snapshotPresentationTestControl() {
+  if (!presentationTestEnabled) return { enabled:false, kind:"REAL", delayMs:0, revision:0 };
+  const kind = document.getElementById("presentationTestKind").value || "REAL";
+  return {
+    enabled:true,
+    kind,
+    delayMs:boundedInteger(document.getElementById("presentationTestDelay").value, 0, 60000),
+    revision:boundedInteger(document.getElementById("presentationTestRevision").value, 0, 1000000)
+  };
+}
+
+function presentationDelay(delayMs) {
+  return new Promise(resolve => globalThis.setTimeout(resolve, delayMs || 0));
+}
+
+async function syntheticPresentationResponse(question, requestMeta) {
+  const control = requestMeta.testControl;
+  await presentationDelay(control.delayMs);
+  const revisionControl = control.kind === "SYNTH_ANSWER" ? {
+    request_id:requestMeta.requestId,
+    provided_base_revision:requestMeta.baseRevision,
+    accepted_base_revision:requestMeta.baseRevision,
+    committed_revision:control.revision,
+    outcome:"COMMITTED"
+  } : {
+    request_id:requestMeta.requestId,
+    provided_base_revision:requestMeta.baseRevision,
+    current_revision:control.revision,
+    outcome:control.kind === "SYNTH_STALE" ? "REJECTED_STALE_BASE" : "NOT_COMMITTED_EXECUTION_ERROR"
+  };
+  if (control.kind !== "SYNTH_ANSWER") return {
+    clarify:true,
+    next_prompt:control.kind === "SYNTH_STALE" ? "受控测试：过期基线请求。" : "受控测试：执行错误。",
+    report:null,
+    contract:null,
+    contractStore:null,
+    contractVerification:null,
+    contractMode:"enforced",
+    businessStatus:"ERROR",
+    errorCode:control.kind === "SYNTH_STALE" ? "stale_base_revision" : "presentation_test_error",
+    pendingClarification:null,
+    revisionControl,
+    syntheticTest:true
+  };
+  const report = JSON.parse(JSON.stringify(MOCK.T001));
+  report._question = question;
+  report._businessStatus = "ANSWER";
+  report._contractMode = "presentation_test_synthetic";
+  report._revisionControl = revisionControl;
+  report._syntheticTest = true;
+  return { report, revisionControl, businessStatus:"ANSWER", errorCode:null, syntheticTest:true };
+}
+
+function beginRequestHistory(meta, question) {
+  chatRequestHistory.push({
+    seq: meta.seq,
+    requestId: meta.requestId,
+    baseRevision: meta.baseRevision,
+    question,
+    status: "PENDING",
+    disposition: "PENDING",
+    startedAt: new Date().toISOString()
+  });
+  chatRequestHistory[chatRequestHistory.length - 1].testControl = meta.testControl;
+  if (chatRequestHistory.length > 50) chatRequestHistory.splice(0, chatRequestHistory.length - 50);
+  renderRequestHistory();
+}
+
+function finishRequestHistory(meta, out, disposition) {
+  const entry = chatRequestHistory.find(item => item.requestId === meta.requestId);
+  if (!entry) return;
+  const rc = out.revisionControl || {};
+  entry.status = out.businessStatus || (out.clarify ? "CLARIFY" : "ANSWER");
+  entry.outcome = rc.outcome || (out.transportFallback ? "TRANSPORT_FALLBACK" : "UNKNOWN");
+  entry.committedRevision = Number.isInteger(rc.committed_revision) ? rc.committed_revision : null;
+  entry.currentRevision = Number.isInteger(rc.current_revision) ? rc.current_revision : null;
+  entry.errorCode = out.errorCode || null;
+  entry.syntheticTest = Boolean(out.syntheticTest);
+  entry.disposition = disposition;
+  entry.finishedAt = new Date().toISOString();
+  entry.responseSummary = {
+    business_status: entry.status,
+    outcome: entry.outcome,
+    committed_revision: entry.committedRevision,
+    current_revision: entry.currentRevision,
+    error_code: entry.errorCode
+  };
+  entry.responseSummary.synthetic_test = entry.syntheticTest;
+  renderRequestHistory();
+}
+
+function renderRequestHistory() {
+  const rows = document.getElementById("requestHistoryRows");
+  const state = document.getElementById("requestHistoryState");
+  const count = document.getElementById("requestHistoryCount");
+  if (!rows || !state || !count) return;
+  const lateCount = chatRequestHistory.filter(item => item.disposition === "LATE_HISTORY_ONLY").length;
+  count.textContent = chatRequestHistory.length + "条";
+  state.dataset.lateCount = String(lateCount);
+  state.dataset.latestRequestSeq = String(currentAskSeq);
+  state.dataset.latestRenderedSeq = String(latestRenderedSeq);
+  state.textContent = chatRequestHistory.length
+    ? "当前基线 revision " + currentBaseRevision + "；迟到响应 " + lateCount + " 条；迟到项仅保留历史，不覆盖当前结果。"
+    : "尚无请求。";
+  rows.innerHTML = chatRequestHistory.slice().reverse().map(item => {
+    const revision = item.committedRevision ?? item.currentRevision ?? "-";
+    const disposition = item.disposition === "LATE_HISTORY_ONLY" ? "迟到·仅历史"
+      : (item.disposition === "PRESENTED" ? "已呈现" : "处理中");
+    return '<tr data-request-seq="' + esc(item.seq) + '" data-request-id="' + esc(item.requestId)
+      + '" data-disposition="' + esc(item.disposition) + '" data-synthetic-test="' + esc(Boolean(item.syntheticTest)) + '"><td>' + esc(item.seq)
+      + '</td><td title="' + esc(item.requestId) + '">' + esc(item.question)
+      + '</td><td>' + esc(item.baseRevision) + '</td><td>' + esc(item.status)
+      + ' / ' + esc(revision) + '</td><td>' + esc(disposition) + '</td></tr>';
+  }).join("");
+}
+
+function updateAskActivity() {
+  const btn = document.getElementById("btnAsk");
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = inFlightAskCount > 0 ? "提问 / 评估（" + inFlightAskCount + "进行中）" : "提问 / 评估";
+}
+
+async function ask(question, requestMeta) {
+  document.getElementById("loading").style.display = "block";
+  if (requestMeta.testControl.enabled && requestMeta.testControl.kind !== "REAL") {
+    return syntheticPresentationResponse(question, requestMeta);
+  }
+  const selectedQueryMode = document.getElementById("queryMode").value || "semantic";
+  let transportError = "";
+  let serverErrorPrompt = "";
+  try {
+    const resp = await fetch(apiUrl("/api/v1/chat"), {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        question,
+        session_id: currentSessionId,
+        base_revision: requestMeta.baseRevision,
+        request_id: requestMeta.requestId,
+        query_mode: selectedQueryMode.startsWith('fh_') ? 'semantic' : selectedQueryMode,
+        fh_arm: selectedQueryMode === 'fh_f' ? 'F' : selectedQueryMode === 'fh_h' ? 'H' : null,
+        clarification_reply: requestMeta.clarificationReply || null
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (requestMeta.testControl.enabled) await presentationDelay(requestMeta.testControl.delayMs);
+      if (data.session_id) currentSessionId = data.session_id;
+      const revisionControl = data.revision_control || null;
+      if (data.clarify) return {
+        clarify:true,
+        next_prompt:data.next_prompt,
+        report:null,
+        contract:data.contract || null,
+        contractStore:data.contract_store || null,
+        contractVerification:data.contract_verification || null,
+        contractMode:data.contract_mode || (data.contract ? "enforced" : ""),
+        businessStatus:data.business_status || "CLARIFY",
+        errorCode:data.error_code || null,
+        pendingClarification:data.pending_clarification || null,
+        clarification:data.clarification || null,
+        revisionControl,
+        queryMode:data.query_mode || null
+      };
+      const report = data.report || data.result || {};
+      report._question = question;
+      report.markdown = data.markdown || report.markdown || "";
+      if (data.llm && data.llm.text) {
+        report._llmText = data.llm.text;
+        report._llmAnswerVerification = data.llm.answer_verification || null;
+        report._llmIsFallback = Boolean(data.llm.is_fallback);
+        report._llmFallbackReason = data.llm.fallback_reason || "";
+        report._llmFinishReason = data.llm.finish_reason || "";
+        report._llmAttempts = data.llm.attempts || null;
+        report._llmProvider = data.llm.provider || "";
+        report._llmModel = data.llm.model || "";
+        report._llmExperimentMode = data.llm.experiment_mode || "";
+        report._llmQueryMode = data.llm.query_mode || "";
+        report._llmModelInvoked = Boolean(data.llm.model_invoked);
+      }
+      else if (data.llm && data.llm.delivery_status === "BLOCKED") {
+        const emptyContent = data.llm.content_delivery && data.llm.content_delivery.status === "EMPTY_CONTENT";
+        report._llmText = emptyContent
+          ? (data.llm.content_delivery.length_exhausted
+            ? "模型达到输出长度限制但未返回正文，未交付答复。"
+            : "模型未返回正文，未交付答复。")
+          : "模型答复未通过本组的输出核验，已阻止呈现。";
+        report._llmIsFallback = false;
+        report._llmExperimentMode = data.llm.experiment_mode || "g2_llm_constrained";
+        report._llmQueryMode = data.llm.query_mode || "";
+      }
+      else if (data.llm && data.llm.error) report._llmText = "模型未调用：" + data.llm.error;
+
+
+      if (Array.isArray(data.charts) && data.charts.length
+          && (!Array.isArray(report.charts) || report.charts.length === 0)) {
+        report.charts = data.charts;
+      }
+      if (Array.isArray(data.tool_calls) && data.tool_calls.length
+          && (!Array.isArray(report.tool_calls) || report.tool_calls.length === 0)) {
+        report.tool_calls = data.tool_calls;
+      }
+      if (data.audit && !report.audit) report.audit = data.audit;
+      if (data.system_metrics && !report.system_metrics) report.system_metrics = data.system_metrics;
+      report._contract = data.contract || (data.result && data.result.contract) || null;
+      report._contractStore = data.contract_store || (data.result && data.result.contract_store) || null;
+      report._executionReceipt = data.execution_receipt || (data.result && data.result.execution_receipt) || null;
+      report._contractVerification = data.contract_verification || (data.result && data.result.contract_verification) || null;
+      report._presentationVerification = data.presentation_verification || report.presentation_verification || null;
+      report._contractMode = data.contract_mode || (data.result && data.result.contract_mode) || "";
+      report._businessStatus = data.business_status || "ANSWER";
+      report._pendingClarification = data.pending_clarification || null;
+      report._revisionControl = revisionControl;
+      report._experimentMode = (data.experiment_mode && data.experiment_mode.active_mode) || "";
+      report._queryMode = data.query_mode || null;
+      report._answerSpec = data.answer_spec || report.answer_scope || null;
+      report._semanticTrace = data.semantic_trace || null;
+      return { report, revisionControl, businessStatus:data.business_status || "ANSWER", errorCode:data.error_code || null };
+    }
+    transportError = "HTTP " + resp.status;
+    const data = await resp.json();
+    const reasonCode = data.error?.code || data.error_code || "";
+    const reason = data.error?.message || data.message || data.detail
+      || (typeof data.error === "string" ? data.error : "") || transportError;
+    serverErrorPrompt = reason === "explicit_requirement_not_preserved" || reasonCode === "explicit_requirement_not_preserved"
+      ? "系统未能完整保留问题中的明确要求，本轮已拒绝作答，不显示推测结果。（原因代码：explicit_requirement_not_preserved）"
+      : reason + (reasonCode ? "（原因代码：" + reasonCode + "）" : "");
+  } catch (e) {
+    transportError = String((e && e.message) || e || "network_error");
+  }
+  if (selectedQueryMode === "semantic" || selectedQueryMode.startsWith('fh_')) {
+    return {
+      clarify:true,
+      next_prompt:serverErrorPrompt || "智能语义服务当前不可用，本轮已停止且不会显示本地模拟结果。请检查服务和活动模型配置，或显式切换到规则对照模式。",
+      report:null,
+      businessStatus:"ERROR",
+      errorCode:"semantic_transport_unavailable",
+      queryMode:{active_mode:"semantic", automatic_rule_fallback:false},
+      revisionControl:{request_id:requestMeta.requestId, outcome:"NOT_COMMITTED_SEMANTIC_TRANSPORT_ERROR"},
+      transportError
+    };
+  }
+  const m = question.match(/T0\d+/);
+  const tid = m ? m[0] : "T001";
+  return { report: MOCK[tid] || MOCK.T001, transportFallback:true, businessStatus:"FALLBACK" };
+}
+
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+  ["chat","profile","api"].forEach(id => {
+    const el = document.getElementById("tab-" + id);
+    if (el) el.style.display = id === name ? "" : "none";
+  });
+}
+
+document.querySelectorAll(".tab").forEach(el => el.addEventListener("click", () => showTab(el.dataset.tab)));
+
+let currentAskSeq = 0;
+
+function updateKnownBaseRevision(out) {
+  const rc = out.revisionControl || {};
+  const observedRevision = Number.isInteger(rc.committed_revision) ? rc.committed_revision
+    : (Number.isInteger(rc.current_revision) ? rc.current_revision
+      : (out.report && out.report._contract && Number.isInteger(out.report._contract.revision)
+        ? out.report._contract.revision : null));
+  if (observedRevision !== null) currentBaseRevision = Math.max(currentBaseRevision, observedRevision);
+}
+
+function renderClarificationChoices(out, box, seq) {
+  const spec = out.clarification;
+  if (!spec || !spec.pending_id || !Array.isArray(spec.options)) return;
+  const session = currentSessionId;
+  const panel = document.createElement("div");
+  panel.className = "card";
+  panel.setAttribute("data-clarification-id", spec.pending_id);
+  const title = document.createElement("p");
+  const slotNames = {region:"地区",school:"学校",value_view:"原始值或标准分",aggregation:"统计口径",statistic:"统计量"};
+  const slotName = slotNames[spec.slot] || "当前字段";
+  title.textContent = "原任务：" + spec.original_question + "。请确认" + slotName + "：";
+  panel.appendChild(title);
+  const buttons = [];
+  function send(action, optionId, text, slot) {
+    if (seq !== currentAskSeq || session !== currentSessionId) return;
+    if (action !== "cancel" && Date.now() / 1000 >= spec.expires_at) {
+      title.textContent = "这条澄清已过期，请重新提问。";
+      return;
+    }
+    buttons.forEach(b => { b.disabled = true; });
+    document.getElementById("question").value = spec.original_question;
+    submitQuestion({pending_id:spec.pending_id, action, ...(optionId ? {option_id:optionId} : {}), ...(text ? {text} : {}), ...(slot ? {slot} : {})});
+  }
+  function button(label, action, optionId) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn";
+    b.textContent = label;
+    b.addEventListener("click", () => send(action, optionId));
+    buttons.push(b);
+    panel.appendChild(b);
+  }
+  spec.options.forEach(option => button(option.label + "：" + option.difference, "choose", option.option_id));
+  button("都不是", "none");
+  button("取消这条任务", "cancel");
+  const label = document.createElement("label");
+  label.textContent = "补充或纠正" + slotName + "：";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = spec.slot === "region" ? "完整省、市或区县名称" : "填写学校名称或明确口径";
+  label.appendChild(input);
+  panel.appendChild(label);
+  const amend = document.createElement("button");
+  amend.type = "button";
+  amend.className = "btn";
+  amend.textContent = "提交补充";
+  amend.addEventListener("click", () => { if (input.value.trim()) send("amend", null, input.value.trim()); });
+  buttons.push(amend);
+  panel.appendChild(amend);
+  (spec.confirmed_slots || []).forEach(confirmed => {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "btn";
+    edit.textContent = "修改已确认的" + (slotNames[confirmed.slot] || confirmed.slot) + "：" + confirmed.label;
+    edit.addEventListener("click", () => send("revise", null, null, confirmed.slot));
+    buttons.push(edit);
+    panel.appendChild(edit);
+  });
+  box.appendChild(panel);
+}
+
+async function submitQuestion(clarificationReply = null) {
+  const qInput = document.getElementById("question");
+  const q = qInput.value.trim();
+  if (!q) return;
+  qInput.value = q;
+  qInput.setAttribute("data-last-submitted", q);
+  const thisSeq = ++currentAskSeq;
+  const requestMeta = {
+    seq: thisSeq,
+    requestId: newRequestId(),
+    baseRevision: currentBaseRevision,
+    clarificationReply,
+    testControl:snapshotPresentationTestControl()
+  };
+  beginRequestHistory(requestMeta, q);
+  const box = document.getElementById("chatResult");
+  inFlightAskCount += 1;
+  updateAskActivity();
+  box.setAttribute("data-status", "loading");
+  box.setAttribute("data-req-seq", String(thisSeq));
+  box.setAttribute("data-current-question", q);
+  box.innerHTML = '<div class="card" data-card-status="loading" data-req-seq="' + thisSeq + '" style="text-align:center;padding:36px 20px;color:var(--text-muted);">'
+    + '<div style="font-size:16px;font-weight:600;margin-bottom:8px;color:var(--text-main);">正在分析评估数据并生成图表...</div>'
+    + '<div style="font-size:13px;color:var(--text-muted);">正在处理：' + esc(q) + '</div>'
+    + '</div>';
+
+  try {
+    const out = await ask(q, requestMeta);
+    updateKnownBaseRevision(out);
+    const isLate = thisSeq !== currentAskSeq;
+    if (isLate) {
+      finishRequestHistory(requestMeta, out, "LATE_HISTORY_ONLY");
+      return;
+    }
+    latestRenderedSeq = thisSeq;
+    finishRequestHistory(requestMeta, out, "PRESENTED");
+    document.getElementById("loading").style.display = "none";
+    box.setAttribute("data-status", "done");
+    if (out.clarify) {
+      const statusLabel = out.businessStatus === "CANCELLED" ? "任务状态：" : "需补充澄清：";
+      box.innerHTML = '<div class="card" data-card-status="clarify" data-question="' + esc(q) + '">'
+        + '<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface-soft);border-radius:8px;margin-bottom:12px;font-size:13px;border-left:3px solid var(--primary);"><span style="font-weight:600;color:var(--primary);">提问：</span><span>' + esc(q) + '</span></div>'
+        + '<div class="banner warn">' + statusLabel + esc(out.next_prompt) + '</div></div>';
+      renderClarificationChoices(out, box, thisSeq);
+      attachContractPanel({
+        _contract: out.contract,
+        _contractStore: out.contractStore,
+        _contractVerification: out.contractVerification,
+        _contractMode: out.contractMode,
+        _businessStatus: out.businessStatus,
+        _pendingClarification: out.pendingClarification,
+        _revisionControl: out.revisionControl
+      }, box);
+    } else {
+      renderReport(out.report, box);
+      attachContractPanel(out.report, box);
+      if (box.firstElementChild) {
+        box.firstElementChild.setAttribute("data-question", q);
+        box.firstElementChild.setAttribute("data-card-status", "done");
+        box.firstElementChild.setAttribute("data-req-seq", String(thisSeq));
+        const echoBanner = document.createElement("div");
+        echoBanner.className = "card-q-echo";
+        echoBanner.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface-soft);border-radius:8px;margin-bottom:14px;font-size:13px;border-left:3px solid var(--primary);";
+        echoBanner.innerHTML = '<span style="font-weight:600;color:var(--primary);">评估问题：</span><span style="color:var(--text-main);font-weight:500;">' + esc(q) + '</span>';
+        box.firstElementChild.insertBefore(echoBanner, box.firstElementChild.firstChild);
+      }
+    }
+  } finally {
+    inFlightAskCount = Math.max(0, inFlightAskCount - 1);
+    updateAskActivity();
+    if (thisSeq === currentAskSeq) {
+      document.getElementById("loading").style.display = "none";
+    }
+  }
+}
+document.getElementById("btnAsk").addEventListener("click", () => submitQuestion());
+
+document.getElementById("question").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("btnAsk").click();
+  }
+});
+
+document.querySelectorAll(".quick-chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const qInput = document.getElementById("question");
+    qInput.value = btn.dataset.q;
+    qInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.getElementById("btnAsk").click();
+  });
+});
+
+function fillTeacherSelects(rows) {
+  const list = rows && rows.length ? rows : MOCK_TEACHERS;
+  ["profileTeacher"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = "";
+    list.forEach(t => {
+      const o = document.createElement("option");
+      o.value = t.teacher_id;
+      const cname = t.name || TEACHER_NAME_MAP[t.teacher_id] || "模拟教师";
+      const title = t.title_desc || TEACHER_TITLE_MAP[t.title] || t.title || "教师";
+      o.textContent = `${t.teacher_id}（${cname}）· ${t.dept_id||"任课组"} · ${title}`;
+      sel.appendChild(o);
+    });
+  });
+}
+
+function renderTeacherProfile(p) {
+  const cov = p.coverage || {};
+  const cname = p.name || TEACHER_NAME_MAP[p.teacher_id] || "模拟教师";
+  const titleDesc = p.title_desc || TEACHER_TITLE_MAP[p.title] || p.title || "-";
+  let html = '<div class="card">';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+  html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">示例教师档案</span>';
+  html += '<span style="font-size:13px;color:var(--text-muted);">档案编号：' + esc(p.teacher_id) + '</span>';
+  html += '</div>';
+  html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(p.teacher_id) + '（' + esc(cname) + '） · 教师业务与档案概况</h2>';
+  html += '<div class="statGrid">'
+    + '<div class="stat"><div class="v">' + esc(p.dept_id||"-") + '</div><div class="l">任教教研组</div></div>'
+    + '<div class="stat"><div class="v" style="font-size:15px;">' + esc(titleDesc) + '</div><div class="l">专业技术职称</div></div>'
+    + '<div class="stat"><div class="v">' + esc(p.hire_year ? p.hire_year + " 年" : "-") + '</div><div class="l">参加工作年份</div></div>'
+    + '<div class="stat"><div class="v" style="font-size:15px;">' + esc((p.years||[]).join(" / ") || "-") + '</div><div class="l">建档任教学年</div></div>'
+    + "</div>";
+
+  html += '<div class="section"><h3 style="margin-top:0;">考核依据业务数据源采集统计</h3>';
+  html += "<table><tr><th>业务数据源</th><th>考核内容与口径</th><th>采集条数</th></tr>";
+  Object.entries(cov).forEach(([k,v]) => {
+    const meta = TEACHER_SOURCE_DESC_MAP[k] || { name: DATA_SOURCE_MAP[k] || k, desc: "教师业务考核关联数据" };
+    html += "<tr><td><b>" + esc(meta.name) + "</b></td><td style='color:var(--text-muted);font-size:12.5px;'>" + esc(meta.desc) + "</td><td><b style='color:var(--primary);'>" + esc(v) + "</b> 条</td></tr>";
+  });
+  html += "</table></div>";
+  html += '<div class="banner disclaimer">' + esc(p.note || "演示数据为脱敏虚构档案；真实学校数字化数据请走学校简介。") + "</div>";
+  html += '<div style="margin-top:16px;display:flex;gap:10px;">';
+  html += '<button id="btnEvalFromProfile">立即评估该教师教学水平 (' + esc(p.teacher_id) + ')</button>';
+  html += '</div></div>';
+  document.getElementById("profileResult").innerHTML = html;
+  document.getElementById("btnEvalFromProfile").onclick = () => {
+    document.getElementById("question").value = p.teacher_id + " 2024-2025 教学水平怎么样？";
+    showTab("chat");
+    document.getElementById("btnAsk").click();
+  };
+}
+
+function renderSchoolHits(schools) {
+  let html = '<div class="card"><h3>检索结果（' + schools.length + "）</h3>";
+  if (!schools.length) { html += '<div class="banner warn">未找到匹配学校</div></div>'; document.getElementById("profileResult").innerHTML = html; return; }
+  html += "<table><tr><th>id</th><th>校名</th><th>地区</th><th>年份</th><th>学段</th><th></th></tr>";
+  schools.forEach(s => {
+    html += '<tr class="clickable" data-sid="' + s.id + '"><td>' + s.id + "</td><td>" + esc(s.school_name)
+      + "</td><td>" + esc((s.province||"")+"/"+ (s.city||"")) + "</td><td>" + esc(s.year)
+      + "</td><td>" + esc(s.school_type) + '</td><td><button class="ghost btnSchoolProfile" data-sid="' + s.id + '">简介</button> '
+      + '<button class="btnSchoolEval" data-sid="' + s.id + '" data-name="' + esc(s.school_name) + '" data-year="' + esc(s.year) + '">评估</button></td></tr>';
+  });
+  html += "</table></div>";
+  document.getElementById("profileResult").innerHTML = html;
+  document.querySelectorAll(".btnSchoolProfile").forEach(b => b.addEventListener("click", () => loadSchoolProfile(b.dataset.sid)));
+  document.querySelectorAll(".btnSchoolEval").forEach(b => b.addEventListener("click", () => {
+    document.getElementById("question").value = b.dataset.name + " " + b.dataset.year + " 数字化水平怎么样？";
+    showTab("chat");
+    document.getElementById("btnAsk").click();
+  }));
+}
+
+async function loadSchoolProfile(id) {
+  const box = document.getElementById("profileResult");
+  try {
+    const resp = await fetch(apiUrl("/api/v1/schools/" + id + "/profile"));
+    if (!resp.ok) throw new Error(await resp.text());
+    const p = await resp.json();
+    let html = '<div class="card"><h3>学校简介 · ' + esc(p.school_name) + "（id=" + p.id + "）</h3>";
+    html += '<div class="statGrid">'
+      + '<div class="stat"><div class="v">' + esc(p.year) + '</div><div class="l">年份</div></div>'
+      + '<div class="stat"><div class="v">' + esc((p.answered??"-") + "/" + (p.total_questions??"-")) + '</div><div class="l">作答题数</div></div>'
+      + '<div class="stat"><div class="v">' + esc(p.school_type||"-") + '</div><div class="l">学段</div></div>'
+      + '<div class="stat"><div class="v">' + esc(p.region||"-") + '</div><div class="l">区域</div></div>'
+      + "</div>";
+    html += kvTable({
+      province:p.province, city:p.city, district:p.district,
+      school_area_type:p.school_area_type, class_num:p.class_num,
+      teacher_num:p.teacher_num, student_num:p.student_num,
+      same_name_years:(p.same_name_years||[]).join(", ")
+    });
+    html += '<div class="banner disclaimer">' + esc(p.note||"") + "</div>";
+    html += '<button id="btnEvalSchool">评估该校</button></div>';
+    box.innerHTML = html;
+    document.getElementById("btnEvalSchool").onclick = () => {
+      document.getElementById("question").value = p.school_name + " " + p.year + " 数字化水平怎么样？";
+      showTab("chat");
+      document.getElementById("btnAsk").click();
+    };
+  } catch (e) {
+    box.innerHTML = '<div class="card"><div class="banner warn">简介加载失败：' + esc(e.message||e) + "。请先在「接口配置」探测 API。</div></div>";
+  }
+}
+
+document.getElementById("btnTeacherProfile").addEventListener("click", async () => {
+  const tid = document.getElementById("profileTeacher").value;
+  try {
+    const resp = await fetch(apiUrl("/api/v1/teachers/" + tid + "/profile"));
+    if (resp.ok) { renderTeacherProfile(await resp.json()); return; }
+  } catch (e) {}
+  document.getElementById("profileResult").textContent = "暂无教师数据，请先接入数据。";
+});
+
+document.getElementById("btnSchoolSearch").addEventListener("click", async () => {
+  const q = document.getElementById("schoolQ").value.trim();
+  const year = document.getElementById("schoolYear").value.trim();
+  const box = document.getElementById("profileResult");
+  if (!q) { box.innerHTML = '<div class="card"><div class="banner warn">请输入学校名关键词</div></div>'; return; }
+  try {
+    const url = apiUrl("/api/v1/schools?q=" + encodeURIComponent(q) + (year ? "&year=" + encodeURIComponent(year) : ""));
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    renderSchoolHits(data.schools || []);
+  } catch (e) {
+    box.innerHTML = '<div class="card"><div class="banner warn">检索失败：' + esc(e.message||e) + "。请先在「接口配置」保存并探测。</div></div>";
+  }
+});
+
+const LLM_PRESET = {
+  deepseek: { base:"", model:"deepseek-chat" },
+  qwen: { base:"", model:"qwen-plus" },
+  kimi: { base:"", model:"moonshot-v1-8k" },
+  openai: { base:"", model:"gpt-4o-mini" },
+  custom: { base:"", model:"" }
+};
+
+let savedProfiles = [];
+let activeLlmProfileId = "";
+function fillProfileSelect(profiles, active) {
+  const sel = document.getElementById("llmProfileSel");
+  sel.innerHTML = "";
+  savedProfiles = profiles || [];
+  if (!savedProfiles.length) {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = "尚无已保存配置";
+    sel.appendChild(o);
+    return;
+  }
+  savedProfiles.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = (p.name || "未命名") + " · " + (p.model || "-") + " · " + (p.api_key_masked || "无Key");
+    if (p.id === active) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function applyProfileFields(p) {
+  if (!p) return;
+  if (p.provider) document.getElementById("llmProvider").value = p.provider;
+  if (p.api_base) document.getElementById("llmBase").value = p.api_base;
+  if (p.name) document.getElementById("llmProfileName").value = p.name;
+  if (p.model) {
+    document.getElementById("llmModel").value = p.model;
+    fillModelSelect([p.model], p.model);
+  }
+  fillKeyField(p.api_key || "", p.api_key_masked || "");
+}
+
+function currentKey() {
+  const typed = cleanKey(document.getElementById("llmKey").value);
+  return typed;
+}
+function fillKeyField(key, masked) {
+  const el = document.getElementById("llmKey");
+
+
+  el.value = "";
+  if (masked) {
+    el.placeholder = "已保存 " + masked + "，留空则继续使用";
+  } else {
+    el.placeholder = "API Key（sk-... 或中转密钥）";
+  }
+}
+
+function renderLlmStatus(st) {
+  const status = document.getElementById("apiStatus");
+  const dot = document.getElementById("apiDot");
+  if (!st || st.error) {
+    activeLlmProfileId = "";
+    dot.textContent = "模型：未配置";
+    dot.classList.remove("on");
+    status.innerHTML = '<div class="banner warn">无法读取模型配置。请确认 exe 已启动服务。</div>';
+    return;
+  }
+  activeLlmProfileId = st.active || st.id || "";
+  document.getElementById('btnSaveLlm').disabled = st.secure_storage_available !== true;
+  document.getElementById('btnOverwriteLlm').disabled = st.secure_storage_available !== true;
+  document.getElementById('btnSaveLlm').disabled = st.secure_storage_available !== true;
+  document.getElementById('btnOverwriteLlm').disabled = st.secure_storage_available !== true;
+  fillProfileSelect(st.profiles, activeLlmProfileId);
+  if (st.configured) {
+    dot.textContent = "模型：" + (st.name || st.provider || "已配置") + " " + (st.api_key_masked || "");
+    dot.classList.add("on");
+    status.innerHTML = '<div class="banner ok">当前配置：' + esc(st.name || "未命名")
+      + " · " + esc(st.provider||"-") + " · " + esc(st.model||"-") + " · Key " + esc(st.api_key_masked||"(环境变量)")
+      + "</div><div class='mockNote'>共 " + ((st.profiles||[]).length) + " 套，保存在本机 " + esc(st.config_file||"配置仓库") + "。密钥框变空不代表已删除。</div>";
+  } else {
+    dot.textContent = "模型：未配置密钥";
+    dot.classList.remove("on");
+    status.innerHTML = '<div class="banner warn">尚未填写 API Key。默认智能语义识别会显式停止且不会静默回退；请先配置模型，或在提问台显式选择“规则词面识别（对照）”。</div>';
+  }
+  applyProfileFields(st);
+  if (st.secure_storage_available !== true) {
+    status.innerHTML += '<div class="banner warn">当前进程无法使用 Windows 用户加密，已禁止保存。请由正常 Windows 用户会话启动服务；不会回退到明文。</div>';
+  }
+  if (st.secure_storage_available !== true) {
+    status.innerHTML += '<div class="banner warn">当前进程无法使用 Windows 用户加密，已禁止保存。请由正常 Windows 用户会话启动服务；不会回退到明文。</div>';
+  }
+  if (st.needs_resave || st.legacy_config_detected) {
+    status.innerHTML += '<div class="banner warn">检测到旧明文配置，未读取或迁移其中的密钥。请本人重新填写并保存到加密存储。</div>';
+  }
+}
+
+function fillModelSelect(models, current) {
+  const sel = document.getElementById("llmModelSel");
+  const cur = current || document.getElementById("llmModel").value.trim();
+  const list = Array.from(new Set((models||[]).filter(Boolean)));
+  if (cur && list.indexOf(cur) < 0) list.unshift(cur);
+  sel.innerHTML = "";
+  if (!list.length) {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = "未识别到模型，可手动填写";
+    sel.appendChild(o);
+    return;
+  }
+  list.forEach(id => {
+    const o = document.createElement("option");
+    o.value = id; o.textContent = id;
+    if (id === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+  document.getElementById("llmModel").value = sel.value || cur || "";
+}
+
+async function loadLlmStatus() {
+  try {
+    const resp = await fetch(apiUrl("/api/v1/llm/status"));
+    if (resp.ok) { renderLlmStatus(await resp.json()); return; }
+  } catch (e) {}
+  try {
+    const h = await fetch(apiUrl("/health"));
+    if (h.ok) { const d = await h.json(); if (d.llm) { renderLlmStatus(d.llm); return; } }
+  } catch (e) {}
+  renderLlmStatus({ configured:false, error:"offline" });
+}
+
+document.getElementById("llmProvider").addEventListener("change", () => {
+  const p = LLM_PRESET[document.getElementById("llmProvider").value] || LLM_PRESET.custom;
+  if (p.base) document.getElementById("llmBase").value = p.base;
+  if (p.model) document.getElementById("llmModel").value = p.model;
+});
+
+function cleanKey(s) {
+  return String(s||"").replace(/[\ufeff\u200b\u200c\u200d\xa0]/g, "").trim().replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+}
+function cleanBase(s) {
+  s = String(s||"").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  s = s.replace(/\/chat\/completions$/i, "").replace(/\/completions$/i, "");
+  if (s && !/^https?:\/\//i.test(s)) s = ["https", "://", s].join("");
+  return s;
+}
+
+document.getElementById("llmModelSel").addEventListener("change", () => {
+  document.getElementById("llmModel").value = document.getElementById("llmModelSel").value;
+});
+
+async function ensureLocalApi() {
+  const probe = apiUrl("/health");
+  try {
+    const h = await fetch(probe, { cache: "no-store" });
+    if (!h.ok) throw new Error("本机健康检查 HTTP " + h.status);
+    return true;
+  } catch (e) {
+    throw new Error("本机程序未接通（请求 " + probe + "）。请用 TeacherEval.exe 打开的 127.0.0.1 页面，不要直接打开 html 文件。");
+  }
+}
+
+document.getElementById("btnDiscoverModels").addEventListener("click", async () => {
+  const status = document.getElementById("apiStatus");
+  const body = {
+    provider: document.getElementById("llmProvider").value,
+    api_base: cleanBase(document.getElementById("llmBase").value),
+    api_key: currentKey(),
+    profile_id: activeLlmProfileId,
+    save: false
+  };
+  if (!body.api_base && !document.getElementById("llmBase").value) {
+    status.innerHTML = '<div class="banner warn">请先填写官方或中转站 API 地址</div>';
+    return;
+  }
+  status.innerHTML = '<div class="banner">正在用地址和密钥拉取模型列表…</div>';
+  try {
+    await ensureLocalApi();
+    const resp = await fetch(apiUrl("/api/v1/llm/models"), {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (!body.api_key && data.ok && data.profile_id_used !== activeLlmProfileId) {
+      status.innerHTML = '<div class="banner warn">识别失败：活动模型配置已变化，请刷新后重试。</div>';
+      return;
+    }
+    if (!data.ok) {
+      status.innerHTML = '<div class="banner warn">识别失败：' + esc(data.error||"未知错误")
+        + (data.url ? "<br>请求 " + esc(data.url) : "")
+        + (data.tried && data.tried.length ? "<br>已尝试：" + esc(data.tried.join(" 、 ")) : "")
+        + (data.api_key_masked ? "<br>已识别 Key：" + esc(data.api_key_masked) : "")
+        + "</div>";
+      return;
+    }
+    fillModelSelect(data.models, data.current);
+    if (body.api_key) fillKeyField(body.api_key, data.api_key_masked);
+    status.innerHTML = '<div class="banner ok">识别到 ' + (data.count||0) + " 个模型，请在下拉框中选择。密钥不会回填输入框。"
+      + (data.api_key_masked ? " Key " + esc(data.api_key_masked) : "")
+      + "</div>";
+  } catch (e) {
+    status.innerHTML = '<div class="banner warn">识别失败：' + esc(fetchErrorHint(e)) + "</div>";
+  }
+});
+
+async function saveProfile(overwrite) {
+  const name = document.getElementById("llmProfileName").value.trim();
+  const selectedId = document.getElementById("llmProfileSel").value || "";
+  const body = {
+    provider: document.getElementById("llmProvider").value,
+    api_base: cleanBase(document.getElementById("llmBase").value),
+    api_key: currentKey(),
+    model: (document.getElementById("llmModelSel").value || document.getElementById("llmModel").value).trim(),
+    name: name,
+    overwrite: !!overwrite,
+    id: overwrite ? selectedId : ""
+  };
+  if (!body.name) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">请填写配置名称后再保存（例如：官方DeepSeek）</div>'; return; }
+  if (!body.api_base) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">请填写由模型服务商提供的 API 地址，不是本机端口</div>'; return; }
+  if (overwrite && !selectedId) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">没有选中要覆盖的配置。请用「另存为新配置」，或先在下拉框选一套。</div>'; return; }
+  if (!body.api_key && !overwrite) {
+
+    const exists = Array.from(document.getElementById("llmProfileSel").options).some(o => o.textContent.indexOf(body.name + " ·") === 0 || o.textContent.startsWith(body.name + " ·"));
+    if (!exists) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">新建配置必须粘贴 API Key</div>'; return; }
+  }
+  try {
+    const resp = await fetch(apiUrl("/api/v1/llm/config"), {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    renderLlmStatus(data);
+    if (body.api_key) fillKeyField(body.api_key, data.api_key_masked);
+    const names = (data.profiles||[]).map(p => p.name).join("、") || data.name;
+    if (data.configured) {
+      document.getElementById("apiStatus").innerHTML += '<div class="banner ok">'
+        + (overwrite ? "已覆盖当前配置「" : "已保存「") + esc(data.name||body.name) + "」。"
+        + "现有 " + ((data.profiles||[]).length) + " 套：" + esc(names) + "</div>";
+    } else {
+      document.getElementById("apiStatus").innerHTML = '<div class="banner warn">保存后仍未识别到密钥。请确认 Key 不是空、地址以 http 开头。</div>';
+    }
+  } catch (e) {
+    document.getElementById("apiStatus").innerHTML = '<div class="banner warn">保存失败：' + esc(fetchErrorHint(e)) + "</div>";
+  }
+}
+
+document.getElementById("btnSaveLlm").addEventListener("click", () => saveProfile(false));
+document.getElementById("btnOverwriteLlm").addEventListener("click", () => saveProfile(true));
+
+document.getElementById("btnPingLlm").addEventListener("click", async () => {
+  const status = document.getElementById("apiStatus");
+  status.innerHTML = '<div class="banner">正在探测官方/中转接口…</div>';
+  try {
+    const resp = await fetch(apiUrl("/api/v1/llm/ping"), { method:"POST" });
+    const data = await resp.json();
+    if (data.ok) status.innerHTML = '<div class="banner ok">连通成功 · ' + esc(data.provider) + " / " + esc(data.model)
+      + "<br>请求 " + esc(data.chat_url||data.api_base||"") + " · Key " + esc(data.api_key_masked||"")
+      + " · 回复 " + esc(data.reply||"") + "</div>";
+    else status.innerHTML = '<div class="banner warn">探测失败：' + esc(data.message||data.error||"未知错误")
+      + (data.error_code ? "<br>错误码：" + esc(data.error_code) : "")
+      + (data.failure_stage ? "<br>阶段：" + esc(data.failure_stage) : "")
+      + (data.api_key_masked ? "<br>已识别 Key：" + esc(data.api_key_masked) : "")
+      + "</div>";
+  } catch (e) {
+    status.innerHTML = '<div class="banner warn">探测失败：' + esc(fetchErrorHint(e)) + "</div>";
+  }
+});
+
+document.getElementById("llmProfileSel").addEventListener("change", () => {
+  const id = document.getElementById("llmProfileSel").value;
+  const p = savedProfiles.find(x => x.id === id);
+  applyProfileFields(p);
+});
+
+document.getElementById("btnLoadProfile").addEventListener("click", async () => {
+  const id = document.getElementById("llmProfileSel").value;
+  if (!id) return;
+  try {
+    const resp = await fetch(apiUrl("/api/v1/llm/profiles/activate"), {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})
+    });
+    const data = await resp.json();
+    renderLlmStatus(data);
+    document.getElementById("apiStatus").innerHTML += '<div class="banner ok">已切换到「' + esc(data.name||id) + '」</div>';
+  } catch (e) {
+    document.getElementById("apiStatus").innerHTML = '<div class="banner warn">切换失败：' + esc(e.message||e) + "</div>";
+  }
+});
+
+document.getElementById("btnDeleteProfile").addEventListener("click", async () => {
+  const id = document.getElementById("llmProfileSel").value;
+  if (!id) return;
+  if (!confirm("删除这套已保存的 API 配置？")) return;
+  try {
+    const resp = await fetch(apiUrl("/api/v1/llm/profiles/delete"), {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})
+    });
+    renderLlmStatus(await resp.json());
+  } catch (e) {}
+});
+
+async function probeLocal() {
+  try {
+    const resp = await fetch(apiUrl("/health"), { cache: "no-store" });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const datasetNotice = document.getElementById("datasetNotice");
+    if (datasetNotice) {
+      datasetNotice.textContent = data.data_source && data.data_source.data_kind === "synthetic"
+        ? "当前使用完全虚构的合成数据，仅供运行演示，不代表真实学校情况。"
+        : data.real_db ? "当前使用自行接入的数据；结果取决于数据范围与定义。"
+        : "尚未接入数据。请先接入自己的数据库，或运行合成数据生成器。";
+    }
+    const testRequested = new URLSearchParams(globalThis.location.search).get("presentation_test") === "1";
+    const testPanel = document.getElementById("presentationTestPanel");
+    if (testPanel && testRequested) {
+      testPanel.style.display = "block";
+      presentationTestEnabled = Boolean(data.presentation_test_control && data.presentation_test_control.enabled);
+      testPanel.dataset.enabled = String(presentationTestEnabled);
+      const gateState = document.getElementById("presentationTestGateState");
+      gateState.textContent = presentationTestEnabled
+        ? "测试门控已启用；每次提交会冻结当前控件值。合成响应不得计入真实API证据。"
+        : "测试门控未启用；请仅在隔离测试进程设置 TEACHER_EVAL_PRESENTATION_TEST_MODE=1。";
+      ["presentationTestKind", "presentationTestDelay", "presentationTestRevision"].forEach(id => {
+        document.getElementById(id).disabled = !presentationTestEnabled;
+      });
+    }
+    const contractDot = document.getElementById("contractDot");
+    if (contractDot) {
+      const c = data.analysis_contract;
+      if (c && c.catalogue_version) {
+        contractDot.textContent = "契约：" + c.catalogue_version;
+        contractDot.classList.add("on");
+        contractDot.title = "服务 " + (data.service_version || "未知版本")
+          + "；强制操作：" + (c.enforced_operations || []).join(", ")
+          + "；状态库文件：" + ((data.contract_store && data.contract_store.preferred_file) || "未知");
+      } else {
+        contractDot.textContent = "契约：旧服务/未挂载";
+        contractDot.classList.remove("on");
+      }
+    }
+    const dbDot = document.getElementById("dbDot");
+    if (dbDot && data.db_stats) {
+      if (data.db_stats.ready) {
+        const stats = data.db_stats || {};
+        dbDot.textContent = "学校年度：" + (stats.schools_count ?? "—") + " · 作答：" + (stats.answers_count ?? "—");
+        dbDot.classList.add("on");
+      } else {
+        dbDot.textContent = "学校库：异常";
+        dbDot.classList.remove("on");
+      }
+    }
+    if (data.teachers && data.teachers.length) {
+      try {
+        const t = await fetch(apiUrl("/api/v1/teachers"));
+        if (t.ok) { const j = await t.json(); fillTeacherSelects(j.teachers || []); }
+      } catch (e) { fillTeacherSelects(data.teachers.map(id => ({teacher_id:id, dept_id:"", title:""}))); }
+    }
+    if (data.llm) renderLlmStatus(data.llm);
+  } catch (e) {}
+}
+
+fillTeacherSelects(MOCK_TEACHERS);
+probeLocal();
+loadLlmStatus();
+
+</script>
+</body>
+</html>

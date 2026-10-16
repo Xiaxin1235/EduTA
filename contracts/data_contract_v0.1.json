@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "教师评估平台数据契约 v0.1",
+  "description": "定义数据提供方需交付的最小字段集与校验规则。校验器：scripts/data_contract_validator.py",
+  "contract_version": "0.1",
+  "tables": {
+    "teacher": {
+      "description": "教师主数据（去标识化交付，姓名不进入分析库）",
+      "required": ["teacher_id", "dept_id", "title", "hire_year", "is_active"],
+      "key": ["teacher_id"],
+      "columns": {
+        "teacher_id": { "type": "string", "description": "供方系统唯一标识（工号或供方生成的伪 ID）" },
+        "name_hash": { "type": "string", "description": "姓名哈希（可选，用于人工抽检回查；不建议明文姓名进分析库）" },
+        "dept_id": { "type": "string", "description": "教研组/院系标识" },
+        "title": { "type": "string", "enum": ["初级", "中级", "高级", "正高", "其他"] },
+        "hire_year": { "type": "integer", "minimum": 1950, "maximum": 2100 },
+        "is_active": { "type": "integer", "enum": [0, 1] }
+      }
+    },
+    "course_period": {
+      "description": "授课记录（事实表），同一教师同周期同班级同科目只允许一条记录",
+      "required": ["teacher_id", "course_id", "school_year", "semester", "class_id", "student_count", "class_hours"],
+      "key": ["teacher_id", "school_year", "semester", "class_id", "course_id"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "course_id": { "type": "string", "description": "科目名或字典 ID" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "semester": { "type": "string", "enum": ["春", "秋"] },
+        "class_id": { "type": "string", "description": "班级标识，需与 exam_score.class_id 同口径" },
+        "student_count": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "class_hours": { "type": "number", "minimum": 0, "description": "应授课时" }
+      }
+    },
+    "exam_score": {
+      "description": "成绩明细（考试分数，匿名交付）",
+      "required": ["school_year", "semester", "class_id", "course_id", "teacher_id", "student_anon_id", "score_val", "exam_type"],
+      "key": ["school_year", "semester", "class_id", "course_id", "student_anon_id"],
+      "columns": {
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "semester": { "type": "string", "enum": ["春", "秋"] },
+        "class_id": { "type": "string", "description": "班级标识，与 course_period.class_id 同口径" },
+        "course_id": { "type": "string", "description": "科目名或字典 ID，与 course_period.course_id 同口径" },
+        "teacher_id": { "type": "string", "description": "成绩归属：主授课教师" },
+        "student_anon_id": { "type": "string", "description": "学生去标识 ID；要求同一学生跨学期 ID 稳定（增值分析的前提）" },
+        "score_val": { "type": "number", "minimum": 0, "maximum": 150, "description": "原始分；满分制：语数英 150、其他 100" },
+        "exam_type": { "type": "string", "enum": ["期中", "期末", "月考"] }
+      }
+    },
+    "student_survey": {
+      "description": "学生评教（匿名问卷结果，明细表：一行一条问卷记录，无业务唯一键）",
+      "uniqueness": "row_level",
+      "required": ["teacher_id", "school_year", "score"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "score": { "type": "number", "minimum": 1, "maximum": 5, "description": "1~5 分制" },
+        "respondent_class": { "type": "string", "description": "参评班级（可选）" }
+      }
+    },
+    "class_observation": {
+      "description": "听课记录（教研组多人打分，明细表：一行一次听课，无业务唯一键）",
+      "uniqueness": "row_level",
+      "required": ["teacher_id", "school_year", "score"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "score": { "type": "number", "minimum": 0, "maximum": 100, "description": "百分制听课评分" },
+        "observer": { "type": "string", "description": "听课人（可选）" }
+      }
+    },
+    "lesson_plan": {
+      "description": "教案记录（聚合表：同一教师同学年一条，提交课时合计）",
+      "required": ["teacher_id", "school_year", "submitted_hours"],
+      "key": ["teacher_id", "school_year"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "submitted_hours": { "type": "number", "minimum": 0, "description": "已交教案对应课时（分母为 course_period.class_hours）" }
+      }
+    },
+    "research_record": {
+      "description": "教研与学术成果记录（明细表：一行一条成果，无业务唯一键）",
+      "uniqueness": "row_level",
+      "required": ["teacher_id", "school_year", "level", "count"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "level": { "type": "string", "enum": ["national", "provincial", "municipal", "school"] },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "complaint_record": {
+      "description": "投诉记录（敏感，需单独授权；红线维度；明细表：一行一条投诉）",
+      "uniqueness": "row_level",
+      "required": ["teacher_id", "school_year"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "type": { "type": "string" },
+        "verified": { "type": "integer", "enum": [0, 1], "description": "是否查实（仅查实记录进入红线判定）" }
+      }
+    },
+    "discipline_record": {
+      "description": "违规记录（敏感，需单独授权；红线维度；明细表：一行一条违规）",
+      "uniqueness": "row_level",
+      "required": ["teacher_id", "school_year"],
+      "columns": {
+        "teacher_id": { "type": "string" },
+        "school_year": { "type": "string", "pattern": "^20\\d{2}-20\\d{2}$" },
+        "type": { "type": "string" },
+        "verified": { "type": "integer", "enum": [0, 1], "description": "是否查实（仅查实记录进入红线判定）" }
+      }
+    }
+  },
+  "cross_table_rules": {
+    "teacher_in_exam": "exam_score.teacher_id 必须能在 teacher.teacher_id 中找到",
+    "class_consistency": "exam_score.(class_id, course_id, school_year, semester) 必须落在 course_period 的授课组合内",
+    "anon_id_stable": "exam_score.student_anon_id 跨学期必须稳定（增值分析前提）",
+    "survey_no_identifiers": "student_survey 不允许出现姓名/工号等可识别字段"
+  }
+}

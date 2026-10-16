@@ -1,0 +1,8 @@
+{
+  "version": "custom-geography-v1",
+  "application_years": ["2020", "2021", "2022", "2023"],
+  "parent_by_city": {},
+  "city_aliases": {},
+  "province_aliases": {},
+  "districts": {}
+}
