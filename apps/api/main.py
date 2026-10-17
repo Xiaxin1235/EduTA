@@ -3269,7 +3269,7 @@ try:
         save: bool = False
         provider: str = "custom"
 
-    app = FastAPI(title="教师评估 AI 平台 API", version="1.0.0",
+    app = FastAPI(title="EduTA API", version="1.0.1",
                   description="只读评估服务；结果缓存驻留内存，契约修订独立持久化")
     from packages.core.local_browser_security import LocalBrowserSecurityMiddleware
     app.add_middleware(LocalBrowserSecurityMiddleware)

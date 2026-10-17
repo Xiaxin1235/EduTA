@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from packages.core.frozen_paths import app_dir, output_dir, web_dir
 
-UI_VERSION = "1.0.0"
+UI_VERSION = "1.0.1"
 
 def _port_free(port: int) -> bool:
     import socket
@@ -159,7 +159,7 @@ def cmd_serve(args):
     url = f"http://127.0.0.1:{port}/"
     wd = web_dir()
     print("=" * 60)
-    print(f"教师评估 AI 平台 {UI_VERSION}")
+    print(f"EduTA — Education Typed-task Analyst {UI_VERSION}")
     print(f"本机地址：{url}?ui={UI_VERSION}")
     print(f"Web 目录：{wd}")
     print("页签：对话台（Agent 工具调用绘图）/ 简介查询 / 模型密钥")
@@ -216,7 +216,7 @@ def main():
         except Exception:
             pass
 
-    ap = argparse.ArgumentParser(prog="TeacherEval", description="教师评估 AI 平台（单文件版）")
+    ap = argparse.ArgumentParser(prog="EduTA", description="Education Typed-task Analyst — 教育数据的带类型任务分析助手")
     sub = ap.add_subparsers(dest="cmd")
 
     p_eval = sub.add_parser("eval", help="命令行评估")

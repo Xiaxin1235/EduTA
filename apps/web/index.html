@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>学校数字化评价分析系统</title>
+<title>EduTA · 教育数据分析助手</title>
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <style>
@@ -470,8 +470,8 @@
 <body>
 <div id="datasetNotice" role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">请先接入自己的数据，或运行合成数据生成器。查询结果取决于所接数据的范围和定义。</div>
 <div class="header">
-  <h1>学校数字化评价分析系统</h1>
-  <span class="sub">自然语言查询 · 确定性计算 · 数据与图表</span>
+  <h1>EduTA</h1>
+  <span class="sub">Education Typed-task Analyst · 教育数据的带类型任务分析助手</span>
   <span class="apiDot" id="dbDot" style="margin-left:auto">数据库：未检测</span>
   <span class="apiDot" id="contractDot">契约：未检测</span>
   <span class="apiDot" id="apiDot">接口：未检测</span>
@@ -763,7 +763,7 @@ function apiUrl(path) {
 function fetchErrorHint(err) {
   const msg = String((err && err.message) || err || "");
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-    return "浏览器没连上本机程序（不是模型官网回的错）。请确认：① 黑窗口里的 TeacherEval 还在运行；② 地址栏是 127.0.0.1:8610 而不是官方 API 网址；③ 用 Ctrl+F5 刷新。原始错误：" + msg;
+    return "浏览器未连上 EduTA 本机服务。请确认启动窗口仍在运行，使用启动时显示的 127.0.0.1 地址，并刷新页面。原始错误：" + msg;
   }
   return msg;
 }
@@ -3304,7 +3304,7 @@ async function ensureLocalApi() {
     if (!h.ok) throw new Error("本机健康检查 HTTP " + h.status);
     return true;
   } catch (e) {
-    throw new Error("本机程序未接通（请求 " + probe + "）。请用 TeacherEval.exe 打开的 127.0.0.1 页面，不要直接打开 html 文件。");
+    throw new Error("EduTA 本机服务未接通（请求 " + probe + "）。请运行 python run_app.py，并使用启动时显示的 127.0.0.1 页面。");
   }
 }
 

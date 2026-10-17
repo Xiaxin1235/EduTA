@@ -272,7 +272,7 @@ def _http_json(
     except Exception:
         raise GatewayTLSVerificationError("gateway_tls_context_failed") from None
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
-    headers = {"Accept": "application/json", "User-Agent": "TeacherEval/1.0"}
+    headers = {"Accept": "application/json", "User-Agent": "EduTA/1.0.1"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     if body is not None:

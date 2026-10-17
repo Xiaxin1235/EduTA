@@ -1,8 +1,16 @@
-# School Digitization Analytics
+# EduTA
 
-学校数字化评价分析系统：用自然语言查询学校和地区的数字化指标，生成可追溯的数据卡片、统计结果、图表与解释。
+**Education Typed-task Analyst · 教育数据的带类型任务分析助手**
 
-Natural-language analytics for school digitization assessment, with deterministic calculations, traceable evidence, downloadable charts, and configurable answer checking.
+EduTA 面向学校数字化评价数据，将自然语言问题转换为带类型的分析任务。模型负责理解问题和撰写解释，程序对照原问题与指标目录校正任务，通过注册工具完成只读查询和确定性计算，并生成数据卡片与图表。
+
+EduTA (Education Typed-task Analyst) answers questions over school digitization assessment data using typed analytical tasks and deterministic tools. The model interprets and explains; the program corrects and computes.
+
+## 工作方式
+
+用户问题与对话上下文 → 带类型任务与输出要求 → 对照原问题的程序校正 → 注册工具与只读 SQL → 数据卡片、图表与模型解释。
+
+任务表示确定对象、筛选条件、年度、指标、运算、取值视图及零值和空值规则；独立的输出要求记录用户需要的数值、比较和图表。字段存在歧义时，系统保留当前任务并提出澄清。执行核验、正文检查和检查后的处理策略作为可配置部件保留，详见 [系统架构](docs/ARCHITECTURE.md) 与 [运行配置](docs/RUNNING.md)。
 
 ## 功能
 
@@ -20,8 +28,8 @@ Natural-language analytics for school digitization assessment, with deterministi
 建议使用 Windows 和 Python 3.11 / 3.12。模型配置页使用 Windows 当前用户的 DPAPI 加密保存密钥；本仓库不提供任何模型账号或密钥。
 
 ```powershell
-git clone https://github.com/Xiaxin1235/school-digitization-analytics.git
-cd school-digitization-analytics
+git clone https://github.com/Xiaxin1235/EduTA.git
+cd EduTA
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -31,7 +39,7 @@ python run_app.py
 
 生成器完全由代码构造虚构学校和作答，不读取任何外部数据库。生成的数据仅供运行演示，位于被 Git 忽略的 `data/` 目录；仓库不包含预生成数据文件。教师演示 CSV 可用 `python scripts/mock_transform.py` 另外生成，内容同样完全虚构。
 
-浏览器默认打开 `http://127.0.0.1:8600`。默认是智能语义识别：请在“模型密钥”页输入自己的 API 根地址、模型名和密钥。未配置模型时，可以在对话台明确选择“规则词面识别”体验本地查询。程序不会自动用规则结果冒充模型结果。
+浏览器默认打开 `http://127.0.0.1:8600`。默认是智能语义识别：请在“模型密钥”页输入自己的 API 根地址、模型名和密钥。未配置模型时，可以在对话台选择“规则词面识别”体验本地查询。
 
 合成数据示例问题：
 
@@ -67,10 +75,10 @@ python run_app.py
 | `evaluation_templates`、`contracts` | 指标定义与数据接口定义 |
 | `scripts` | 运行引擎、数据接口校验和合成数据生成器 |
 
-## 数据与运行边界
+## 数据与许可
 
-此公开发行版提供运行代码与指标定义。真实学校记录、作答数据、清洗成果、模型凭据、聊天记录、论文、实验题目、参考答案、评分结果和开发历史均不包含在仓库中。指标定义属于程序的业务配置，不包含学校观测值。
+仓库提供运行代码、指标定义和合成数据生成器，不附真实学校数据、模型凭据、论文及研究过程材料。指标定义是程序的业务配置，不包含学校观测值。
 
-模型服务会接收当前请求所需的问题、上下文及工具事实。接入数据与选择模型服务时，由部署者确定可发送的内容。合成数据仅用于检查运行流程，不代表研究结果或真实学校情况。
+模型服务接收当前请求所需的问题、上下文及工具事实。接入自有数据时，请按数据使用要求配置模型服务。
 
 高级运行配置见 [运行方式](docs/RUNNING.md)。本项目采用 [Apache License 2.0](LICENSE)。依赖包按各自许可证提供，参见 [第三方依赖](THIRD_PARTY_NOTICES.md)。
