@@ -22,9 +22,9 @@
     },
     {
       "path": "apps/web/index.html",
-      "SHA256": "2283aeefbc4b8148c4771717678125b7d4342de7862c488729b90ca57e42c7a1",
+      "SHA256": "12930d0c714f80eb6cfc66293eb9d142ab8a049cfa039d044b1aa6797f056dc7",
       "frozen_SHA256": "ffd6ef08b8804747dfcd4bde9fae6b33f314fbcc7479d88cae734fb57cdb50ed",
-      "adaptation": "LF line endings only"
+      "adaptation": "public deployment usability fix: actual dataset counts/examples, data-source wording, exact small-sample policy threshold audit"
     },
     {
       "path": "contracts/data_contract_v0.1.json",
@@ -70,9 +70,9 @@
     },
     {
       "path": "packages/agent/audit_agent.py",
-      "SHA256": "1871e8068f1481ba9b83a576e5e5080fe59c8cda240861a6b47aa385893f2087",
+      "SHA256": "29634c95bce3a54bbd9558ae9170b16e1b84283efa93fa706c526b1e12933be9",
       "frozen_SHA256": "1871e8068f1481ba9b83a576e5e5080fe59c8cda240861a6b47aa385893f2087",
-      "adaptation": "LF line endings only"
+      "adaptation": "public deployment usability fix: actual dataset counts/examples, data-source wording, exact small-sample policy threshold audit"
     },
     {
       "path": "packages/agent/bench.py",
@@ -538,7 +538,7 @@
     },
     {
       "path": "README.md",
-      "SHA256": "5ebc26ada1931f57243aeca1c9c4d6eead75b9c8954d64458da8b0094e5e5383",
+      "SHA256": "72a24604ee8a673c9d345366b7efed8a51f23690737f9208a405c9beda6b687b",
       "frozen_SHA256": "67f15f001dc4b6427e7d33396374403aee895f90f7bcc42aaf6dd7a403760382",
       "adaptation": "rewritten README"
     },
@@ -745,5 +745,6 @@
     "research_rules/GEOGRAPHY_REGISTRY_FULL_v1.json",
     "research_rules/RESEARCH_DATASET_PRE_R11_v1.json"
   ],
-  "notes": "Application implementation from frozen Fix9; public text files use LF. README is rewritten; synthetic generator is a separate distribution helper. Private dataset/config resources excluded."
+  "notes": "Application implementation from frozen Fix9; public text files use LF. README is rewritten; synthetic generator is a separate distribution helper. Private dataset/config resources excluded.",
+  "deployment_check": "Windows/Python3.12 fresh environment; README rule-mode samples and actual chart download verified; no real model calls"
 }

@@ -468,7 +468,7 @@
 </style>
 </head>
 <body>
-<div role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">本次研究口径：学校指年度登记观测；地区按规范城市、所属省份和用户明示条件共同选取，不代表全市历史学校全集。</div>
+<div role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">数据与范围以当前配置和实际查询为准；学校记录按年度统计，合成演示数据不代表真实学校。</div>
 <div class="header">
   <h1>教师与学校数字化评估系统</h1>
   <span class="sub">界面 v3.29.0-constraint-v6 · 原生F/H v1 · 83题可信语义目录</span>
@@ -493,17 +493,17 @@
           <option value="fh_f">结构化任务 · F平铺</option>
           <option value="fh_h">结构化任务 · H作用域</option>
         </select>
-        <input type="text" id="question" placeholder="例如：武汉市2020年的数字资源怎么样？罗泉学校2023年给老师配了多少平板？">
+        <input type="text" id="question" placeholder="例如：示例市2023年基础设施平均分是多少？示例一小学2023年整体得分是多少？">
         <button id="btnAsk">提问 / 评估</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
-        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">快捷示例：</span>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="武汉市2020年的数字化水平怎么样？">武汉市2020年总体</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="武汉市2020年的数字资源怎么样？">武汉市2020年数字资源</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年给老师配了多少平板？只说数量，不要图。">罗泉学校教师平板</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年给学生配了多少平板？只说数量。">罗泉学校学生平板</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年平板有多少？">平板歧义澄清</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="长沙县 2021 数字化大盘怎么样？">长沙县 2021 数字化大盘</button>
+        <span style="font-size:12px;color:var(--text-muted);font-weight:500;">合成数据示例：</span>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2023年整体得分是多少？">示例市整体</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2023年基础设施平均分是多少？">示例市基础设施</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年的整体得分是多少？">单校整体</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年第9题原始值是多少？">单校题项原值</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市和演示市2023年教育教学平均分比较。">两市比较</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年六维得分，画图。">单校六维图表</button>
       </div>
       <div id="presentationTestPanel" data-enabled="false" style="display:none;margin-top:12px;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;">
         <div style="font-size:12.5px;font-weight:700;color:#92400e;">迟到响应受控测试模式 · 仅用于页面时序验收，不能作为真实API结果</div>
@@ -1144,7 +1144,7 @@ function renderLlmSection(report, title) {
       : "可信语义映射 · 契约/重放/AnswerSpec约束";
     return '<div class="section llm-box" style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
       + '<h3 style="color:#6d28d9;margin:0 0 8px 0;font-size:15px;">'
-      + esc(title || "智能语义定向答复")
+      + esc(title || "范围定向答复")
       + '<span style="font-size:11.5px;font-weight:normal;color:#6d28d9;padding:2px 8px;border:1px solid #8b5cf6;border-radius:12px;margin-left:8px;">' + esc(badge) + '</span>'
       + '</h3>'
       + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#1e293b;">' + esc(txt) + '</div>'
@@ -1183,7 +1183,7 @@ function renderLlmSection(report, title) {
       + '</div>'
       + '<div style="font-size:13.5px;color:#92400e;line-height:1.6;margin-top:8px;">'
       + esc(cleanErr) + '<br>'
-      + '<span style="font-size:12px;color:#78350f;opacity:0.9;">提示：本报告所有统计得分、维度均分、梯队排位及 Matplotlib 综合图表均直接由本地 SQLite 真实数据库计算生成，数据准确完整。</span>'
+      + '<span style="font-size:12px;color:#78350f;opacity:0.9;">提示：统计结果与图表来自当前配置的数据源；核验一致性不等于对原始记录真实性作出认证。</span>'
       + '</div>'
       + '</div>';
   }
@@ -1917,7 +1917,7 @@ function renderReport(report, into) {
       html += renderLlmSection(report, "模型回答");
       if (answerScope.chart_requested) html += renderAgentVisuals(report);
       if (report._showFactDebugAudit && report.audit && report.system_metrics) html += renderAuditAndMetricsSection(report);
-      html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校官方填报作答库，供核查参考。") + '</div></div>';
+      html += '<div class="banner disclaimer">' + esc(report.disclaimer || "结果仅依据当前配置的数据源及本次查询范围；使用合成数据时不代表真实学校或地区。") + '</div></div>';
       into.innerHTML = html;
       return;
     }
@@ -1925,7 +1925,7 @@ function renderReport(report, into) {
     let html = '<div class="card">';
     html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
     html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">指标事实问答</span>';
-    if (itemScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">智能语义定向 · 契约核验</span>';
+    if (itemScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">范围定向 · 契约核验</span>';
     const loc = [o.province, o.city, o.district].filter(Boolean).join(" · ");
     if (loc) html += '<span style="font-size:13px;color:var(--text-muted);">' + esc(loc) + '</span>';
     if (o.school_type) html += '<span style="font-size:13px;color:var(--text-muted);">· ' + esc(o.school_type) + '</span>';
@@ -1989,7 +1989,7 @@ function renderReport(report, into) {
       html += renderAuditAndMetricsSection(report);
     }
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校在国家/省级教育数字化问卷的官方填报作答库，供核查参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "结果仅依据当前配置的数据源及本次查询范围；使用合成数据时不代表真实学校或地区。") + '</div>';
     if (!itemScoped) {
       html += '<div style="margin-top:16px;display:flex;gap:10px;">';
       html += '<button class="secondary" id="btnEvalWholeSchool" data-name="' + esc(o.school_name) + '" data-year="' + esc(o.year || '') + '">综合评估该校数字化发展水平</button>';
@@ -2087,7 +2087,7 @@ function renderReport(report, into) {
     // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本排名基于区域全量中小学在国家/省数字化问卷官方填报作答折算均分，供教育视导与学校定位参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "结果仅依据当前配置的数据源及本次查询范围；使用合成数据时不代表真实学校或地区。") + '</div>';
     html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
     html += '<button class="secondary" id="btnRankToFact" data-name="' + esc(o.school_name) + '">查看该校设备配置事实</button>';
     html += '<button class="secondary" id="btnRankToRegion" data-region="' + esc(o.region_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">查看全区数字化大盘</button>';
@@ -2142,7 +2142,7 @@ function renderReport(report, into) {
     let html = '<div class="card">';
     html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
     html += '<span style="background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">' + (isRegionRanking ? '区域学校排名' : '区域数字化大盘') + '</span>';
-    if (semanticScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">智能语义定向 · AnswerSpec</span>';
+    if (semanticScoped) html += '<span style="background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">范围定向 · AnswerSpec</span>';
     if (o.target_rank) {
       const shownRank = (o.target_school && o.target_school.rank) || o.target_rank;
       html += '<span style="background:#faeee9;color:var(--primary);font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;">精准位次 · 第 ' + shownRank + ' 名</span>';
@@ -2317,7 +2317,7 @@ function renderReport(report, into) {
 
     // 模型解读；语义首片只展示AnswerSpec允许的定向答复。
     if (!semanticScoped || report._llmModelInvoked !== false) {
-      html += renderLlmSection(report, semanticScoped ? "智能语义定向答复" : "智能区域宏观诊断与建议");
+      html += renderLlmSection(report, semanticScoped ? "范围定向答复" : "智能区域宏观诊断与建议");
     }
     if (!semanticScoped || answerScope.chart_requested) {
       html += renderAgentVisuals(report);
@@ -2326,7 +2326,7 @@ function renderReport(report, into) {
       html += renderAuditAndMetricsSection(report);
     }
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本报告由区域全量中小学数字化作答数据统计聚合生成，仅供教育行政主管部门决策参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "结果仅依据当前配置的数据源及本次查询范围；使用合成数据时不代表真实学校或地区。") + '</div>';
     html += '</div>';
     into.innerHTML = html;
     bindRetryLlm(report, into);
@@ -2478,7 +2478,7 @@ function renderReport(report, into) {
     html += renderAuditAndMetricsSection(report);
 
     // 免责声明
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本榜单基于各省在册中小学在全国教育数字化监测平台的官方填报作答折算均分，供宏观教育决策与视导参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "结果仅依据当前配置的数据源及本次查询范围；使用合成数据时不代表真实学校或地区。") + '</div>';
 
     html += '</div>';
     into.innerHTML = html;
@@ -3659,7 +3659,7 @@ async function probeLocal() {
     const dbDot = document.getElementById("dbDot");
     if (dbDot && data.db_stats) {
       if (data.db_stats.ready) {
-        dbDot.textContent = "学校库：37.5万所 (3111.56万作答在线)";
+        dbDot.textContent = "学校年度记录：" + data.db_stats.schools_count.toLocaleString() + "条（" + data.db_stats.answers_count.toLocaleString() + "条作答）";
         dbDot.classList.add("on");
       } else {
         dbDot.textContent = "学校库：异常";

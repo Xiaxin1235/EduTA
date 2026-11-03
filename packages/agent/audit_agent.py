@@ -145,13 +145,13 @@ class DataAuditAgent:
             verdict_badge = "缺少同范围溯源证据"
         elif result.get("status") == "empty_filter" or result.get("school_count") == 0:
             verdict = "PASS"
-            verdict_badge = "认证通过 · 真实数据在册（0样本核验无篡改）"
+            verdict_badge = "当前核验通过 · 该范围无有效样本"
         elif has_not_checked:
             verdict = "PASS"
             verdict_badge = "核心核验通过 · 部分项未检验/不适用"
         else:
             verdict = "PASS"
-            verdict_badge = "认证全通 · 100% 真实数据"
+            verdict_badge = "当前核验项通过"
 
         # 统一各检查项状态，杜绝一边写“未执行检验”一边标“通过”的自相矛盾
         c_comp_status = computation.get("status") or ("PASS" if computation.get("tamper_free") else "FAIL")
@@ -223,7 +223,7 @@ class DataAuditAgent:
                     "summary": "未提供投影前契约溯源；不以全库在册数量替代目标范围核验"}
         verified = True
         evidence_chain = []
-        source_name = "本地真实数据库 (SQLite education_digitization.sqlite)"
+        source_name = "当前配置的学校年度数据库（SQLite）"
 
         try:
             from scripts.school_engine import connect
@@ -335,7 +335,7 @@ class DataAuditAgent:
             "source": source_name,
             "evidence_count": ev_count,
             "evidence_chain": evidence_chain,
-            "summary": f"已完成 {ev_count} 项底层物理数据库对齐核验，数据 100% 真实在册",
+            "summary": f"已完成 {ev_count} 项底层物理数据库对齐核验，数值与当前数据源一致，不证明原始登记真实性",
         }
 
     def _verify_computations(self, obj_type: str, result: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
@@ -971,7 +971,15 @@ class DataAuditAgent:
                 pass
 
         hallucinated = []
-        tokens_in_text = self._numeric_re.findall(text)
+        # The fixed small-sample policy is a threshold, not a measured value.
+        # Recognize only its exact registered sentence with an applicable count;
+        # other occurrences of 30 and all reported measurements remain checked.
+        from packages.semantic_query.regional_capabilities import SMALL_NOTE
+        policy_text = text
+        if any(type(result.get(k)) is int and 0 <= result[k] < 30
+               for k in ('school_count', 'requested_school_count')):
+            policy_text = policy_text.replace(SMALL_NOTE, '')
+        tokens_in_text = self._numeric_re.findall(policy_text)
         for num in tokens_in_text:
             clean = num.rstrip("%")
             # 基础语法常数（1-10 维度序数、100 分满分）直接放行
@@ -1058,7 +1066,7 @@ class DataAuditAgent:
 
         if h_count == 0:
             status = "PASS"
-            summary = "文本数字与公开数值视图一致；此项不证明语义映射或整体事实正确" if scoped else "文本生成经证据链绝对约束，零事实编造，零数值幻觉 (Zero-Hallucination: 100%)"
+            summary = "文本数字与公开数值视图一致；此项不证明语义映射或整体事实正确" if scoped else "当前文本数字未发现与可用数值证据冲突；不证明语义映射或原始记录真实性"
         else:
             status = "FAIL"
             summary = f"未能通过零数值幻觉校验：检出 {h_count} 处异常数字/事实 ({', '.join(hallucinated)})"
