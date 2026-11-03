@@ -1,3 +1,13 @@
+"""统一多意图与实体路由器 (Intent Router)。
+
+将用户的开放式自然语言提问分流至对应的处理引擎：
+1. INTENT_TEACHER_EVAL: 教师多维综合评估 (indicator_engine)
+2. INTENT_SCHOOL_FACT:  具体指标事实问答 (fact_engine)
+3. INTENT_REGION_EVAL:  区域数字化宏观评估 (region_engine)
+4. INTENT_SCHOOL_EVAL:  整校多维综合评估 (school_engine)
+5. INTENT_CLARIFY:      缺少必要实体，给出精准引导提示
+"""
+
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,11 +22,15 @@ _CAL_YEAR_RE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
 _SCHOOL_RE = re.compile(r"[\u4e00-\u9fff0-9A-Za-z]{2,40}(?:高级中学|初级中学|小学|中学|学校|幼儿园|学院|初中|高中|附中|附小|职中|职高|技校|分校|校区|[一二三四五六七八九十\d]+[中高小])")
 _SCHOOL_ID_RE = re.compile(r"\b(?:S|学校|id:?)(\d{1,8})\b", re.I)
 
+# 统计口径中的“按学校”“每校”是分析单位，不是学校实体。
 _SCHOOL_AGGREGATION_RE = re.compile(
     r"(?:按|对|以)(?:每所|各所|所有|全部)?学校|(?:每|各)(?:所)?(?:学校|校)|"
     r"(?:均分|平均|等权|汇总|加权|作答).*(?:学校|中小学)$"
 )
 
+# 区域两期查询中的“有效学校数量/学校数”与“同一批学校”描述的是统计口径或
+# 越界的队列语义，并不是一所具体学校的名称。进入学校实体扫描前移除这些短语，
+# 避免无分隔符问句把“武汉市到有效学校”一类残片误当作学校实体。
 _REGION_LONGITUDINAL_GENERIC_SCHOOL_SCOPE_RE = re.compile(
     r"(?:(?:有效|有数据|参与|纳入|覆盖|样本)(?:的)?)?学校(?:总)?"
     r"(?:数量|数目|数(?=$|[\s，,。？！?的量目为是有共分各多几较更高低大小呢吗变增减差]))"
@@ -78,12 +92,13 @@ _REGION_EVALUATION_UNSUPPORTED_INTENT_PATTERNS = (
     ),
 )
 
+
 def _extract_years(text: str) -> List[str]:
-    pass
+    """从提问中提取学年或日历年（支持肯定指定与排除否定年份）。"""
     ranges = _YEAR_RE.findall(text)
     if ranges:
         return ranges
-
+    # 显式肯定选定单一学年/年份（如 只接受2020年、只看2020年、只用2020年、锁定2020年）
     affirmative = re.findall(r"(?:只接受|只看|只算|只选|仅看|只用|锁定|仅接受)\s*(20\d{2})年?", text)
     if affirmative:
         return [affirmative[0]]
@@ -94,7 +109,7 @@ def _extract_years(text: str) -> List[str]:
         if valid:
             return valid
         return cal
-
+    # 宽泛时间识别
     if any(k in text for k in ("近三年", "近3年")):
         return ["2021", "2022", "2023"]
     if any(k in text for k in ("近两年", "近2年")):
@@ -103,8 +118,9 @@ def _extract_years(text: str) -> List[str]:
         return ["latest"]
     return []
 
+
 def _extract_aggregation(text: str) -> str:
-    pass
+    """提取聚合计算方式：按学校等权平均 (school_equal_mean) 或全部作答池化平均 (answer_pooled_mean)。"""
     if any(k in text for k in (
         "作答放在一起平均", "合在一起平均", "所有作答合并平均", "全部作答放在一起平均",
         "全部题目的作答放在一起平均", "作答池化", "不要先按学校汇总", "不先按学校汇总",
@@ -114,6 +130,7 @@ def _extract_aggregation(text: str) -> str:
     )) or re.search(r"(?<![A-Za-z])pool(?:ed|ing)?(?![A-Za-z])", text, re.I):
         return "answer_pooled_mean"
     return "school_equal_mean"
+
 
 def _has_explicit_aggregation(text: str) -> bool:
     return any(k in text for k in (
@@ -125,12 +142,14 @@ def _has_explicit_aggregation(text: str) -> bool:
         "学校等权", "每校等权", "按学校等权", "先按学校汇总", "各校均分再平均",
     )) or bool(re.search(r"(?<![A-Za-z])pool(?:ed|ing)?(?![A-Za-z])", text, re.I))
 
+
 _AGGREGATION_SCHOOL_PHRASE_RE = re.compile(
     r"(?:(?:改回|改为|换成|换为|采用|使用|按照|按)\s*"
     r"(?:学校|每校|各校)\s*(?:等权|平均|汇总|聚合)"
     r"|(?:学校|每校|各校)\s*等权"
     r"|(?:每校|各校)\s*(?:平均|汇总|聚合))"
 )
+
 
 _RANKING_PATTERNS = [
     "排第几", "排名", "排位", "位次", "名次", "在区里", "在县里", "在市里",
@@ -141,6 +160,7 @@ _LEADERBOARD_PATTERNS = [
     "最好的学校", "标杆学校", "排名前", "前三", "前五", "前10", "前十",
     "排名靠前", "最薄弱", "最差的学校", "后五", "后三", "榜单",
 ]
+
 
 _INVALID_SCHOOL_SUBSTRINGS = (
     "哪个学校", "哪所学校", "哪所小学", "哪所中学", "什么学校", "哪些学校",
@@ -169,9 +189,11 @@ _SCHOOL_FILTER_RE = re.compile(
     r"^(?:只纳入|纳入|仅包含|包含|只含|筛选|仅限|按|只看|只算|只统计|仅统计|统计)?(?:公办|民办|公立|私立|乡村|农村|镇区|城镇|城区|城市)?(?:小学|初中|高中|中学|幼儿园|中职|完全中学|九年一贯制|十二年一贯制|学校|中小学)$"
 )
 
-def _extract_school_filter(text: str) -> Tuple[Optional[str], str]:
-    pass
 
+def _extract_school_filter(text: str) -> Tuple[Optional[str], str]:
+    """从提问中精准提取办学性质（公办/民办）、学段（小学/初中/高中）或城乡过滤条件，并返回剔除该短语后的文本。"""
+    # 排名目标后的裸筛选词同样是结构化范围，而不是学校实体。例如：
+    # “前三所小学学校”“前三所乡村学校”“Top 3 公办学校”。
     ranking_filter = re.search(
         r"(?:排名前|前|top\s*)\s*(?:\d+|[一二两三四五六七八九十]{1,3})\s*(?:名|所|家|个)?\s*"
         r"(?P<filter_phrase>"
@@ -189,6 +211,7 @@ def _extract_school_filter(text: str) -> Tuple[Optional[str], str]:
         stripped_text = re.sub(r"\s+", " ", text[:start] + " " + text[end:]).strip()
         return filter_name, stripped_text
 
+    # 复合匹配：性质 + 学段（如 公办小学、民办小学、乡村学校、只看初中、初中学校、乡村小学）
     m = re.search(
         r"(?:只纳入|纳入|仅包含|包含|只含|筛选|仅限|按|只看|只算|只统计|仅统计|统计)?\s*"
         r"(公办|民办|公立|私立|乡村|农村|镇区|城镇|城区|城市)?\s*"
@@ -214,6 +237,7 @@ def _extract_school_filter(text: str) -> Tuple[Optional[str], str]:
             stripped_text = re.sub(r"\s+", " ", stripped_text).strip()
             return filter_name, stripped_text
 
+    # 单独办学性质/城乡/学段词（如 只看公办、只看民办、只看乡村、只看民办学校、如果只纳入乡村学校呢）
     m2 = re.search(
         r"(?:只纳入|纳入|仅包含|包含|只含|筛选|仅限|按|只看|只算|只统计|仅统计|统计)\s*"
         r"(公办|民办|公立|私立|乡村|农村|镇区|城镇|城区|城市|初中|初级中学|小学|高中|高级中学|中职|幼儿园|九年一贯制|十二年一贯制)(?:学校)?",
@@ -225,6 +249,7 @@ def _extract_school_filter(text: str) -> Tuple[Optional[str], str]:
         stripped_text = re.sub(r"\s+", " ", stripped_text).strip()
         return filter_name, stripped_text
 
+    # 单独性质+学校（如 民办学校）
     m3 = re.search(r"(?:^|[，,、\s])(民办|公办|公立|私立|乡村|农村)(?:学校)(?:$|[，,、\s及和与])", text)
     if m3:
         filter_name = m3.group(1)
@@ -283,8 +308,9 @@ _DIMENSION_ALIASES = {
     ),
 }
 
+
 def _extract_dimensions_and_stat(text: str) -> Tuple[List[str], Optional[str]]:
-    pass
+    """从提问中提取针对六大宏观维度的查询或特定统计量需求（支持多维度并列提取，且排除否定纠错项）。"""
     valid_dims = []
     for d in STANDARD_MACRO_DIMENSIONS:
         spans = [alias for alias in _DIMENSION_ALIASES.get(d, (d,)) if alias in text]
@@ -298,6 +324,7 @@ def _extract_dimensions_and_stat(text: str) -> Tuple[List[str], Optional[str]]:
             if not negated:
                 valid_dims.append((d, min(text.find(item) for item in spans)))
 
+    # 按照文本出现的先后顺序排序；优先提升明确强调用词修饰的目标维度
     valid_dims.sort(key=lambda item: item[1])
     valid_dims = [item[0] for item in valid_dims]
     alias_to_dimension = {
@@ -367,10 +394,12 @@ def _extract_dimensions_and_stat(text: str) -> Tuple[List[str], Optional[str]]:
 
     return target_dims, target_stat
 
+
 def _extract_dimension_and_stat(text: str) -> Tuple[Optional[str], Optional[str]]:
-    pass
+    """兼容旧接口：返回第一个维度与统计量。"""
     dims, stat = _extract_dimensions_and_stat(text)
     return (dims[0] if dims else None), stat
+
 
 _CN_NUM_MAP = {
     "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
@@ -379,6 +408,7 @@ _CN_NUM_MAP = {
     "十六": 16, "十七": 17, "十八": 18, "十九": 19, "二十": 20,
 }
 
+
 def _parse_cn_or_digit(s: str) -> Optional[int]:
     s = s.strip()
     if s.isdigit():
@@ -386,6 +416,7 @@ def _parse_cn_or_digit(s: str) -> Optional[int]:
     if s in _CN_NUM_MAP:
         return _CN_NUM_MAP[s]
     return None
+
 
 _PREFIX_PAT = re.compile(
     r"^(?:那|那么|如果|若是|若|请问|请帮我|帮我|我想|我要|我想知道|我想了解|我想看|请评估|我评估|评估一下|评估|查询|查一下|查看|对比一下|对比|比较一下|比较|看看|分析一下|分析|测算|"
@@ -429,9 +460,11 @@ _SCHOOL_PAIR_CONNECTOR_RE = re.compile(
     re.I,
 )
 
-def _extract_rank_info(text: str) -> Tuple[Optional[int], Optional[int]]:
-    pass
 
+def _extract_rank_info(text: str) -> Tuple[Optional[int], Optional[int]]:
+    """从提问中提取精准目标排位 (target_rank) 或前N名 (top_n)。"""
+    # 1. 榜首 / 第一名 / 领跑学校 / 倒数第一 / 排名最后 / 最后一所
+    # 末位表达必须先于“第一名”判断；“倒数第一名”本身包含“第一名”。
     if any(k in text for k in (
         "最后一名", "倒数第一", "倒数第1", "倒数第一名", "排名最后", "排最后", "末位",
         "最低分学校", "分数最低的学校", "排名末位", "最后一所", "最后一家", "最后的一所", "末位学校", "倒数第一所",
@@ -440,6 +473,7 @@ def _extract_rank_info(text: str) -> Tuple[Optional[int], Optional[int]]:
     if any(k in text for k in ("榜首", "最好的学校", "最强学校", "领跑学校", "最高分学校", "分数最高的学校", "第一名", "排第一", "排名第一", "排在第一")):
         return 1, None
 
+    # 2. 排名前 N / 前 N 名 / 前 N 所 / Top N / 排在最前面的N所 / 哪N所...最多
     m_top = re.search(
         r"(?:排在最前面的|排名前|前|top\s*)\s*(\d+|[一二两三四五六七八九十]{1,3})\s*(?:名|所|所学校|家|个)?",
         text,
@@ -456,18 +490,21 @@ def _extract_rank_info(text: str) -> Tuple[Optional[int], Optional[int]]:
         if num and num > 0:
             return None, num
 
+    # 3. 显式排位声明：排名第 N / 位列第 N / 位居第 N / 排第 N
     m_rank = re.search(r"(?:排名?第|位列第|位居第|排第)\s*(\d+|[一二两三四五六七八九十]{1,3})", text)
     if m_rank:
         num = _parse_cn_or_digit(m_rank.group(1))
         if num and num > 0:
             return num, None
 
+    # 4. 显式名次：第 N 名 / 第 N 位 / 第 N 名次
     m_rank2 = re.search(r"第\s*(\d+|[一二两三四五六七八九十]{1,3})\s*(?:名|位|名次)", text)
     if m_rank2:
         num = _parse_cn_or_digit(m_rank2.group(1))
         if num and num > 0:
             return num, None
 
+    # 5. 疑问句式定向抽取（如：第二是哪个学校、第二是谁、第三是哪所）
     m_colloquial = re.search(r"第\s*(\d+|[一二两三四五六七八九十]{1,3})\s*(?:名|位)?\s*(?:是|为|算|算作)?\s*(?:哪|谁|什么)", text)
     if m_colloquial:
         num = _parse_cn_or_digit(m_colloquial.group(1))
@@ -475,6 +512,7 @@ def _extract_rank_info(text: str) -> Tuple[Optional[int], Optional[int]]:
             return num, None
 
     return None, None
+
 
 def _ranking_evidence_span(
     text: str,
@@ -506,16 +544,19 @@ def _ranking_evidence_span(
         return match.group(0) if match else None
     return None
 
+
 def _is_pure_region(s: str) -> bool:
-    pass
+    """判断字符串是否为纯行政区域（或带泛指学校后缀的区域名），而非具体单所学校。"""
     if not s or len(s) < 2:
         return False
 
+    # 1. 明确的具体学校类型后缀，直接判定非纯区域
     if re.search(r"(?:高级中学|初级中学|实验学校|外国语学校|附中|附小|幼儿园|学院)$", s):
         return False
     if re.search(r"(?<!中小)学$", s) and not re.search(r"^(?:全|各类?|各级|所有|全部|全市|全区|全县|全省|按)", s):
         return False
 
+    # 2. 泛指学校后缀 (学校 / 中小学)，如果完全匹配具体校名则排除
     if re.search(r"(?:学校|中小学)$", s):
         try:
             from scripts.school_engine import find_schools
@@ -534,7 +575,7 @@ def _is_pure_region(s: str) -> bool:
     if not reg or not reg.get("name"):
         return False
     rn = reg["name"]
-
+    # 严格校验：排除「长春市东北师大附中」等包含完整地名但实际上是学校的情况
     if c == rn or c in (reg.get("province"), reg.get("city"), reg.get("district")):
         return True
     reg_names = [reg.get("name"), reg.get("province"), reg.get("city"), reg.get("district")]
@@ -548,13 +589,15 @@ def _is_pure_region(s: str) -> bool:
             return True
     return False
 
+
 def _clean_region_token(s: str) -> Optional[str]:
-    pass
+    """清洗对比片段并识别是否为合法的区域名称。"""
     s = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", s.strip())
     raw_s = s.strip()
     s = _CHART_INSTRUCTION_RE.sub("", s).strip()
     s = _PREFIX_PAT.sub("", s).strip()
-
+    # 把紧邻年份的时间介词一并清除，避免“上海市在2021年数字化水平”
+    # 在后续去掉范围描述后残留为无法识别的“上海市在”。
     s = re.sub(r"(?:在|于)?\s*20\d{2}\s*年?", "", s).strip()
 
     for _ in range(6):
@@ -585,6 +628,7 @@ def _clean_region_token(s: str) -> Optional[str]:
     if not stem or len(stem) < 2:
         return None
 
+    # 如果原始词以具体学校类型结尾（如 初中、高中、附中、小学、高级中学、学校等）且不是纯泛指，排除保护
     if re.search(r"(?:高级中学|初级中学|实验学校|小学|中学|幼儿园|学院|初中|高中|附中|附小|学校)$", raw_s):
         if not re.search(r"^(?:各级|各类|所有|全部|各个?|全区|全市|全县|全省|按)", raw_s):
             try:
@@ -601,11 +645,13 @@ def _clean_region_token(s: str) -> Optional[str]:
             return reg["name"]
     return None
 
+
 def _extract_comparison_regions(text: str, context: Optional[Dict[str, Any]] = None) -> Optional[Tuple[str, str]]:
-    pass
+    """从提问中提取参与宏观横向对比的两个行政区域（如：武汉市数字化水平和上海市比较、武汉市和上海市学校比较）。"""
     ctx = context or {}
     last_region = ctx.get("last_region")
 
+    # 若明确为切换指令（如“换到长沙市”“切换到上海市”），且不含显式对比词，不触发对比
     if any(k in text for k in ("换到", "切换到", "转到")) and not any(cp in text for cp in _COMPARE_PATTERNS):
         return None
 
@@ -629,18 +675,22 @@ def _extract_comparison_regions(text: str, context: Optional[Dict[str, Any]] = N
     if len(regions) >= 2:
         return regions[0], regions[1]
 
+    # 单区域纵向变动提示：如果提问包含多个年份（如 2020与2023）或包含纵向变动词（如 均分变化、变化、提升、回落等），
+    # 且当前提问仅显式提及单区域，则属于单区域纵向对比，严禁盲目与上一轮 last_region 捏合成双区域横向比对
     years = _extract_years(text)
     has_longitudinal_hint = len(years) >= 2 or any(k in text for k in ("变化", "趋势", "提升", "增长", "下降", "变动", "回落", "走势", "演变"))
     if has_longitudinal_hint:
         return None
 
+    # 若提问中明确包含具体学校线索，禁止单区域盲目与历史 last_region 捏合成双区域对比
     has_school_hint = any(k in text for k in ("学校", "小学", "中学", "附中", "高中", "初中", "两所", "校"))
     if len(regions) == 1 and last_region and last_region != regions[0] and not has_school_hint:
         return last_region, regions[0]
     return None
 
+
 def _clean_school_token(s: str) -> str:
-    pass
+    """清洗单校名称候选，彻底剥离各种复杂的句末尾部修饰词与比较短语。"""
     s = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", s.strip())
     s = _CHART_INSTRUCTION_RE.sub("", s).strip()
     s = _PREFIX_PAT.sub("", s).strip()
@@ -668,7 +718,7 @@ def _clean_school_token(s: str) -> str:
         s = re.sub(r"(?:在)?(?:谁的|谁|哪个学校的|哪所学校的|哪个|哪所)?(?:数字化发展水平|数字化水平|数字化表现|数字化发展|数字化情况|数字化大盘|数字化方面|数字化能力|数字化|表现|情况|差距|差异|差别|特征|成效)+$", "", s).strip()
         s = s.rstrip("的").strip()
         s = re.sub(r"(?:哪个更好|哪个更高|哪个好|谁好|谁更高|谁更强|谁发展好|谁更胜一筹|哪所更好|哪所学校好|哪所好|哪家好|哪个强|哪个高|谁高|如何|怎样|怎么样|好不好)+$", "", s).strip()
-
+        # 去掉年份和比较问法后可能悬空的时间介词，如“学校在2021年数字化水平哪个更好”。
         s = re.sub(r"(?:在|于)$", "", s).strip()
         s = s.rstrip("谁").rstrip("哪").strip()
         s = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", s.strip())
@@ -680,8 +730,9 @@ def _clean_school_token(s: str) -> str:
     s = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", s.strip())
     return s
 
+
 def _extract_comparison_schools(text: str, context: Optional[Dict[str, Any]] = None) -> Optional[Tuple[str, str]]:
-    pass
+    """从提问中提取参与横向对比的两所学校实体（支持显式对比词及多轮代词/上下文继承）。"""
     ctx = context or {}
     last_school = ctx.get("last_school")
     has_comp = any(p in text for p in _COMPARE_PATTERNS) or bool(
@@ -719,10 +770,29 @@ def _extract_comparison_schools(text: str, context: Optional[Dict[str, Any]] = N
         return last_school, schools[0]
     return None
 
+
+
 def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    pass
+    from packages.semantic_query import runtime as rt
+    from packages.semantic_query.regional_capabilities import route, prepare_legacy
+    context = context or {}
+    extended = route(text, {}, context, rt)
+    if extended is not None:
+        return extended
+    working, _, notices = prepare_legacy(text, {}, context)
+    routed = _route_query_impl(working, context)
+    if routed.get('intent') != 'clarify':
+        routed['original'] = text
+        routed['program_notices'] = notices
+    return routed
+
+
+def _route_query_impl(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """主路由函数：输入用户提问与上一轮上下文，输出意图与结构化参数。"""
     q_text = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", text.strip())
 
+    # 0. 校验不支持的系统边界外指标与策略
+    # 0.1 不支持的学科考试统考成绩（数学成绩、语文成绩等）
     if any(k in q_text for k in (
         "数学考试成绩", "语文考试成绩", "英语考试成绩", "学生数学考试", "学生学科成绩",
         "期末考试成绩", "学生考试成绩", "数学成绩", "考试成绩", "统考成绩", "学生数学"
@@ -740,6 +810,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
                 "original": q_text,
             }
 
+    # 0.2 不支持的数据处理规则（删除零值）
     if any(k in q_text for k in (
         "删除所有零值", "先删除所有零值", "删除零值", "先删除零值", "剔除零值", "过滤所有零值", "过滤零值", "剔除所有零值"
     )):
@@ -750,6 +821,9 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 0.3 中位数属于已声明能力；筛选能力在提取结构化过滤条件后统一校验。
+
+    # 0.5 全国各省份教育数字化宏观大盘与横向排名 (national_ranking)
     has_national = any(k in q_text for k in ("全国", "各省", "所有省份", "全省", "所有省", "全国各省"))
     has_ranking_keyword = any(k in q_text for k in (
         "最好", "最高", "排名", "排第", "第一", "领先", "优劣", "名次", "前几", "最差", "榜首", "榜单",
@@ -857,11 +931,13 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
     target_dimension_explicit = target_dimension is not None
     school_filter = None if clear_school_filter else extracted_filter
 
+    # 代词消解准备 (它、该校、该地区、该老师)
     has_school_pronoun = bool(re.search(r"(它|该校|这所学校|该学校|此校|该校的)", q_text))
     has_school_pair_pronoun = bool(re.search(r"(这两所学校|两所学校|这两校|两校|二者|它们)", q_text))
     has_region_pronoun = bool(re.search(r"(该地区|该县|该区|该市|这个地区|这片区域)", q_text))
     has_teacher_pronoun = bool(re.search(r"(?:该教师|这位老师|该老师|该教师的|这位老师的|该老师的|他的|她的|(?<![其吉利])(?:他|她)(?![们人]))", q_text))
 
+    # 仅当提问具有代词继承或明确延续指代时，才继承上一轮的年份；若用户提出了全新的完整评估实体，不盲目继承旧年份
     has_followup_particle = bool(re.match(r"^那[个些类一]?", q_text)) or q_text.endswith(("呢", "呢？", "呢?"))
     has_explicit_context_ref = (
         bool(ctx.get("pending_clarification_active")) or
@@ -900,6 +976,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
     if extracted_filter is None and not clear_school_filter and last_school_filter and has_explicit_context_ref:
         school_filter = last_school_filter
 
+    # 1. 判定教师提问 (T001 等或代词继承)
     teachers = _TEACHER_RE.findall(q_text)
     if teachers:
         return {
@@ -916,6 +993,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 优先检测双校对比（若明确包含学校提示词，先于区域对比检测）。
+    # 已验证双校焦点只能成对继承，不能静默选择 A 或 B 作为单校焦点。
     has_school_hint = any(k in q_text for k in ("学校", "小学", "中学", "附中", "高中", "初中", "两所", "校"))
     school_compare_fact_metric = None if target_dimension else match_indicator(q_text)
     comp_pair = _extract_comparison_schools(q_text, context=ctx)
@@ -1029,6 +1108,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "pending_provenance": ctx.get("pending_provenance") or {},
         }
 
+    # 2. 检查双区域宏观对比意图 (如：武汉市数字化水平和上海市比较、武汉市和上海市学校比较)
     comp_regions = _extract_comparison_regions(q_text, context=ctx)
     explicit_compare_followup_region = detect_region(q_text)
     if (
@@ -1052,7 +1132,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
         and not has_region_pronoun
         and explicit_compare_followup_region is None
     ):
-
+        # 已验证双区域焦点只能成对继承；不把任一侧降格为含糊的 last_region。
         comp_regions = (last_region_compare_a, last_region_compare_b)
     if comp_regions:
         region_a = detect_region(comp_regions[0])
@@ -1136,6 +1216,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "pending_provenance": ctx.get("pending_provenance") or {},
         }
 
+    # 3.5 检查单区域两期重复截面变化（不是同一批学校的队列追踪）。
     region_cand = detect_region(q_text) or (detect_region(q_text_no_filter) if q_text_no_filter != q_text else None)
     if not region_cand and (has_region_pronoun or has_explicit_context_ref) and last_region:
         region_cand = detect_region(last_region)
@@ -1149,13 +1230,17 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
         any(k in q_text for k in (
             "变化", "相比", "趋势", "增长", "下降", "提升", "变动", "演变", "回落", "走势",
             "两期", "跨年", "跨学年", "历年", "多年",
-
+            # 预测类请求即使只显式给出一个目标年，也属于两期截面首片明确拒绝的
+            # 推断边界。先把它们送入纵向候选，再由下方统一返回稳定拒绝码，
+            # 避免“预测武汉市2022年均分”降级为 missing_city 或普通单年均值。
             "预测", "预估", "外推", "推算未来", "估算未来", "未来趋势", "明年",
         ))
         or directional_period_match is not None
         or ("比" in q_text and len(calendar_years) >= 2 and not comp_regions and not comp_pair)
     )
 
+    # 区域排名首片只允许单一显式年份。排名目标与两期/跨年语义同时出现时，
+    # 必须在纵向路由前稳定拒绝，不能把排名词静默丢弃后提交纵向 PASS。
     if (
         region_cand
         and ranking_target_explicit
@@ -1198,6 +1283,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             has_explicit_school_entity = True
             break
 
+    # 当前两期能力支持行政区域的重复截面，对单校跨年比较转为两校对比引擎跨期比对。
     if has_multi_year_intent and has_explicit_school_entity:
         if len(calendar_years) >= 2:
             return {
@@ -1217,6 +1303,9 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 排名推断类越界问题可能不含“第N名/Top N”，不能等到排名目标解析后再判断，
+    # 否则会静默降级为普通区域均值并提交 PASS。只在单区域、无显式学校实体、
+    # 无双区域/双校比较时拦截，避免扩大 P3.5 的能力声明。
     if (
         region_cand
         and (_REGION_RANKING_SCOPE_RE.search(q_text) or ranking_target_explicit)
@@ -1233,6 +1322,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
                     "original": q_text,
                 }
 
+    # 不带排名或多期语义的单年度区域归因请求也不能降级为普通均值。
+    # 使用通用区域拒绝码，避免把无排名目标的请求错误标成排名推断。
     if (
         region_cand
         and not ranking_target_explicit
@@ -1263,6 +1354,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
     period_a_explicit = False
     period_b_explicit = False
 
+    # 首片只支持两个既有年度的描述性重复截面对比。越界意图必须在准备契约前
+    # 稳定澄清，不能静默降级为普通均值并提交 PASS revision。
     if longitudinal_candidate:
         for reason, pattern, message in _REGION_LONGITUDINAL_UNSUPPORTED_INTENT_PATTERNS:
             if pattern.search(q_text):
@@ -1483,6 +1576,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "pending_provenance": ctx.get("pending_provenance") or {},
         }
 
+    # 4. 检查具体指标项匹配。显式“第N题/qN”优先于题面关键词，避免把
+    # 区域单题静默扩大成83题区域总体；多题和越界题号在对象识别后 fail closed。
     explicit_question_ids = extract_explicit_question_ids(q_text)
     valid_explicit_question_ids = [qid for qid in explicit_question_ids if 1 <= qid <= 83]
     invalid_explicit_question_ids = [qid for qid in explicit_question_ids if qid not in valid_explicit_question_ids]
@@ -1508,10 +1603,12 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
         and not target_rank
         and not target_top_n
     ):
-
+        # 可信学校事实后的纯时期追问只改年份，学校与指标继续来自已验证焦点。
         metric_info = dict(last_school_fact_metric)
         metric_from_focus = True
 
+    # 5. 提取单学校实体（过滤疑问句式、纯排位词及筛选限定词，防止对比句粘连）
+    # “学校等权/按学校汇总”中的“学校”是聚合单位，不是实体名称。
     school_scan_text = _AGGREGATION_SCHOOL_PHRASE_RE.sub(" ", q_text)
     school_scan_text = _REGION_LONGITUDINAL_GENERIC_SCHOOL_SCOPE_RE.sub(" ", school_scan_text)
     school_scan_text = re.sub(
@@ -1542,7 +1639,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             continue
         if any(bad in m for bad in _INVALID_SCHOOL_SUBSTRINGS):
             continue
-
+        # 若贪婪正则匹配到了对比连词（如将两校粘连成一个候选名），主动拆分
         should_split = any(cp in m for cp in _COMPARE_PATTERNS)
         if not should_split and any(k in m for k in ("和", "与", "跟", "及", "、")):
             sub_parts = _DELIM_RE.split(m)
@@ -1573,13 +1670,13 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             continue
         if _is_pure_region(clean_m):
             continue
-
+        # 仅过滤明确包含名次/排位修饰语的伪校名（如“第二名学校”“排名前三学校”），不过滤“第一附属中学”等合法校名
         if re.search(r"(?:第[一二两三四五六七八九十\d]+(?:名|位|名次)|前[一二两三四五六七八九十\d]+(?:名|所|家|位)?|榜首|排名|位次)", m):
             continue
 
         if len(clean_m) < 4:
             continue
-
+        # 1) 以行政区域开头，剩余部分为纯学段/泛指词（如 武汉初中、上海小学、成都小学 等）
         cand_reg = detect_region(clean_m)
         if cand_reg and cand_reg.get("name"):
             reg_stem = cand_reg["name"].rstrip("市").rstrip("区").rstrip("县").rstrip("省")
@@ -1590,16 +1687,17 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
                     school_filter = suffix_stage
                 continue
 
+        # 2) 对泛指型学段短语与地名+学段组合校验真实库，防止把筛选条件当成学校名
         try:
             from scripts.school_engine import find_schools
             test_hits = find_schools(clean_m, limit=1)
             if not test_hits:
-
+                # 显式包含办学性质或筛选词
                 if any(k in clean_m for k in ("公办", "民办", "公立", "私立", "乡村", "城镇", "只纳入", "纳入")):
                     if not school_filter:
                         school_filter = clean_m
                     continue
-
+                # 若以“学校”开头或包含问卷动词/字段短语，或者为当前指标标题子串，坚决过滤伪学校实体
                 if clean_m.startswith("学校") or any(v in clean_m for v in ("实现", "拥有", "利用", "开展", "能够", "管理", "建设", "推进", "主管", "兼任", "配置", "是否", "工作内容", "投入", "平台", "云平台", "最近", "近一年", "数字化", "资产")):
                     continue
                 if metric_info and clean_m in metric_info.get("name", ""):
@@ -1610,6 +1708,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
         if clean_m not in school_matches and not _is_pure_region(clean_m):
             school_matches.append(clean_m)
 
+    # 多校对比/排序 (如 3 所学校中排在中间的是哪所)
     if len(school_matches) >= 3 and any(k in q_text for k in ("中间", "中位数", "排在中间", "正中间", "哪个在中间")):
         return {
             "intent": "multi_school_compare",
@@ -1621,6 +1720,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "pending_provenance": ctx.get("pending_provenance") or {},
         }
 
+    # 若拆分后发现其实是两所学校，兜底转为对比意图
     if len(school_matches) >= 2:
         if school_matches[0] == school_matches[1]:
             return {
@@ -1690,6 +1790,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "pending_provenance": ctx.get("pending_provenance") or {},
         }
 
+    # 显式区域必须优先于旧学校焦点。否则“长沙县2020年第1题”在前一轮
+    # 留有last_school时会被错误继承为school_fact。
     from packages.semantic_query.runtime import _literal_region_spans, _literal_school_name_spans
     literal_regions=_literal_region_spans(q_text) if not _literal_school_name_spans(q_text) else []
     literal_region_info=detect_region(literal_regions[0]) if len(literal_regions)==1 else None
@@ -1758,6 +1860,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 5. 检查是否在询问某所具体学校的排位 / 相对排名
     is_ranking = any(p in q_text for p in _RANKING_PATTERNS)
     if is_ranking and target_school:
         reg_cand = detect_region(q_text)
@@ -1770,6 +1873,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 5. 若检测到具体指标意图：学校实体优先；无学校且无区域时才要求补学校。
     if metric_info and (target_school or not preidentified_region_info):
         if not target_school:
             if last_school:
@@ -1829,6 +1933,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             } if metric_from_pending else {}),
         }
 
+    # 6. 检查是否在询问区域大盘、区域精准名次、维度或区域榜单
     region_info = preidentified_region_info
     if not region_info and (has_region_pronoun or target_rank or target_top_n or target_dimension or has_explicit_context_ref or any(p in q_text for p in _LEADERBOARD_PATTERNS)):
         if last_region:
@@ -1836,7 +1941,8 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
 
     if region_info:
         if not target_school:
-
+            # 区域排名首片必须给出精准名次、倒数第一或Top N。泛化“排名/榜单”
+            # 不得降级为区域总体均值，也不得默认返回完整榜单。
             if _REGION_RANKING_SCOPE_RE.search(q_text) and not ranking_target_explicit:
                 return {
                     "intent": "clarify",
@@ -1844,7 +1950,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
                     "missing": ["请指定第N名、倒数第一或Top N；当前首片不返回完整榜单。"],
                     "original": q_text,
                 }
-
+            # 如果是宏观大盘评估，且用户未提供年份，且无多轮延续指代，要求澄清年份 (missing_year)
             if not active_year and not has_explicit_context_ref:
                 r_name = region_info.get("name", "该地区")
                 return {
@@ -1997,6 +2103,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
                 "target_top_n_evidence": ranking_evidence_span,
             }
 
+    # 7. 整校综合评估 (含代词追问继承)
     if target_school:
         return {
             "intent": "school_eval",
@@ -2007,6 +2114,7 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
             "original": q_text,
         }
 
+    # 8. 未能识别到任何实体
     missing = []
     reason = None
     if years or target_rank is not None or target_top_n is not None or any(k in q_text for k in ("全部83项", "全部指标", "学校等权均分", "整体数字化均分", "数字化综合分", "学校均分")):
@@ -2018,11 +2126,11 @@ def route_query(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str
     elif "地区" in q_text:
         missing.append("请补充具体地区名称（例如：长沙县、七台河市、湖南省等）")
     elif "学校" in q_text:
-        missing.append("请补充具体学校名称（例如：示例市示例区示例二小学、示例一小学等）")
+        missing.append("请补充具体学校名称（例如：长沙县成绩小学、罗泉学校等）")
     elif "老师" in q_text or "教师" in q_text:
         missing.append("请提供教师ID（例如：T001、T002）或学校名称")
     else:
-        missing.append("未识别到查询对象。您可以自由提问：①微观配置（如：示例一小学配置了多少台教师平板电脑？）；②区域大盘（如：长沙县2021数字化水平怎么样？）；③相对排名（如：示例一小学在区里排第几？）；④整校评估（如：示例市示例区示例二小学2020数字化水平）")
+        missing.append("未识别到查询对象。您可以自由提问：①微观配置（如：罗泉学校配置了多少台教师平板电脑？）；②区域大盘（如：长沙县2021数字化水平怎么样？）；③相对排名（如：罗泉学校在区里排第几？）；④整校评估（如：长沙县成绩小学2020数字化水平）")
 
     pending_context = {
         "last_year": active_year,

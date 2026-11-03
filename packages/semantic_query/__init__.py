@@ -1,3 +1,5 @@
+"""Shared semantic-query components for product and controlled experiments."""
+
 from packages.semantic_query.catalogue import load_semantic_catalogue
 from packages.semantic_query.answer_scope import (
     project_report_scope,

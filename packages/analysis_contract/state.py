@@ -1,3 +1,10 @@
+"""SQLite-backed trusted contract revision store.
+
+This store is deliberately separate from the read-only questionnaire database.
+The verifier reloads the committed revision from here instead of trusting a
+contract copied into a result payload.
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,10 +19,17 @@ from typing import Any, Dict, Optional
 
 from .schema import AnalysisContract
 
+
 ROOT = Path(__file__).resolve().parents[2]
 
+
 def automatic_store_candidates() -> tuple[tuple[Path, str], ...]:
-    pass
+    """Return stable writable-location candidates in preference order.
+
+    Frozen builds must not depend on the installation directory being writable.
+    LOCALAPPDATA is the Windows-appropriate primary location for machine-local
+    runtime state; roaming AppData and the user profile are durable fallbacks.
+    """
     if not getattr(sys, "frozen", False):
         return ((ROOT / "data" / "runtime" / "analysis_contracts.sqlite", "repository_runtime"),)
 
@@ -40,14 +54,16 @@ def automatic_store_candidates() -> tuple[tuple[Path, str], ...]:
             candidates.append((path, source))
     return tuple(candidates)
 
+
 def default_store_path() -> Path:
     configured = os.getenv("TEACHER_EVAL_CONTRACT_DB")
     if configured:
         return Path(configured)
     return automatic_store_candidates()[0][0]
 
+
 def store_path_manifest() -> dict:
-    pass
+    """Describe path resolution without opening or creating the database."""
     configured = os.getenv("TEACHER_EVAL_CONTRACT_DB")
     if configured:
         candidates = ((Path(configured), "environment_override"),)
@@ -63,8 +79,15 @@ def store_path_manifest() -> dict:
         ],
     }
 
+
 def contract_store_status() -> dict:
-    pass
+    """Probe the configured store without allowing an exception to escape.
+
+    An explicit override remains fail-closed: this probe never switches to an
+    automatic candidate when the configured path cannot be opened.  The
+    returned payload is an internal diagnostic. Public API callers must
+    project it through the path-redaction helper before returning it.
+    """
     manifest = store_path_manifest()
     store = ContractStore()
     try:
@@ -89,8 +112,10 @@ def contract_store_status() -> dict:
             "fallback_used": False,
         }
 
+
 class ContractStoreUnavailable(OSError):
-    pass
+    """Raised when no configured or automatic contract store can be opened."""
+
 
 class StaleBaseRevision(RuntimeError):
     def __init__(self, requested: int, current: int, *, attempt_id: Optional[str] = None):
@@ -98,6 +123,7 @@ class StaleBaseRevision(RuntimeError):
         self.current = current
         self.attempt_id = attempt_id
         super().__init__(f"stale_base_revision:{requested}!={current}")
+
 
 class ContractStore:
     _FOCUS_PREDICATE = (
@@ -236,7 +262,12 @@ class ContractStore:
         return AnalysisContract.from_dict(json.loads(row[0])) if row else None
 
     def latest_focus(self, session_id: str) -> Optional[AnalysisContract]:
-        pass
+        """Return the newest revision allowed to drive conversational focus.
+
+        Successful answers and explicit NO_DATA revisions preserve the user's
+        requested task. Failed execution/verification attempts remain in the
+        history but cannot become the next turn's inherited focus.
+        """
         with self._session() as conn:
             row = conn.execute(
                 "SELECT contract_json FROM task_revision "
@@ -248,7 +279,7 @@ class ContractStore:
         return AnalysisContract.from_dict(json.loads(row[0])) if row else None
 
     def session_state(self, session_id: str) -> Dict[str, Any]:
-        pass
+        """Read the OCC head, trusted focus and pending from one durable view."""
         with self._session() as conn:
             conn.execute("BEGIN")
             head = conn.execute(
@@ -288,7 +319,7 @@ class ContractStore:
         task_id: str,
         revision: int,
     ) -> AnalysisContract:
-        pass
+        """Load a historical revision only when it was a trusted task state."""
         with self._session() as conn:
             row = conn.execute(
                 "SELECT contract_json,business_status,verification_status FROM task_revision "
@@ -371,7 +402,7 @@ class ContractStore:
         }
 
     def active_pending(self, session_id: str) -> Optional[Dict[str, Any]]:
-        pass
+        """Return the one non-committed clarification awaiting this session."""
         with self._session() as conn:
             row = conn.execute(
                 "SELECT * FROM clarification_pending WHERE session_id=? AND status='ACTIVE' "
@@ -395,7 +426,7 @@ class ContractStore:
         turn_id: Optional[str] = None,
         expected_head_revision: Optional[int] = None,
     ) -> Dict[str, Any]:
-        pass
+        """Atomically supersede an older pending item and persist the new one."""
         pending_id = str(uuid.uuid4())
         turn_id = turn_id or str(uuid.uuid4())
         with self._session() as conn:
@@ -442,7 +473,12 @@ class ContractStore:
 
     def claim_selective_reply(self, session_id: str, reply: Dict[str, Any], *, request_id: str,
                               expected_head_revision: Optional[int] = None, flow_key=None, supplement=None) -> Dict[str, Any]:
-        pass
+        """Atomically consume one confirmed intent; no business query is run here.
+
+        Repeated/concurrent submissions are receipts only, including after an
+        execution failed or legitimately returned no data. Existing pending
+        JSON carries the claim, avoiding a second state store or schema.
+        """
         from packages.semantic_query.selective_clarification import resolve_reply
         import hashlib
         if not isinstance(reply, dict):
@@ -607,7 +643,9 @@ class ContractStore:
                 ),
             )
             if pending_id is not None and self.focus_eligible(business_status, verification_status):
-
+                # The verified execution and its pending transition are one commit.
+                # Target only the pending observed by this request: a newer
+                # clarification created concurrently must remain untouched.
                 conn.execute(
                     "UPDATE clarification_pending SET status=?,resolution=?,updated_at=CURRENT_TIMESTAMP "
                     "WHERE pending_id=? AND session_id=? AND status='ACTIVE'",

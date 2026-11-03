@@ -2,30 +2,38 @@
 
 **Education Typed-task Analyst · 教育数据的带类型任务分析助手**
 
-EduTA 面向学校数字化评价数据，将自然语言问题转换为带类型的分析任务。模型负责理解问题和撰写解释，程序对照原问题与指标目录校正任务，通过注册工具完成只读查询和确定性计算，并生成数据卡片与图表。
+EduTA 面向教师与学校数字化评价，把自然语言问题转换为结构化分析任务，通过注册工具执行只读查询和确定性计算，再生成回答、数据卡片和图表。模型负责理解与表达，数值来自实际工具执行。
 
-EduTA (Education Typed-task Analyst) answers questions over school digitization assessment data using typed analytical tasks and deterministic tools. The model interprets and explains; the program corrects and computes.
+EduTA turns school-digitization questions into typed analytical tasks, executes registered read-only tools, and presents grounded answers with data cards and charts.
 
-## 工作方式
+## 当前版本
 
-用户问题与对话上下文 → 带类型任务与输出要求 → 对照原问题的程序校正 → 注册工具与只读 SQL → 数据卡片、图表与模型解释。
+本仓库更新至 v6 实验使用的 **Fix9 系统源码**。冻结源码标识为 `13a34b27f40357eb7bf07c34000f151b15c6f9e5877119c64be5dd1edbb910b5`，文件对应关系见 [PUBLIC_SOURCE_MANIFEST.json](PUBLIC_SOURCE_MANIFEST.json)。
 
-任务表示确定对象、筛选条件、年度、指标、运算、取值视图及零值和空值规则；独立的输出要求记录用户需要的数值、比较和图表。字段存在歧义时，系统保留当前任务并提出澄清。执行核验、正文检查和检查后的处理策略作为可配置部件保留，详见 [系统架构](docs/ARCHITECTURE.md) 与 [运行配置](docs/RUNNING.md)。
+公开版保留完整应用代码、指标模板、语义目录、年度采集规则与合成数据生成器。真实数据库、包含真实地址和校名的地区登记明细、题库、参考答案、凭据和运行日志不随仓库分发。合成数据只用于安装和体验，不能代替论文实验数据或正式结果。
 
 ## 功能
 
-- 学校、地区、年度、指标、筛选条件与多轮上下文解析。
-- 指标目录绑定、原问题需求校正与选择性澄清。
-- 学校评估、题项事实、地区统计、比较、排名、跨年分析。
-- SQLite 只读查询和确定性聚合；原始值与归一化得分分开处理。
-- 数据卡片、表格、图表预览及 PNG 下载。
-- OpenAI 兼容模型接口；模型负责解析与解释，程序负责计算。
-- 可选执行核验、正文检查、一次受限修复，或保留正文并加提醒。
-- 保留教师评价模块和配置式指标模板。
+| 能力 | 内容 |
+|---|---|
+| 对象与范围 | 学校、地区、省级与全国范围，年度、学段和城乡筛选 |
+| 指标粒度 | 整体、六个一级维度、十三个登记二级维度、83道问卷题项及已注册学校字段和复合指标 |
+| 分析任务 | 原始值、得分、均值、中位数、有效学校数、比较、排名和年度变化；具体组合以注册能力为准 |
+| 对话 | 继承相容上下文，保留完整对象与时期，选择性澄清，区分指标歧义与目录无数据 |
+| 展示 | 原前端中的回答、数据卡片、表格、图表预览及 PNG 下载 |
+| 可选检查 | 执行核验、正文检查和受限修复，分别配置 |
 
-## 快速启动
+系统同时保留教师评价模块与配置式模板，教师与学校评价使用各自的指标口径。
 
-建议使用 Windows 和 Python 3.11 / 3.12。模型配置页使用 Windows 当前用户的 DPAPI 加密保存密钥；本仓库不提供任何模型账号或密钥。
+## 工作流程
+
+问题与上下文 → 结构化任务草稿 → 对照目录与原问题绑定对象、年度、指标和筛选 → 注册执行计划 → 只读 SQL 和确定性计算 → 工具事实、回答与图表。
+
+模型不直接生成任意 SQL 执行。目录或执行能力外的请求按情况说明无数据或澄清；正文生成与可选核验是执行后的独立环节。
+
+## 快速启动：合成数据
+
+推荐 **Windows、Python 3.11 / 3.12**。网页模型配置使用 Windows 当前用户绑定的 DPAPI 加密保存凭据。
 
 ```powershell
 git clone https://github.com/Xiaxin1235/EduTA.git
@@ -33,52 +41,75 @@ cd EduTA
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python scripts/generate_synthetic_data.py
+python -X utf8 scripts/generate_synthetic_data.py --with-overlay
+$env:TEACHER_EVAL_RESEARCH_CONFIG = (Resolve-Path 'data/synthetic/research_dataset.json').Path
 python run_app.py
 ```
 
-生成器完全由代码构造虚构学校和作答，不读取任何外部数据库。生成的数据仅供运行演示，位于被 Git 忽略的 `data/` 目录；仓库不包含预生成数据文件。教师演示 CSV 可用 `python scripts/mock_transform.py` 另外生成，内容同样完全虚构。
+浏览器默认打开 `http://127.0.0.1:8600`。在“模型密钥”页填写自己的 API 根地址、模型名和密钥。研究业务模型为 deepseek-flash；仓库不提供账号、密钥或付费调用。未配置模型时，可以选择规则词面识别体验已支持的本地任务。
 
-浏览器默认打开 `http://127.0.0.1:8600`。默认是智能语义识别：请在“模型密钥”页输入自己的 API 根地址、模型名和密钥。未配置模型时，可以在对话台选择“规则词面识别”体验本地查询。
+生成器只读取仓库模板，构造四年、六所虚构学校的年度记录、作答、元数据映射与虚构地区字典。输出在被 Git 忽略的 `data/synthetic/`。重复生成请选新空目录，例如 `--output data/synthetic_new --with-overlay`，再将环境变量指向新配置。
 
-合成数据示例问题：
+可尝试：
 
 ```text
-示例市2023年的数字化水平怎么样？
-示例市示例区示例一小学2023年的数字化水平怎么样？
-示例市示例区示例一小学2023年给老师配置了多少台平板电脑？
+示例市2023年基础设施平均分是多少？
+示例市示例区示例一小学2023年的整体得分是多少？
+示例市示例区示例一小学2023年第9题原始值是多少？
+示例市和演示市2023年教育教学平均分比较。
 ```
 
-只启动服务：`python run_app.py serve --no-browser --port 8600`。服务仅监听本机，正常会话和 CSRF 防护保持启用。
+合成字典只含虚构地区，不能演示真实全国31个省级行政区的完整排名。请同时核对实际执行范围、数据卡片和统计口径。
 
 ## 接入自己的数据
 
-基础数据库包含 `schools`、`questions` 和 `answers` 三张表，见 [数据接口](docs/DATA.md)。将数据库路径设为环境变量后启动：
+| 设置 | 用途 |
+|---|---|
+| `TEACHER_EVAL_DATA_DB` | 符合学校表结构的基础 SQLite 数据库 |
+| `TEACHER_EVAL_RESEARCH_CONFIG` | 本地三库适配配置和登记字典 |
+| `TEACHER_EVAL_CONTRACT_DB` | 独立运行状态库 |
+| `TEACHER_EVAL_CHARTS_DIR` | 图表输出目录 |
+| 网页“模型密钥” | 用户自己的模型配置，保存于本机 `output/secure_config/` |
 
-```powershell
-$env:TEACHER_EVAL_DATA_DB = (Resolve-Path 'path/to/your-database.sqlite').Path
-python run_app.py
-```
+先体验合成数据，再按 [数据说明](docs/DATA.md) 和配置示例接入自有数据库。研究配置中的数据路径、校验值、地区字典及可选年度未采集规则必须配套，不可把其他库的规则或参考答案直接套用。真实全国与省内排名需要相应范围的数据及登记字典。
 
-还保留了“原始事实快照 + 格式规范元数据 + 清洗映射”的三库联合读取能力。配置示例位于 `config/research_dataset.example.json`，不会默认启用。清洗数据库、映射、行政区登记表及其文件校验值由数据持有者自行提供；相对路径以配置文件所在目录为基准解析。
+保留既有 `TEACHER_EVAL_*` 和 `TE_*` 环境变量。普通启动沿用产品模式；正式实验组需要显式配置，见 [运行配置](docs/RUNNING.md)，不能将普通页面运行自动等同于论文实验组。
 
-## 目录
+## 计算口径与边界
+
+- 原始值保留登记量纲，归一化得分与数量分开。百分制得分不自动等于实际人员比例。
+- 单校整体分按模板有效题项和维度权重计算；地区学校等权统计与单校模板分不是同一口径。
+- 二级维度分为其所属题项得分的均值，是应用扩展口径，不是问卷另行规定的官方分数。单子维度等情况遵循已实现归并规则。
+- 登记零、缺失与当年未采集分开处理，不覆盖原数据库。年度排除规则仅在配套配置启用时应用。
+- 多年数据是独立年度截面，同名记录不自动证明同校队列，不能据此推断因果、预测未来或作显著性结论。
+- 查询成功、数值正确、正文完整和页面交付分别判断；合成示例不构成正式评测成绩。
+
+## 配置说明
+
+| 配置 | 行为 |
+|---|---|
+| G0 | 无业务模型的规则解析、工具计算与规则回答 |
+| G1 | 模型解析和写作，程序校正按需求保持开关配置 |
+| G2 | 模型路径加执行和正文核验，以及按配置启用的受限修复 |
+
+目录注释、程序校正、语义 checker、执行核验和答复修复是不同部件。研究中各组合以冻结配置为准；代码保留某项功能，不代表论文证明它能提升总体准确率。
+
+## 目录导航
 
 | 目录 | 内容 |
 |---|---|
-| `apps/web`、`apps/api` | 完整交互页面与 FastAPI 服务 |
-| `packages/semantic_query` | 模型解析、需求校正、任务编译和答复检查 |
-| `packages/analysis_contract` | 执行契约、工具能力和独立核验 |
-| `packages/agent` | 路由、报告、工具与绘图 |
-| `packages/llm_gateway` | 模型网关 |
-| `packages/core` | 数据适配、凭据与本机会话 |
-| `evaluation_templates`、`contracts` | 指标定义与数据接口定义 |
-| `scripts` | 运行引擎、数据接口校验和合成数据生成器 |
+| `apps/` | 网页前端、FastAPI 服务 |
+| `packages/semantic_query/` | 解析、需求保持、指标绑定、组合任务和事实交付 |
+| `packages/task_query/` | 类型化任务计划与执行 |
+| `packages/analysis_contract/` | 契约、运行状态与独立核验 |
+| `packages/llm_gateway/` | 模型网关与调用协议 |
+| `scripts/` | 学校、地区、事实引擎与合成数据生成器 |
+| `evaluation_templates/` | 模板、83题目录与维度说明 |
+| `research_rules/` | 可公开的目录注释和年度采集规则；真实地区明细另配 |
+| `docs/` | [架构](docs/ARCHITECTURE.md)、[数据](docs/DATA.md)、[运行配置](docs/RUNNING.md) |
 
-## 数据与许可
+## 许可证与反馈
 
-仓库提供运行代码、指标定义和合成数据生成器，不附真实学校数据、模型凭据、论文及研究过程材料。指标定义是程序的业务配置，不包含学校观测值。
+代码许可见 [LICENSE](LICENSE)，第三方说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 [NOTICE](NOTICE)。代码许可不代表外部研究数据、问卷和第三方资料可自由再分发。
 
-模型服务接收当前请求所需的问题、上下文及工具事实。接入自有数据时，请按数据使用要求配置模型服务。
-
-高级运行配置见 [运行方式](docs/RUNNING.md)。本项目采用 [Apache License 2.0](LICENSE)。依赖包按各自许可证提供，参见 [第三方依赖](THIRD_PARTY_NOTICES.md)。
+问题和建议请提交 [GitHub Issues](https://github.com/Xiaxin1235/EduTA/issues)。请使用虚构示例并说明配置、期望和实际行为，不要附带密钥、真实数据库或受保护题目。

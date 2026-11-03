@@ -1,13 +1,27 @@
+"""M13 · exe 启动器。
+
+用法（打包后）：
+  TeacherEval.exe                       → 起本地 API + 自动打开对话台（默认）
+  TeacherEval.exe serve                 → 只起本地 API（不自动开浏览器）
+  TeacherEval.exe eval --teacher T001   → 命令行直接评估，输出报告
+  TeacherEval.exe eval --teacher T003 --json-out
+
+源码模式同样可用：python run_app.py [serve|eval ...]
+"""
+
 import argparse
 import os
 import sys
 from urllib.parse import urlsplit
 
+# frozen / 源码都保证仓库根在 path（PyInstaller 会保留这些 import）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from packages.core.frozen_paths import app_dir, output_dir, web_dir
+from packages.core.frozen_paths import app_dir, output_dir, web_dir  # noqa: E402
 
-UI_VERSION = "1.0.1"
+
+UI_VERSION = "v3.29.0-c9-v5-integration"
+
 
 def _port_free(port: int) -> bool:
     import socket
@@ -20,6 +34,7 @@ def _port_free(port: int) -> bool:
     finally:
         s.close()
 
+
 def _pick_port(preferred: int) -> int:
     if _port_free(preferred):
         return preferred
@@ -28,12 +43,14 @@ def _pick_port(preferred: int) -> int:
             return p
     return preferred
 
+
 def _open_browser(url: str):
     import threading
     import webbrowser
-
+    # 加版本参数，避免浏览器把旧 index.html 缓存当成本页
     bust = url.rstrip("/") + f"/?ui={UI_VERSION}"
     threading.Timer(1.2, lambda: webbrowser.open(bust)).start()
+
 
 def cmd_eval(args):
     if getattr(args, "school", None):
@@ -93,6 +110,7 @@ def cmd_eval(args):
         print(f"\nJSON 已写出：{out}")
     return 0
 
+
 def _get_lan_ip() -> str:
     import socket
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -104,8 +122,9 @@ def _get_lan_ip() -> str:
     finally:
         s.close()
 
+
 def _configure_session_proxy(proxy: str | None) -> None:
-    pass
+    """为当前服务进程设置临时出站代理，不写入用户或项目配置。"""
     if proxy is None:
         return
     value = str(proxy).strip()
@@ -113,6 +132,7 @@ def _configure_session_proxy(proxy: str | None) -> None:
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         raise ValueError("--proxy 仅支持带主机名的 http/https 代理地址")
 
+    # urllib 会从这三个环境变量读取代理；只作用于当前服务及其子进程。
     os.environ["HTTP_PROXY"] = value
     os.environ["HTTPS_PROXY"] = value
     os.environ["ALL_PROXY"] = value
@@ -122,6 +142,7 @@ def _configure_session_proxy(proxy: str | None) -> None:
         if host not in no_proxy:
             no_proxy.append(host)
     os.environ["NO_PROXY"] = ",".join(no_proxy)
+
 
 def cmd_serve(args):
     if getattr(args, "host", "127.0.0.1") != "127.0.0.1":
@@ -152,14 +173,14 @@ def cmd_serve(args):
     preferred = args.port
     port = _pick_port(preferred)
     if port != preferred:
-        print(f"[warn] 端口 {preferred} 已被占用。")
+        print(f"[warn] 端口 {preferred} 已被占用（多半是旧版 TeacherEval 还在跑）。")
         print(f"       本次改用 {port}。请关掉旧窗口后再刷新，否则浏览器可能仍打开旧页面。")
 
     host = "127.0.0.1"
     url = f"http://127.0.0.1:{port}/"
     wd = web_dir()
     print("=" * 60)
-    print(f"EduTA — Education Typed-task Analyst {UI_VERSION}")
+    print(f"教师评估 AI 平台 {UI_VERSION}")
     print(f"本机地址：{url}?ui={UI_VERSION}")
     print(f"Web 目录：{wd}")
     print("页签：对话台（Agent 工具调用绘图）/ 简介查询 / 模型密钥")
@@ -209,6 +230,7 @@ def cmd_serve(args):
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
 
+
 def main():
     for s in (sys.stdout, sys.stderr):
         try:
@@ -216,12 +238,12 @@ def main():
         except Exception:
             pass
 
-    ap = argparse.ArgumentParser(prog="EduTA", description="Education Typed-task Analyst — 教育数据的带类型任务分析助手")
+    ap = argparse.ArgumentParser(prog="TeacherEval", description="教师评估 AI 平台（单文件版）")
     sub = ap.add_subparsers(dest="cmd")
 
     p_eval = sub.add_parser("eval", help="命令行评估")
     p_eval.add_argument("--teacher", default=None, help="评估指定教师（如 T001）")
-    p_eval.add_argument("--school", default=None, help="评估指定学校（如：--school 示例二小学 或 --school 1）")
+    p_eval.add_argument("--school", default=None, help="评估指定学校（如：--school 成绩小学 或 --school 1）")
     p_eval.add_argument("--year", default=None, help="指定学校年份（如 2020、2023）")
     p_eval.add_argument("--years", default="2023-2024,2024-2025", help="教师学年范围")
     p_eval.add_argument("--json-out", action="store_true")
@@ -240,13 +262,14 @@ def main():
 
     args = ap.parse_args()
     if args.cmd is None:
-
+        # 默认：serve + 自动开浏览器
         args.cmd = "serve"
         args.port = 8600
         args.no_browser = False
         args.proxy = None
         return cmd_serve(args)
     return args.func(args)
+
 
 if __name__ == "__main__":
     sys.exit(main())

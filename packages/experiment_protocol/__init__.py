@@ -1,3 +1,5 @@
+"""Runtime controls for isolated research experiment modes."""
+
 from .mode import (
     bound_profile_id,
     bind_experiment_profile_fingerprint,

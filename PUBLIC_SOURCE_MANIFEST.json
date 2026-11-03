@@ -1,0 +1,749 @@
+{
+  "version": "fix9-v6",
+  "frozen_source_fingerprint": "13a34b27f40357eb7bf07c34000f151b15c6f9e5877119c64be5dd1edbb910b5",
+  "files": [
+    {
+      "path": "apps/api/__init__.py",
+      "SHA256": "dc950c1a4459e6ec6551ef8b5cdbb0bf796a8d754b18bdedaca1faf67dafbefb",
+      "frozen_SHA256": "dc950c1a4459e6ec6551ef8b5cdbb0bf796a8d754b18bdedaca1faf67dafbefb",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "apps/api/main.py",
+      "SHA256": "e3c6309b321fbc1b6d1e6782bf4ecf89e77b0a14faa8831632be2c4cfbc4ed6c",
+      "frozen_SHA256": "2507c77059b999d3bf8b3ec66de905a6c1d2064ee575a49e3d6bc5565f15702c",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "apps/api/requirements.txt",
+      "SHA256": "acd1e8df8e7b81239ced8153e97165170bf0b62d6aec3523cc5c1304f81716ce",
+      "frozen_SHA256": "acd1e8df8e7b81239ced8153e97165170bf0b62d6aec3523cc5c1304f81716ce",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "apps/web/index.html",
+      "SHA256": "2283aeefbc4b8148c4771717678125b7d4342de7862c488729b90ca57e42c7a1",
+      "frozen_SHA256": "ffd6ef08b8804747dfcd4bde9fae6b33f314fbcc7479d88cae734fb57cdb50ed",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "contracts/data_contract_v0.1.json",
+      "SHA256": "364e74cb428fbb16a43fc6bdc30a5f5f6cbce433dd2dac44957232d13378b3d0",
+      "frozen_SHA256": "364e74cb428fbb16a43fc6bdc30a5f5f6cbce433dd2dac44957232d13378b3d0",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "evaluation_templates/2025-2026_v1.yaml",
+      "SHA256": "0c6e3f99b79997b1a2402024da302a434da9f0ae04a87e4409366853c45b5a8a",
+      "frozen_SHA256": "0c6e3f99b79997b1a2402024da302a434da9f0ae04a87e4409366853c45b5a8a",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "evaluation_templates/school_digitization_dimension_meanings_v1.json",
+      "SHA256": "bd6fb14b42683b0d8667a7b81c5387f608cdc2f5ec848c1b0711978a471a02f0",
+      "frozen_SHA256": "c8fc1216fac71a11151c6a66418662925d13939273c77a9d53aa0ab778d5c5c4",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "evaluation_templates/school_digitization_semantics_v1.yaml",
+      "SHA256": "6ea6896e08b429f1798dbe08f0e9f0a9c465b19905c7800dfc5720c476cf3849",
+      "frozen_SHA256": "6ea6896e08b429f1798dbe08f0e9f0a9c465b19905c7800dfc5720c476cf3849",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "evaluation_templates/school_digitization_semantics_v2.yaml",
+      "SHA256": "43b2a77052fd64fbddc6e940c4e4ee5c2097cfa49007581d2fa2904dc3fb93a2",
+      "frozen_SHA256": "775e6bd2de6a68ecc0a66fdf239cd66dfb075da6cf2fc3926f1f926aab6a2161",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "evaluation_templates/school_digitization_v1.yaml",
+      "SHA256": "2720054189360d43edc00708c13fd2d399b294d6462b09c24cacb2606f687197",
+      "frozen_SHA256": "4c8fcac96b8abc6030ef6deec1c479e0bdbfadf63a3cd70e410bcbc8d0e6ebf7",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/__init__.py",
+      "SHA256": "6b1121da495327d6ecda552553159239c9c5148ad6194f3c9ddbe918c02d4271",
+      "frozen_SHA256": "6b1121da495327d6ecda552553159239c9c5148ad6194f3c9ddbe918c02d4271",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/audit_agent.py",
+      "SHA256": "1871e8068f1481ba9b83a576e5e5080fe59c8cda240861a6b47aa385893f2087",
+      "frozen_SHA256": "1871e8068f1481ba9b83a576e5e5080fe59c8cda240861a6b47aa385893f2087",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/bench.py",
+      "SHA256": "2675036485164568f375e7f38ff83133500d0609282023ea846bb9674bc08008",
+      "frozen_SHA256": "2675036485164568f375e7f38ff83133500d0609282023ea846bb9674bc08008",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/composer.py",
+      "SHA256": "d2de900bfd3e0446c6c0717b0c58ee6f2bad92c18324b8189ddfedd1d033f815",
+      "frozen_SHA256": "cad347e2bb347c3a0ea76edad3e6f8f68d0d97846d7a580501b91127395a866c",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/critic.py",
+      "SHA256": "112dbeee433c86a21fba2b40b5dbaa079efb812c676ba29c2c6cabb39829fcbb",
+      "frozen_SHA256": "112dbeee433c86a21fba2b40b5dbaa079efb812c676ba29c2c6cabb39829fcbb",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/expert_advisor.py",
+      "SHA256": "9245eb73a916a4aad7fc73a6d791ca55f1b6a362b4c5bd725b3a6a072c76efd3",
+      "frozen_SHA256": "9245eb73a916a4aad7fc73a6d791ca55f1b6a362b4c5bd725b3a6a072c76efd3",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/indicator_catalog.py",
+      "SHA256": "04d4c4fb11a2745d0602a49d61033e1ecd748da07bff9637534a0f112d428d9b",
+      "frozen_SHA256": "b7d85f08e6cc78983303bf7be55248ef7d1ad4c950e2615fed5c24e29482a774",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/planner.py",
+      "SHA256": "b947b799222f2f774b5c10bb6fbfabf8f088b7bd3582012f0da04f36d9354db7",
+      "frozen_SHA256": "b947b799222f2f774b5c10bb6fbfabf8f088b7bd3582012f0da04f36d9354db7",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/retriever.py",
+      "SHA256": "58ed84bf514ee1b53aa3e82ea23d4562d5c16a7847a7cae84635d686858731ba",
+      "frozen_SHA256": "58ed84bf514ee1b53aa3e82ea23d4562d5c16a7847a7cae84635d686858731ba",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/router.py",
+      "SHA256": "15ccba927179ddde53ac1381a8f0cc17106aa1281ad99288f418f5988db96eb3",
+      "frozen_SHA256": "7d11e6329e72f151fe6e3e849e97f759908479fa2b877261f5c0d5632b52777f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/__init__.py",
+      "SHA256": "8d05183cd274420b0cc235aaa4c80e9951af2ff0c65b78c66ae3348510e2ad25",
+      "frozen_SHA256": "8d05183cd274420b0cc235aaa4c80e9951af2ff0c65b78c66ae3348510e2ad25",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/base.py",
+      "SHA256": "f684506b5926941751c4f738b7ad763e92a49d288180305222e90b38ed4aea7b",
+      "frozen_SHA256": "f684506b5926941751c4f738b7ad763e92a49d288180305222e90b38ed4aea7b",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/chart_builder.py",
+      "SHA256": "9d848a68360601c9b27b2a9d0e3b2bd43fe6e561ec313164410f2cb0a60df8f8",
+      "frozen_SHA256": "cc80196b57d33ddb6c6a62b16472f82e6de18d9f5a41c4407acd74a6f12e9939",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/chart_scope.py",
+      "SHA256": "4f7f6608acba17bf2d03450655cefe0ec820c62861d3206d9d8bf40272745e51",
+      "frozen_SHA256": "4f7f6608acba17bf2d03450655cefe0ec820c62861d3206d9d8bf40272745e51",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/orchestrator.py",
+      "SHA256": "11416cd00b802e98a98b2e0f4abaa2d0ca717920c8f29ca8fa830665e213b293",
+      "frozen_SHA256": "558f0ec0abdeb8c106172bdc9feb1a0e6b133784248031bd174c278daedc2594",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/python_runner.py",
+      "SHA256": "c8d7a95c83fabf9c00b8565435dcadd64f9c6c6e58911cd0dda08b51e70be727",
+      "frozen_SHA256": "c8d7a95c83fabf9c00b8565435dcadd64f9c6c6e58911cd0dda08b51e70be727",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/regional_capability.py",
+      "SHA256": "3d7af83a8bec50c699731e430afb17ecc02f8f4f01ac1534be0e4ca890a17691",
+      "frozen_SHA256": "3d7af83a8bec50c699731e430afb17ecc02f8f4f01ac1534be0e4ca890a17691",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/agent/tools/registry.py",
+      "SHA256": "2205cef69903d08e82a12d64dd39039b3f48c50c1c435be550b7acabd039173f",
+      "frozen_SHA256": "2205cef69903d08e82a12d64dd39039b3f48c50c1c435be550b7acabd039173f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/analysis_contract/__init__.py",
+      "SHA256": "c6edba0bd9a7a46b04909b18b5f4bec2e41a78cf6362c2cbb153eb04a3748f8f",
+      "frozen_SHA256": "c6edba0bd9a7a46b04909b18b5f4bec2e41a78cf6362c2cbb153eb04a3748f8f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/analysis_contract/capabilities.py",
+      "SHA256": "a305e05f2c1598c3e6a397c6e7f09c95f0f281ed47e7edbf9828d04d8d3cb0e4",
+      "frozen_SHA256": "a305e05f2c1598c3e6a397c6e7f09c95f0f281ed47e7edbf9828d04d8d3cb0e4",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/analysis_contract/schema.py",
+      "SHA256": "333bf08a1300621518b88dade0825a7553ab809d70aa28117d2e7e7effc95528",
+      "frozen_SHA256": "9cc0ebf10eea117e5d27cc9676ddbc236829b94c0bebbf328906283a6a81b898",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/analysis_contract/service.py",
+      "SHA256": "fcbc09daf7337bbedbad7820595684b7c22bb799609ffa836ee173fcc1959266",
+      "frozen_SHA256": "5da5c3bc9602a2a02ea2371f047cece9109c47e8df49ba47e8aca8601d0ae89e",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/analysis_contract/state.py",
+      "SHA256": "ab57119df34b0d071c139fb7d26cac5e66e24e97477860b2d048a06ab7e6a956",
+      "frozen_SHA256": "ab57119df34b0d071c139fb7d26cac5e66e24e97477860b2d048a06ab7e6a956",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/__init__.py",
+      "SHA256": "2ec9edfd68fdf422f2413a85a55fd38cbfdf4fadb71dffd53e52bf0e30ed11c4",
+      "frozen_SHA256": "2ec9edfd68fdf422f2413a85a55fd38cbfdf4fadb71dffd53e52bf0e30ed11c4",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/authz.py",
+      "SHA256": "0615bd9d83f3b7be1042fecce24da6a044a55fb4a4ed34ee848c6f8cb787f1c8",
+      "frozen_SHA256": "0615bd9d83f3b7be1042fecce24da6a044a55fb4a4ed34ee848c6f8cb787f1c8",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/frozen_paths.py",
+      "SHA256": "86cb0d2584bd082966e4d8797b2017d78e5a4ec09dc245c54a0a1a88fb0e9c1b",
+      "frozen_SHA256": "86cb0d2584bd082966e4d8797b2017d78e5a4ec09dc245c54a0a1a88fb0e9c1b",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/geography_registry.py",
+      "SHA256": "0a0ed185cf87268494e0023b3b7bc889ca358e054475a05af83b2edfa1b614c7",
+      "frozen_SHA256": "0a0ed185cf87268494e0023b3b7bc889ca358e054475a05af83b2edfa1b614c7",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/item_collection.py",
+      "SHA256": "a04f9fbecb267eeef2e289baf05dc11cc8460cc14fdd7559af83bcf8245e2176",
+      "frozen_SHA256": "a04f9fbecb267eeef2e289baf05dc11cc8460cc14fdd7559af83bcf8245e2176",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/local_browser_security.py",
+      "SHA256": "7e4e33fd0e3749f8ed13716757d9e36bc1f87e879305890fc0869d606b455488",
+      "frozen_SHA256": "7e4e33fd0e3749f8ed13716757d9e36bc1f87e879305890fc0869d606b455488",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/national_scope.py",
+      "SHA256": "2eb2633ac52bc2d38920a8cba0f99c576edd3915ef37a30d32c4e1648a6d0232",
+      "frozen_SHA256": "2eb2633ac52bc2d38920a8cba0f99c576edd3915ef37a30d32c4e1648a6d0232",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/paired_experiment_bridge.py",
+      "SHA256": "eab502a48bf4726e9da60238e1fb09c7a6a4c71d4efe9f04c1ff09c24cf3b827",
+      "frozen_SHA256": "eab502a48bf4726e9da60238e1fb09c7a6a4c71d4efe9f04c1ff09c24cf3b827",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/research_data.py",
+      "SHA256": "182ce87b3553f59faeb131c11f3984c1d3b08815163cb85accc179918698d4f0",
+      "frozen_SHA256": "2d930a2d18beb6d5f1fbaa9fa74effda07981b1d8cc7ff308a18d041ecd94a85",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/school_filters.py",
+      "SHA256": "8fcb9b032b9c54ad48f7cb577185da34fbd1bf555fa8bdcc325a929dd52bad9c",
+      "frozen_SHA256": "8fcb9b032b9c54ad48f7cb577185da34fbd1bf555fa8bdcc325a929dd52bad9c",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/school_names.py",
+      "SHA256": "7d2f6dfe5dd77918d75b29f5d97b656d5155da46dac4e0d2009f26ad56fe07cc",
+      "frozen_SHA256": "7d2f6dfe5dd77918d75b29f5d97b656d5155da46dac4e0d2009f26ad56fe07cc",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/school_registry.py",
+      "SHA256": "f5f101462f3547cacebf57ee4dede49a8e56d4be2b3b1752268c7de29f49140f",
+      "frozen_SHA256": "f5f101462f3547cacebf57ee4dede49a8e56d4be2b3b1752268c7de29f49140f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/core/secure_credentials.py",
+      "SHA256": "3c735a8eb5b6d20a5ab0a207f9a1eff38a5399c23706f20385ba897ee6a5de05",
+      "frozen_SHA256": "878426b5674eb76360a3a71154af814e0220584827ef7408a073c38a1e37aa4f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/experiment_protocol/__init__.py",
+      "SHA256": "ce99eff2e25e40bc10b2c14f0144c8934cea9c8f05d84efac2631b4ba7386c41",
+      "frozen_SHA256": "ce99eff2e25e40bc10b2c14f0144c8934cea9c8f05d84efac2631b4ba7386c41",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/experiment_protocol/llm_common.py",
+      "SHA256": "34cf569ac2b9a2b628d2e03b954f25bc96c3c1ff05aed24175a1dd56fd75c1b5",
+      "frozen_SHA256": "a4e6fcb57aa1a6a67f385d7d0371496c88bc6caca4959b4644384dc1bd44bc62",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/experiment_protocol/mode.py",
+      "SHA256": "5fc81114939ba892351dad2a5faa7b173339c0ad8eca55cba75c1ca4b26b23d5",
+      "frozen_SHA256": "1e4be0c8c84786badf470579de9ffb995cb7cd2ecafde961f6a519a6ec9a8c1d",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/experiment_protocol/trace.py",
+      "SHA256": "85d3a1a01098e34142c76fdf0ce7ab334fe749316ad9789bf90dec797b6abe32",
+      "frozen_SHA256": "85d3a1a01098e34142c76fdf0ce7ab334fe749316ad9789bf90dec797b6abe32",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/indicator_engine/__init__.py",
+      "SHA256": "89ae7a51c0ea3090f50022febdc8550bb0922a9d37e785c405585c7aefd9b575",
+      "frozen_SHA256": "89ae7a51c0ea3090f50022febdc8550bb0922a9d37e785c405585c7aefd9b575",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/indicator_engine/calibration.py",
+      "SHA256": "1caef498a26e3c275c1dd0e9c6ec98110b08f003dca9768d586db96e8bf26690",
+      "frozen_SHA256": "1caef498a26e3c275c1dd0e9c6ec98110b08f003dca9768d586db96e8bf26690",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/llm_gateway/__init__.py",
+      "SHA256": "157da191d6b65952e91496fe1299bab4cb522cf0d33cef691d0dc511644d71e6",
+      "frozen_SHA256": "157da191d6b65952e91496fe1299bab4cb522cf0d33cef691d0dc511644d71e6",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/llm_gateway/gateway.py",
+      "SHA256": "b6183d02bead19c5453f695e682541437c8c7979f6d2c5ea79305dcbc355da7e",
+      "frozen_SHA256": "d76fa5abc9eb3ac240b8782cf0a02777d1aaadd7aa9a817089096c6f37095728",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/llm_gateway/providers.json",
+      "SHA256": "98df8a119b2a0c77fda89a0d7268165a1ae760c711f9e930c7eb421a80c720b6",
+      "frozen_SHA256": "98df8a119b2a0c77fda89a0d7268165a1ae760c711f9e930c7eb421a80c720b6",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/__init__.py",
+      "SHA256": "caec1a45b226a137e0f6c78ec048cde3feb2a53ac5e7e9904fc51f0dae7e89c6",
+      "frozen_SHA256": "caec1a45b226a137e0f6c78ec048cde3feb2a53ac5e7e9904fc51f0dae7e89c6",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/answer_scope.py",
+      "SHA256": "275775b59db0a2e8122b3b04064b550c35a2b53ff8d2bcf598e7bcb73d36afb8",
+      "frozen_SHA256": "fc57b5e68b1b323d1d04693e53ec8e6145aa5941b705409a146361b05ed68fca",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/catalogue.py",
+      "SHA256": "4b71d2712d0dcdb1d175ee4a145b0f1ecc6a91e98911384e98f63ed270ee5ed3",
+      "frozen_SHA256": "4b71d2712d0dcdb1d175ee4a145b0f1ecc6a91e98911384e98f63ed270ee5ed3",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/catalogue_annotations.py",
+      "SHA256": "c793113e47c42de12c26deb417e77b8f6acca96de02c45ae2fac05264fd31d9e",
+      "frozen_SHA256": "c793113e47c42de12c26deb417e77b8f6acca96de02c45ae2fac05264fd31d9e",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/coverage.py",
+      "SHA256": "b6232acacbb8a12e7ad3425a6699c431e3303855f8a8c886c4b9760475c0aa16",
+      "frozen_SHA256": "3abac85340861fd7b3486a1ce65eaa6cf08ebdebe451a8d4ecc98081c8bc73d0",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/fact_assertions.py",
+      "SHA256": "fd2e6bdab3a2e0b40f946c089e1d71b41b4a29ea43f181d6b4c26816b79cb3b6",
+      "frozen_SHA256": "fd2e6bdab3a2e0b40f946c089e1d71b41b4a29ea43f181d6b4c26816b79cb3b6",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/mode.py",
+      "SHA256": "8016eacb8e932425b11e1f6ae114c4e0b24699a5b3410e5b079470c08a743263",
+      "frozen_SHA256": "8016eacb8e932425b11e1f6ae114c4e0b24699a5b3410e5b079470c08a743263",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/__init__.py",
+      "SHA256": "008bdee145508f319d24e4891ae8769a9845ab2396fc3fd29f2449e9c4215f1f",
+      "frozen_SHA256": "008bdee145508f319d24e4891ae8769a9845ab2396fc3fd29f2449e9c4215f1f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/diagnostic_contract.py",
+      "SHA256": "e57e5792e02bbffafd5c8759aed1eb58fa8a5ffb52b7b25fe27daa6fb1ae9e9a",
+      "frozen_SHA256": "e57e5792e02bbffafd5c8759aed1eb58fa8a5ffb52b7b25fe27daa6fb1ae9e9a",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/effective_scope_binding.py",
+      "SHA256": "07e18e6ecc7a4aaaa26a111ccb04c8d3c11bced610cd09462a9d0d6628b86f8b",
+      "frozen_SHA256": "07e18e6ecc7a4aaaa26a111ccb04c8d3c11bced610cd09462a9d0d6628b86f8b",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/gateway_adapter.py",
+      "SHA256": "11d5fa73ffd409a315bda88d242fac027e72721d0533f9e0e5e1a561a0ffc924",
+      "frozen_SHA256": "11d5fa73ffd409a315bda88d242fac027e72721d0533f9e0e5e1a561a0ffc924",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/referent_boundary.py",
+      "SHA256": "c36a2ec3dcc19ac35cc54d7107f0bd2f324d57503222379493988383420a46a8",
+      "frozen_SHA256": "c36a2ec3dcc19ac35cc54d7107f0bd2f324d57503222379493988383420a46a8",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/repair_binding.py",
+      "SHA256": "7f59fa1cdab46e040188ac62c32b49326be0f48bcb48540adbdf58caef0a3383",
+      "frozen_SHA256": "7f59fa1cdab46e040188ac62c32b49326be0f48bcb48540adbdf58caef0a3383",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/semantic_model_checker.py",
+      "SHA256": "a5a1eb2beaedfe0bfe485a61bdca8e41fdd5c169b4f1dbef0a65591dee20aa27",
+      "frozen_SHA256": "fa7648e5efad8d2e73bc113c5729a17ef30aefa2f4b8288bcb35204c2e65eee3",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/model_checker/sparse_contract.py",
+      "SHA256": "7fd908401a11b74aa25c31d4f97ec1893306902aa08881cdceb6f47b09c9b236",
+      "frozen_SHA256": "7fd908401a11b74aa25c31d4f97ec1893306902aa08881cdceb6f47b09c9b236",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/original_task_binding.py",
+      "SHA256": "8a40ec6d6100b0b95b08df0ece9215254ba4daaef0e5262e8cf9f4637c343113",
+      "frozen_SHA256": "8a40ec6d6100b0b95b08df0ece9215254ba4daaef0e5262e8cf9f4637c343113",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/public_tasks.py",
+      "SHA256": "f4cb7ff4f35dd9cbb134e912a39f95a55f0ad1915897161748ae036162d79fdc",
+      "frozen_SHA256": "b69327c1475d43a895d7cbadbf387ac08354356c4afd37a4028c9355abdee070",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/regional_capabilities.py",
+      "SHA256": "5aad1526d383318402485d5fba5f4933e30d5eb4517b19f38532dca536f5821e",
+      "frozen_SHA256": "83b1954f8b8eb452ee056b0d808dae96f3f77e48184731547608f62b8c4c6992",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/repair_delivery.py",
+      "SHA256": "6cb0564c8075ab75fab21925052d3bd8eb307924813c7904a992fe07c8e339e2",
+      "frozen_SHA256": "6cb0564c8075ab75fab21925052d3bd8eb307924813c7904a992fe07c8e339e2",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/request_semantics.py",
+      "SHA256": "ddeb08fc4d50f4eaea7aa1d2aaa1807efedcb77391c61cc3702e078a664278de",
+      "frozen_SHA256": "d1056a6b492b534cba833c3daed8eb65adafe430b2268b426f59f3ddd57817a8",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/required_facts.py",
+      "SHA256": "945703b72c5df889f1bff7a9ad664f372284b7d1e5f888abcf538dbf84415717",
+      "frozen_SHA256": "fa335a51876d9cad02d9078b0d687777d459c06dd52dc77e047eb2ac6877ebbc",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/requirement_checklist.py",
+      "SHA256": "79ecd5d44cb3b8ee5db4a898cbc427128ebb5f26b42af499788e7e6f84ea4e11",
+      "frozen_SHA256": "9610c776ce5e670ef65f4387a7b5229aed21b982a86944279c24c3f5e707e560",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/runtime.py",
+      "SHA256": "f98153115783b020795a3cca2299369aff5d36ecb4c56dfff76fe9a2d6fd8f32",
+      "frozen_SHA256": "46b7a79cc0e6afae5f5ddc9fcb61584beba5f97bcd54b5fa2857c64034139778",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/selective_clarification.py",
+      "SHA256": "9464be80759c1ed8c924380d4cd8583e07558e6d5e406a3517d3611117106f26",
+      "frozen_SHA256": "9464be80759c1ed8c924380d4cd8583e07558e6d5e406a3517d3611117106f26",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/semantic_preflight.py",
+      "SHA256": "baeb6b41859aa1e6e8337122054c03335fe5f2d0ab979ce2a556bb1ff321f5a8",
+      "frozen_SHA256": "8bbcbf98617cae90129e407cf52eb9d2109e57d12a72243c6631da837f27bc08",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/semantic_repair_gateway.py",
+      "SHA256": "5f07f66856fd2cd709ecf5a76c5e0db92c68d2818feacdb85f2c8f5738a476ec",
+      "frozen_SHA256": "5f07f66856fd2cd709ecf5a76c5e0db92c68d2818feacdb85f2c8f5738a476ec",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/task_draft.py",
+      "SHA256": "f33bac5759cb1c953c9508fd74da8c5f1117b7a201acafe9a3c501777e849b3f",
+      "frozen_SHA256": "f33bac5759cb1c953c9508fd74da8c5f1117b7a201acafe9a3c501777e849b3f",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/tool_adapter.py",
+      "SHA256": "3a06fbb3dd015c118f6cf559feca0b9ad2493cf0b5f526b8def904380978108c",
+      "frozen_SHA256": "3a06fbb3dd015c118f6cf559feca0b9ad2493cf0b5f526b8def904380978108c",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/topic_tasks.py",
+      "SHA256": "2f0559092b30f14421241de15f93724ba787d8fc510f51c880096b8430e50a5b",
+      "frozen_SHA256": "2f0559092b30f14421241de15f93724ba787d8fc510f51c880096b8430e50a5b",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/typed_plan.py",
+      "SHA256": "04f5b6373baffed5c960b7e097d663cf881124d3727cb2033ef2c42d3545a113",
+      "frozen_SHA256": "66be39f04448730316ba8dc2cc5c12b0f8d5b5fc7146fe6ed415fd8b4eefe739",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/semantic_query/unit_delivery.py",
+      "SHA256": "bb70bd36f1193cd449b566c4daa5181594456619b8a665570227546ee7c8d76e",
+      "frozen_SHA256": "bb70bd36f1193cd449b566c4daa5181594456619b8a665570227546ee7c8d76e",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/task_query/__init__.py",
+      "SHA256": "1bd851f8d5601add05ee12bb0bee231ab414ec7ec509f6406e67f60690f4e08c",
+      "frozen_SHA256": "84be60bd5a5af600e81547fc0b82c38c572dbcc5168ef7d7f11858e31b764dbf",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/task_query/plan.py",
+      "SHA256": "ac0009e454715f9c9df39b2c12a0ca3da965abb93cda71f793f1a83cdeb5a197",
+      "frozen_SHA256": "323f9125c40bc7b23bff8b30aecb16101cd2d6046b5c3a75071e5b5e7dacc7ec",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "packages/task_query/runtime.py",
+      "SHA256": "4458b20d3f25587b64700565e0d6de10dab5f60b909fd8dbd06b3754bb2ed49b",
+      "frozen_SHA256": "4458b20d3f25587b64700565e0d6de10dab5f60b909fd8dbd06b3754bb2ed49b",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "README.md",
+      "SHA256": "5ebc26ada1931f57243aeca1c9c4d6eead75b9c8954d64458da8b0094e5e5383",
+      "frozen_SHA256": "67f15f001dc4b6427e7d33396374403aee895f90f7bcc42aaf6dd7a403760382",
+      "adaptation": "rewritten README"
+    },
+    {
+      "path": "research_rules/CATALOGUE_ANNOTATIONS_v2.json",
+      "SHA256": "d8dc6bac9919301df433a3687053a82cdd24f50a62303b1b4a34fed6f6822a8a",
+      "frozen_SHA256": "1ef64711a3bf28532b10d0d7f54f4203471daec79282ccf978a05623ade127e1",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "research_rules/UNCOLLECTED_ITEMS_v1.json",
+      "SHA256": "362940cb908c510d3570f38ea5ed904389ac9eda651925a94da72c4a62fd388a",
+      "frozen_SHA256": "732ee37e1ce73287d27c928cb12fbe290ee23e4e89f0e2ddb6f15acdfd044cb8",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "run_app.py",
+      "SHA256": "197b879c05891282fad31af790d5ad121d5aa648856cb2eea9ce634c4813b150",
+      "frozen_SHA256": "a76a85a5baf9f9aecee4e04791b91c027af41b7919f17d76ad7201d4f7361404",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/__init__.py",
+      "SHA256": "89663587ac005fbea24775d26f84ccd3ceeb24cffc77f740e9590247551c1293",
+      "frozen_SHA256": "89663587ac005fbea24775d26f84ccd3ceeb24cffc77f740e9590247551c1293",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/build_geography_registry.py",
+      "SHA256": "f656da67c41ae78356ad05464dd4ca5f11ea53447f730991f13d529d4729f234",
+      "frozen_SHA256": "f656da67c41ae78356ad05464dd4ca5f11ea53447f730991f13d529d4729f234",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/build_real_template.py",
+      "SHA256": "8874038420e0750be715f935264c890648042848dca5e365c02f549a82f8e626",
+      "frozen_SHA256": "8874038420e0750be715f935264c890648042848dca5e365c02f549a82f8e626",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/data_contract_validator.py",
+      "SHA256": "750be4ebc30ec7cc2714ea8d528c7b2f7fd6aba3d841c17d94785b9a3846dfff",
+      "frozen_SHA256": "750be4ebc30ec7cc2714ea8d528c7b2f7fd6aba3d841c17d94785b9a3846dfff",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile.py",
+      "SHA256": "1d7c9014b532198bd2a97343679d8d80656bf6746cf975e5a1ccc544710c83ba",
+      "frozen_SHA256": "1d7c9014b532198bd2a97343679d8d80656bf6746cf975e5a1ccc544710c83ba",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile2.py",
+      "SHA256": "25563256bd75d8a3a889923083f788fa5d117574b79f82f69953616e0685554a",
+      "frozen_SHA256": "25563256bd75d8a3a889923083f788fa5d117574b79f82f69953616e0685554a",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile3.py",
+      "SHA256": "9ca36db572da4fc1c3c30af81d23e92ce9f51d87b04ea60f20641df31451f45a",
+      "frozen_SHA256": "9ca36db572da4fc1c3c30af81d23e92ce9f51d87b04ea60f20641df31451f45a",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile4.py",
+      "SHA256": "6f634c9d5f6dbadcaba635854d2959af74f47ead74ab94d7d4f7cb7ec69645dc",
+      "frozen_SHA256": "6f634c9d5f6dbadcaba635854d2959af74f47ead74ab94d7d4f7cb7ec69645dc",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile5.py",
+      "SHA256": "caffa0179c0926c548bce44bf97502046fd83fc826254d1a8058c75df7f70a31",
+      "frozen_SHA256": "caffa0179c0926c548bce44bf97502046fd83fc826254d1a8058c75df7f70a31",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile6.py",
+      "SHA256": "58aeca75424f588787cd25fdebb29031b1559dc0750ef07a09ce9f5dc701e9eb",
+      "frozen_SHA256": "58aeca75424f588787cd25fdebb29031b1559dc0750ef07a09ce9f5dc701e9eb",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/db_profile7.py",
+      "SHA256": "41eed62e57cbc76e7e336187344ea85562a78af84afe4e2646c9925d6f995f40",
+      "frozen_SHA256": "41eed62e57cbc76e7e336187344ea85562a78af84afe4e2646c9925d6f995f40",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/doc_smoke.py",
+      "SHA256": "e35853553c8309c149410aada846169405259ddb0efbbbb60a708e19890edbbe",
+      "frozen_SHA256": "e35853553c8309c149410aada846169405259ddb0efbbbb60a708e19890edbbe",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/engine_check.py",
+      "SHA256": "c3307c185494d18f33ee342eeb48884b2fa49446783b308b7ae6f7ebf7517d11",
+      "frozen_SHA256": "c3307c185494d18f33ee342eeb48884b2fa49446783b308b7ae6f7ebf7517d11",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/export_conversation.py",
+      "SHA256": "0fdb8bc8500f2757d175862fa2fed5c38aa67cf887d439716dc05e42fabf856f",
+      "frozen_SHA256": "420b541cfd224a75531534ae03b079efd243ce4aeef3487b3af70f43cb8e85af",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/fact_engine.py",
+      "SHA256": "f3f9e64326999b7e0cca16ef10511519d1e7a5bd2e4384017923670860575503",
+      "frozen_SHA256": "f3f9e64326999b7e0cca16ef10511519d1e7a5bd2e4384017923670860575503",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/import_full_data.py",
+      "SHA256": "f310eff03e2e75e1637b39487fe0a789e45a5b51fae0b81947548c08967a11e9",
+      "frozen_SHA256": "f310eff03e2e75e1637b39487fe0a789e45a5b51fae0b81947548c08967a11e9",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/import_real_data.py",
+      "SHA256": "225a1ccdab897523cd79046984b1dffd29022f5d20364aae12357b92482f95c7",
+      "frozen_SHA256": "225a1ccdab897523cd79046984b1dffd29022f5d20364aae12357b92482f95c7",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/indicator_engine.py",
+      "SHA256": "1b9c07fef0b50634b7293dadb303a5ef5720c6749bf3c497ed1338e0a298cf03",
+      "frozen_SHA256": "1b9c07fef0b50634b7293dadb303a5ef5720c6749bf3c497ed1338e0a298cf03",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/launch_ablation_modes.py",
+      "SHA256": "b92713d75728b1ac1f8a899f3205bcee3ff22f72da7dbf2cffe841072477bf06",
+      "frozen_SHA256": "b92713d75728b1ac1f8a899f3205bcee3ff22f72da7dbf2cffe841072477bf06",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/mock_transform.py",
+      "SHA256": "713771b8e44dd36a2840045905fbf893ebfe65f2ca367602d21191f981b542a3",
+      "frozen_SHA256": "713771b8e44dd36a2840045905fbf893ebfe65f2ca367602d21191f981b542a3",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/module_board.py",
+      "SHA256": "83d408c58084745bf62b8f5893e74d41bd818f8df19e58ed46c1a6a907ecd4b4",
+      "frozen_SHA256": "83d408c58084745bf62b8f5893e74d41bd818f8df19e58ed46c1a6a907ecd4b4",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/precompute_provinces.py",
+      "SHA256": "6c2e34f8413bb12c1181448be773e00bff80f3fc9646b02402dfdf8ef62d44f2",
+      "frozen_SHA256": "6c2e34f8413bb12c1181448be773e00bff80f3fc9646b02402dfdf8ef62d44f2",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/region_engine.py",
+      "SHA256": "fd556474d4205d5886b4421bb66d63a622feff2849d11746b735405603f254d2",
+      "frozen_SHA256": "ec077405658b609fdb4fff2a8893ef24a352908e94f5d32d1d4c6345377864fd",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/school_engine.py",
+      "SHA256": "c7dbd41fe301d007d52808330b23761868420771d02e966fb6bd8ee7d9f8bf8e",
+      "frozen_SHA256": "cbae097f6db6b872a044c6f40d5eac64aeed3d09d19fd6aefd78ababb1bda447",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/template_check.py",
+      "SHA256": "39b8323d70e7861460b6cb20a294a10d0b8e62cdefeea4af90377c9fa8981f73",
+      "frozen_SHA256": "39b8323d70e7861460b6cb20a294a10d0b8e62cdefeea4af90377c9fa8981f73",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/test_multiturn.py",
+      "SHA256": "6523d250821c1e6806bd6e96f9748b21389d6406705c271ba7b35bf1a20fdab5",
+      "frozen_SHA256": "6523d250821c1e6806bd6e96f9748b21389d6406705c271ba7b35bf1a20fdab5",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/test_tools.py",
+      "SHA256": "cbf522f24829484b839594461d73d39cb769cd4ba552a8b179b608d579a28ace",
+      "frozen_SHA256": "cbf522f24829484b839594461d73d39cb769cd4ba552a8b179b608d579a28ace",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/verify_api_charts.py",
+      "SHA256": "5ca15494309139f2eb92b168b14526eab4a33719b96f9e12acf45e34e640b132",
+      "frozen_SHA256": "5ca15494309139f2eb92b168b14526eab4a33719b96f9e12acf45e34e640b132",
+      "adaptation": "LF line endings only"
+    },
+    {
+      "path": "scripts/verify_numbers.py",
+      "SHA256": "3ef887233bf9ccd0d3f9dc8737db4586759a033a9bd754ae535802c5e351bd46",
+      "frozen_SHA256": "3ef887233bf9ccd0d3f9dc8737db4586759a033a9bd754ae535802c5e351bd46",
+      "adaptation": "LF line endings only"
+    }
+  ],
+  "excluded_private_resources": [
+    "config/research_dataset.json",
+    "research_rules/GEOGRAPHY_CITY_VALUES_FULL_v1.csv",
+    "research_rules/GEOGRAPHY_INSUFFICIENT_CITY_EVIDENCE_v1.csv",
+    "research_rules/GEOGRAPHY_PARENT_TIES_v1.csv",
+    "research_rules/GEOGRAPHY_REGISTRATION_ANOMALIES_v1.csv",
+    "research_rules/GEOGRAPHY_REGISTRY.json",
+    "research_rules/GEOGRAPHY_REGISTRY_FULL_v1.json",
+    "research_rules/RESEARCH_DATASET_PRE_R11_v1.json"
+  ],
+  "notes": "Application implementation from frozen Fix9; public text files use LF. README is rewritten; synthetic generator is a separate distribution helper. Private dataset/config resources excluded."
+}

@@ -1,3 +1,9 @@
+"""Fail-closed, process-local controls for P4 experiment method identities.
+
+G0 is the frozen deterministic baseline. All model modes share one real LLM
+parser/catalogue/tool/writer path. A1–A3 vary only the declared G2 controls.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,6 +13,7 @@ from collections import Counter
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Dict
+
 
 _LOCK = threading.Lock()
 _COUNTERS: Counter[str] = Counter()
@@ -29,8 +36,9 @@ _ABLATION_MODES = {
 }
 _LLM_MODES = {"g1_llm_unconstrained", "g2_llm_constrained"} | _ABLATION_MODES
 
+
 def mechanism_flags(mode: str) -> Dict[str, bool | str]:
-    pass
+    """Predeclared treatment matrix; never derive ablations from the G1 switch."""
     g2_family = mode == "g2_llm_constrained" or mode in _ABLATION_MODES
     flags = {
         "g2_first_prompt": g2_family,
@@ -41,13 +49,19 @@ def mechanism_flags(mode: str) -> Dict[str, bool | str]:
         "answer_repair": mode in {"g2_llm_constrained", "a1_no_execution_verification"},
         "delivery_policy": "block",
         "requirement_preservation": True,
+        "catalogue_annotation": True,
     }
     if mode == "g1_llm_unconstrained":
         setting = os.environ.get("TE_ABLATION_REQUIREMENT_PRESERVATION", "1")
         if setting not in {"0", "1"}:
             raise ValueError("requirement_preservation_control_must_be_0_or_1")
         flags["requirement_preservation"] = setting == "1"
-
+        setting = os.environ.get("TE_ABLATION_CATALOGUE_ANNOTATION", "1")
+        if setting not in {"0", "1"}:
+            raise ValueError("catalogue_annotation_control_must_be_0_or_1")
+        flags["catalogue_annotation"] = setting == "1"
+    # This experiment override changes only the existing answer-repair gate.
+    # Keep the G2 identity, first writer, checks and publication rules intact.
     if mode == "g2_llm_constrained":
         setting = os.environ.get("TE_ABLATION_ANSWER_REPAIR", "1")
         if setting not in {"0", "1"}:
@@ -61,6 +75,9 @@ def mechanism_flags(mode: str) -> Dict[str, bool | str]:
             flags["answer_repair"] = False
     return flags
 
+
+# The diagnostic ping is allowed only to verify the bound profile and outbound
+# path. It is not a product/parser/writer stage and never produces an answer.
 _ALLOWED_LLM_TASKS = {
     "experiment_diagnostic",
     "experiment_parser",
@@ -68,13 +85,16 @@ _ALLOWED_LLM_TASKS = {
     "experiment_repair",
 }
 
+
 def _text(name: str) -> str:
     return str(os.environ.get(name) or "").strip()
+
 
 def _run_id_hash(value: str) -> str | None:
     if not value:
         return None
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
 
 def experiment_mode_status() -> Dict[str, Any]:
     requested = _text("TEACHER_EVAL_EXPERIMENT_MODE").lower()
@@ -96,6 +116,10 @@ def experiment_mode_status() -> Dict[str, Any]:
         requested != "g1_llm_unconstrained"
         or os.environ.get("TE_ABLATION_REQUIREMENT_PRESERVATION", "1") in {"0", "1"}
     )
+    catalogue_annotation_valid = (
+        requested != "g1_llm_unconstrained"
+        or os.environ.get("TE_ABLATION_CATALOGUE_ANNOTATION", "1") in {"0", "1"}
+    )
     supported = requested in ({""} | _SUPPORTED_MODES)
     enabled = bool(
         requested in _SUPPORTED_MODES
@@ -108,6 +132,7 @@ def experiment_mode_status() -> Dict[str, Any]:
         and repair_control_valid
         and delivery_policy_valid
         and requirement_preservation_valid
+        and catalogue_annotation_valid
     )
     if not requested:
         reason = "not_configured"
@@ -127,6 +152,8 @@ def experiment_mode_status() -> Dict[str, Any]:
         reason = "delivery_policy_must_be_block_or_warn"
     elif not requirement_preservation_valid:
         reason = "requirement_preservation_control_must_be_0_or_1"
+    elif not catalogue_annotation_valid:
+        reason = "catalogue_annotation_control_must_be_0_or_1"
     elif requested in _ABLATION_MODES and not (os.path.isabs(trace_dir) and os.path.isdir(trace_dir)):
         reason = "isolated_trace_directory_required"
     else:
@@ -169,7 +196,9 @@ def experiment_mode_status() -> Dict[str, Any]:
             if enabled
             else None
         ),
-
+        # Normal product operation remains unchanged. G0 and incomplete/unknown
+        # experiment identities fail closed; only complete G1/G2 identities may
+        # use the bound model profile.
         "llm_calls_allowed": bool(not requested or (enabled and requested in _LLM_MODES)),
         "allowed_llm_tasks": sorted(_ALLOWED_LLM_TASKS | ({"semantic_check", "semantic_repair"} if requested == "g2_llm_constrained" and _text("TE_SEMANTIC_PREFLIGHT") == "code_model" else set())) if enabled and requested in _LLM_MODES else [],
         "proposed_constraints_enabled": bool(enabled and requested != "g1_llm_unconstrained" and requested in _LLM_MODES),
@@ -197,8 +226,9 @@ def experiment_mode_status() -> Dict[str, Any]:
         "g2_llm_constrained": "implemented_unverified_candidate",
     }
 
+
 def requirement_preservation_enabled() -> bool:
-    pass
+    """Effective G1 treatment, including calls outside the parser entry point."""
     scoped = _REQUIREMENT_PRESERVATION.get()
     if scoped is not None:
         return scoped
@@ -208,33 +238,39 @@ def requirement_preservation_enabled() -> bool:
         and not status["mechanisms"]["requirement_preservation"]
     )
 
+
 @contextmanager
 def requirement_preservation_scope(enabled: bool):
-    pass
+    """Request-local compiler setting; also used for observation on copies."""
     token = _REQUIREMENT_PRESERVATION.set(enabled)
     try:
         yield
     finally:
         _REQUIREMENT_PRESERVATION.reset(token)
 
+
 def g0_rule_enabled() -> bool:
     status = experiment_mode_status()
     return bool(status.get("enabled") and status.get("active_mode") == "g0_rule")
+
 
 def llm_experiment_enabled() -> bool:
     status = experiment_mode_status()
     return bool(status.get("enabled") and status.get("active_mode") in _LLM_MODES)
 
+
 def proposed_constraints_enabled() -> bool:
     status = experiment_mode_status()
     return bool(status.get("enabled") and status.get("proposed_constraints_enabled"))
 
+
 def bound_profile_id() -> str:
-    pass
+    """Internal-only profile binding; never include the raw value in public status."""
     return _text("TEACHER_EVAL_EXPERIMENT_PROFILE_ID")
 
+
 def bind_experiment_profile_fingerprint(fingerprint: str) -> bool:
-    pass
+    """Lock one run to the first complete profile snapshot without exposing it."""
     status = experiment_mode_status()
     if not status.get("enabled") or status.get("active_mode") not in _LLM_MODES:
         return True
@@ -249,12 +285,14 @@ def bind_experiment_profile_fingerprint(fingerprint: str) -> bool:
             return True
         return bound == value
 
+
 def experiment_blocks_llm_outbound() -> bool:
     status = experiment_mode_status()
     return bool(status.get("configured") and not status.get("llm_calls_allowed"))
 
+
 def experiment_allows_llm_entry_point(entry_point: str) -> bool:
-    pass
+    """Allow only the registered common-path stages in an active G1/G2 run."""
     status = experiment_mode_status()
     if not status.get("configured"):
         return True
@@ -265,20 +303,25 @@ def experiment_allows_llm_entry_point(entry_point: str) -> bool:
         return status.get('active_mode') == 'g2_llm_constrained' and _text('TE_SEMANTIC_PREFLIGHT') == 'code_model'
     return task in _ALLOWED_LLM_TASKS
 
+
 def _increment(counter: str, entry_point: str) -> None:
     safe_entry = str(entry_point or "unknown").strip() or "unknown"
     with _LOCK:
         _COUNTERS[counter] += 1
         _ENTRY_POINTS[f"{counter}:{safe_entry}"] += 1
 
+
 def record_llm_blocked(entry_point: str) -> None:
     _increment("llm_blocked_attempts", entry_point)
+
 
 def record_llm_outbound(entry_point: str) -> None:
     _increment("llm_outbound_calls", entry_point)
 
+
 def record_rule_output(entry_point: str) -> None:
     _increment("rule_outputs", entry_point)
+
 
 def record_llm_stage(stage: str, entry_point: str) -> None:
     safe_stage = str(stage or "unknown").strip().lower()

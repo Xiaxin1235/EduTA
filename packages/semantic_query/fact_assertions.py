@@ -1,3 +1,9 @@
+"""G2 assertions bound to executed slots, with explicit inconclusive results.
+
+No question-bank identifiers, reference answers, prose evidence scraping, or
+unbounded arithmetic closure. Supplements are one subtraction of compatible
+executed operands and retain operand/source provenance.
+"""
 from __future__ import annotations
 import re
 from itertools import combinations
@@ -5,6 +11,7 @@ import copy
 import math
 from decimal import Decimal, ROUND_HALF_EVEN
 
+# Chinese text is not an identifier boundary for a measurement.
 NUMBER = r'(?<![A-Za-z\d.])([+-]?\d+(?:\.\d+)?)(?![\d.])'
 MEASURE = re.compile(NUMBER+r'\s*(个学科|学科|人/台|台/人|Mbps|个百分点|百分点|课时|人次|种|分|台|所|人|个|项|名|位|%|次|间|条|堂|门)')
 STAT_LABELS = {
@@ -24,8 +31,13 @@ def compact(text):
 
 def unit_alias(unit):return '学科' if unit=='个学科' else unit
 
+
 def structural_count_supported(match, text, evidence, spec):
-    pass
+    """Validate an explicit dimension cardinality against the public rows.
+
+    None means a business measurement, never a blanket small-number exemption.
+    False also covers missing/duplicate row evidence.
+    """
     if match[2] != '个' or not re.match(r'\s*维度', text[match.end():]):
         return None
     field = 'dimensions_comparison' if spec.get('operation') in {'region_compare','school_compare'} else 'dimensions'
@@ -57,7 +69,8 @@ def entity_aliases(fact):
 def scalar_inventory(evidence,spec):
     from packages.semantic_query.required_facts import required_facts
     facts=required_facts(evidence,spec)
-
+    # Projected scalar fields can be mentioned as a supported supplement,
+    # but never become required merely because they exist.
     extra=[]
     if spec.get('operation') in {'region_eval','school_eval'}:
         for key in ('total_score','median_score','max_score','min_score','school_count','answer_count'):
@@ -65,8 +78,9 @@ def scalar_inventory(evidence,spec):
             extra.append(dict(key=key,value=evidence[key],unit='所' if key=='school_count' else '条' if key=='answer_count' else '分',available=True,entity=evidence.get('short_name') or evidence.get('region_name') or evidence.get('school_name'),period=evidence.get('year'),source_field=key))
     return facts,extra
 
+
 def measurements_by_unit(evidence,spec):
-    pass
+    """Typed executed values only, excluding prose, ids and question numbers."""
     operation=spec.get('operation')
     if operation not in {'region_eval','school_eval','school_fact','public_task','region_compare'}:return None
     facts,extra=scalar_inventory(evidence,spec)
@@ -81,12 +95,18 @@ def measurements_by_unit(evidence,spec):
         if prior is not None:return prior
     return output or None
 
+
 def executed_population_scope(result):
-    pass
+    """Keep explicit execution filter presence, including a meaningful null.
+
+    This metadata is G2-only. Missing metadata must not mean all schools.
+    Contracts, question wording and generated prose are not scope evidence.
+    """
     scope=result.get('execution_scope') or {}
     if 'school_filter' not in scope:return None
     return {key:copy.deepcopy(scope[key]) for key in
             ('query_template','region','region_a','region_b','period','school_filter') if key in scope}
+
 
 _POPULATION_NOUN = re.compile(
     r'(?:本次|本轮|当前|本地区|该地区|两地|两市)?(?:(?:所|已)?'
@@ -94,8 +114,15 @@ _POPULATION_NOUN = re.compile(
     r'|全部|所有|全体|各|这些|上述|有效|受评|参评|样本)学校'
     r'(?=20\d{2}|[：:，,。；;\n/]|(?:为|有|共|数量|学校数|得分|均分|等权)|[+-]?\d|$)')
 
+
 def population_scope_text(text,evidence,spec):
-    pass
+    """Separate grammatical population nouns from named school objects.
+
+    Neutral sample references inherit execution scope. An explicit 'all'
+    assertion additionally needs an executed unfiltered region population;
+    a conflicting filter is FAIL and absent scope evidence is UNCONFIRMED.
+    Restrictive adjectives and named schools remain visible to scope checks.
+    """
     errors=[];scope=evidence.get('executed_population_scope')
     if scope is None:scope=executed_population_scope(evidence)
     def mask(m):
@@ -109,13 +136,15 @@ def population_scope_text(text,evidence,spec):
         return '#population#'
     return _POPULATION_NOUN.sub(mask,text),list(dict.fromkeys(errors))
 
+
 def named_scope_matches(text):
     return list(re.finditer(r'[\u4e00-\u9fff]{2,12}(?:市|省|区|县)|'
                            r'[\u4e00-\u9fff]{2,35}(?:小学|中学|学校)'
                            r'(?=20\d{2}|[：:，,/]|(?:为|有)?[+-]?\d)',text))
 
+
 def verify_explicit_scope(text,evidence,spec):
-    pass
+    """Unsupported extra named scopes cannot be redeemed by a correct answer."""
     from packages.semantic_query.required_facts import required_facts
     facts=required_facts(evidence,spec)
     if not facts:return []
@@ -132,7 +161,8 @@ def verify_explicit_scope(text,evidence,spec):
     for clause in re.split(r'[。；;\n]',scoped_answer):
         if not MEASURE.search(clause):continue
         remaining=clause
-
+        # A literal catalogue metric may contain words such as 区.县级;
+        # those words are part of the indicator, not a newly named district.
         for f in facts:
             qid=f.get('question_id') or (f.get('scope') or {}).get('question_id')
             if qid:
@@ -172,7 +202,8 @@ def verify_scalar_slots(text,evidence,spec):
             continue
         prefix=answer[:m.start()];clause=re.split(r'[。；;\n]',prefix)[-1]
         unit=unit_alias(m[2])
-
+        # Formula operands/results and comparative magnitudes have a separate
+        # ordered-operation verifier. Do not misbind them to the nearest entity.
         if re.search(r'[=]|减|差值|分差|数量差|相差|差距|绝对(?:差|值)|差(?:了|为|是)?$|(?:比|较).{0,22}(?:高|低|多|少)(?:了|约)?$',clause):continue
         if re.match(r'\s*[-+]\s*\d',answer[m.end():]):continue
         labels=[]
@@ -189,7 +220,8 @@ def verify_scalar_slots(text,evidence,spec):
             nearest=max(pos for pos,_ in mentions);entities={slots[i].get('entity') for pos,i in mentions if pos==nearest}
             candidates=[i for i in candidates if slots[i].get('entity') in entities]
         elif len({f.get('entity') for f in required if f.get('entity')})>1:
-
+            # A pair's unnamed first scalar cannot be assigned by its number.
+            # Labelled tables are checked below with their own column binding.
             if not answer[answer.rfind('\n',0,m.start())+1:m.start()].startswith('|'):
                 errors.append('unconfirmed:request_measurement_object_binding');continue
         known=[a for f in slots for a in entity_aliases(f)]
@@ -199,7 +231,8 @@ def verify_scalar_slots(text,evidence,spec):
         foreign=named_scope_matches(scope_text)
         if foreign:
             errors.append('request_named_object_mismatch');continue
-
+        # A label shared by multiple entity slots needs its local entity;
+        # otherwise a coincidentally equal value is not sufficient evidence.
         matches=[i for i in candidates if slots[i].get('available') and unit_alias(slots[i].get('unit') or '')==unit and equal(m[1],slots[i]['value'],unit)]
         if matches:
             found.update(i for i in matches if i<len(required))
@@ -231,7 +264,11 @@ def verify_scalar_slots(text,evidence,spec):
     return list(dict.fromkeys(errors))
 
 def executed_arithmetic_precision(result):
-    pass
+    """G2-only descriptor from executed scalars and the executor's round-2 policy.
+
+    No reconstructed raw operands: the SQL replay retains those privately.
+    Missing verification stays unknown; an explicit failed replay is a conflict.
+    """
     if result.get('object_type')!='region_compare' or result.get('target_stat')=='count':return None
     if result.get('difference_basis')!='raw_means_then_round':return None
     fields=['total_score_a','total_score_b']
@@ -246,6 +283,7 @@ def executed_arithmetic_precision(result):
                 execution_scope=copy.deepcopy(result.get('execution_scope')),
                 verification_status=verification.get('status'),
                 comparison_direction=result.get('comparison_direction'))
+
 
 def precision_errors(evidence):
     precision=evidence.get('executed_arithmetic_precision')
@@ -265,7 +303,8 @@ def precision_errors(evidence):
         if scope_key in scope and scope[scope_key]!=evidence.get(field):
             return ['evidence_conflict:arithmetic_execution_'+scope_key+'_binding']
     left,right=map(lambda v:Decimal(str(v)),precision['operands'])
-
+    # Three round-2 intervals (both displayed means and the delta). This is
+    # only a consistency bound on executed evidence, never answer tolerance.
     if abs(Decimal(str(precision['value']))-(left-right))>=Decimal('0.015'):
         return ['evidence_conflict:arithmetic_precision_binding']
     for field,value in zip(precision['source_fields']+['diff'],precision['operands']+[precision['value']]):
@@ -274,6 +313,7 @@ def precision_errors(evidence):
         return ['evidence_conflict:arithmetic_scope_binding']
     return []
 
+
 _FORMULA_NUMBER=r'[+-]?\d+(?:\.\d+)?'
 _FORMULA_UNIT=r'(?:个学科|学科|人/台|台/人|Mbps|百分点|课时|人次|种|分|台|所|人|个|项|名|位|%|次|间|条|堂)'
 _SUBTRACTION_FORMULA=re.compile(
@@ -281,8 +321,9 @@ _SUBTRACTION_FORMULA=re.compile(
     r'('+_FORMULA_NUMBER+r')('+_FORMULA_UNIT+r')?\s*[，,]?\s*(=|≈|等于)\s*'
     r'('+_FORMULA_NUMBER+r')('+_FORMULA_UNIT+r')?')
 
+
 def _subtraction_labels(proof,facts):
-    pass
+    """Execution-bound entity, period or item labels, shared by both grammars."""
     x,y=proof['left'],proof['right']
     if x.get('entity')!=y.get('entity'):la,ra=entity_aliases(x),entity_aliases(y)
     elif x.get('period')!=y.get('period'):la,ra=[str(x.get('period'))+'年'],[str(y.get('period'))+'年']
@@ -292,13 +333,20 @@ def _subtraction_labels(proof,facts):
         ra+=['前者','前项','第一项'] if facts.index(y)==0 else ['后者','后项','第二项']
     return la,ra
 
+
 def verify_numeric_subtractions(answer,proofs):
-    pass
+    """Check every displayed subtraction, including separate lines.
+
+    Exact equality uses decimal arithmetic. Approximation/result rounding
+    respects the number of stated decimal places, never a broad tolerance.
+    Unbound extra precision is unknown, rather than fabricated raw evidence.
+    """
     allowed=[];errors=[];facts=[]
     for p in proofs:
         for f in (p['left'],p['right']):
             if f not in facts:facts.append(f)
-
+    # Retain operand annotations until their entity/metric/year/value binding
+    # has been checked. Removing parentheses first loses that relationship.
     annotation=re.compile(r'('+_FORMULA_NUMBER+r')('+_FORMULA_UNIT+r')?\(([^()]+)\)(?=\s*(?:-|=|≈))')
     for m in annotation.finditer(answer):
         label=m[3];candidates=list(facts);explicit=False
@@ -311,7 +359,8 @@ def verify_numeric_subtractions(answer,proofs):
         distinct=[f for f in candidates if any(n in label for n in aliases(f))]
         if distinct:candidates=distinct;explicit=True
         token=m[1]
-
+        # The first '-' after an annotated left operand is the binary
+        # operator. A negative right operand is written with a second '-'.
         if token.startswith('-') and answer[max(0,m.start()-1):m.start()]==')':token=token[1:]
         matched=[f for f in candidates if equal(token,f['value'],unit_alias(m[2] or f.get('unit') or ''))]
         if explicit and not matched:errors.append('arithmetic_annotated_operand_mismatch')
@@ -334,7 +383,7 @@ def verify_numeric_subtractions(answer,proofs):
         header=re.fullmatch(r'(?:计算式|计算|算式|按)?(.+?)(?:减|-)(.+?)[:：]',prefix)
         named_pairs=None
         if header:
-
+            # Explanatory wrappers (按“...减...”计算) do not change operands.
             named_pairs=[p for p in proofs if any(n in header[1] for n in _subtraction_labels(p,facts)[0])
                          and any(n in header[2] for n in _subtraction_labels(p,facts)[1])]
             if len(named_pairs)!=1:
@@ -343,14 +392,16 @@ def verify_numeric_subtractions(answer,proofs):
                 errors.append('arithmetic_formula_named_operand_mismatch')
         bound=[p for p in pairs if (named_pairs is None or p in named_pairs)
                and operand_matches(m[1],p['left']['value']) and operand_matches(m[3],p['right']['value'])]
-
+        # Same numeric operands in different executed scopes do not establish
+        # which fact a formula describes. A local literal pair can disambiguate.
         if len(bound)>1:
             named=[p for p in bound if any(n in clause for n in entity_aliases(p['left'])+aliases(p['left'])) and any(n in clause for n in entity_aliases(p['right'])+aliases(p['right']))]
             if len(named)==1:bound=named
         unit=units[0] if units else (bound[0]['unit'] if len(bound)==1 else '')
         exact= c==computed
         rounded=rounding and unit in {'分','%','百分点','Mbps','人/台','台/人'} and computed.quantize(Decimal(1).scaleb(c.as_tuple().exponent),rounding=ROUND_HALF_EVEN)==c
-
+        # Explicit approximation of rounded display operands may refer to an
+        # executed raw-mean delta, but must say so and carry its actual proof.
         raw_approx=bool(len(bound)==1 and m[5]=='≈' and bound[0].get('basis')=='raw_means_then_round'
                         and re.search(r'未舍入|未四舍五入|原始均值',clause)
                         and re.search(r'显示|已舍入|已四舍五入',clause)
@@ -368,7 +419,8 @@ def verify_numeric_subtractions(answer,proofs):
             else:errors.append('unconfirmed:arithmetic_formula_operand_precision_or_binding')
         elif exact or rounded or raw_approx:
             proof=bound[0]
-
+            # A correct display-number calculation is an allowed supplement;
+            # it never substitutes for the requested raw-mean delta slot.
             allowed.append(dict(token=m[6],unit=unit,proof=proof,
                                 directed=c==Decimal(str(proof['value'])),
                                 expression=m[0],displayed_subtraction=str(computed),
@@ -377,6 +429,7 @@ def verify_numeric_subtractions(answer,proofs):
                 if u:allowed.append(dict(token=token,unit=u,proof=proof,directed=False,expression=m[0]))
     return allowed,list(dict.fromkeys(errors))
 
+
 def subtraction_proofs(evidence,spec):
     from packages.semantic_query.required_facts import required_facts
     inventory=required_facts(evidence,spec)
@@ -384,7 +437,7 @@ def subtraction_proofs(evidence,spec):
     proofs=[]
     for left,right in combinations(facts,2):
         if left.get('unit')!=right.get('unit'):continue
-
+        # No combining counts, scores or differing value views/aggregations.
         a,b=left.get('scope') or {},right.get('scope') or {}
         if any(a.get(k)!=b.get(k) for k in ('view','aggregation','statistic')):continue
         if left.get('question_id')!=right.get('question_id'):continue
@@ -407,11 +460,12 @@ def subtraction_proofs(evidence,spec):
     return proofs
 
 def arithmetic_assertions(text,evidence,spec):
-    pass
+    """Return numeric allowance plus checks and inspectable operand proof."""
     answer=compact(text);proofs=subtraction_proofs(evidence,spec);allowed=[];errors=precision_errors(evidence)
-
+    # An explanatory magnitude is a new assertion, even without a comma.
+    # Preserve inherited operand context but never inherit a signed operator.
     answer=re.sub(r'(?<![，,])(?=(?:即|亦即|也就是)(?:相差|差距|绝对差|绝对值))',',',answer)
-
+    # Inventory labels plus literal objects; ordinals refer to inventory order.
     facts=[]
     for proof in proofs:
         for fact in (proof['left'],proof['right']):
@@ -426,7 +480,10 @@ def arithmetic_assertions(text,evidence,spec):
         if unit!='分' and len({f.get('unit') for f in facts})>1:
             relation_answer='。'.join(c for c in re.split(r'[。；;\n]',answer)
                                      if any(unit_alias(m[2])==unit for m in MEASURE.finditer(c)))
-
+        # Prose relations keep their object labels but never consume equation
+        # operands/results. Decimal formula checks also enforce a colon header's
+        # ordered labels, so neither rounded results nor operand signs inherit
+        # the prose scalar-difference interpretation.
         relation_prose=_SUBTRACTION_FORMULA.sub('#equation#',relation_answer)
         errors.extend(_bound_comparison_claims(relation_prose,la,ra,x['value'],y['value'],expected_difference=value,expected_unit=unit))
         subject='(?:'+'|'.join(re.escape(a) for a in la)+')'
@@ -437,22 +494,26 @@ def arithmetic_assertions(text,evidence,spec):
                     or (relation[1] in {'低于','少于'} and value>=0)
                     or (relation[1]=='等于' and value!=0)):
                 errors.append('comparison_direction_mismatch')
-
+        # Only assertion clauses with both named operands, or a complete
+        # checked numeric formula, may introduce a previously absent number.
         for clause in re.split(r'[。；;\n]',answer):
             named=any(a in clause for a in la) and any(b in clause for b in ra)
-            formula_ok=False
+            formula_ok=False  # Equations are verified once with Decimal below.
             formula_spans=[m.span() for m in _SUBTRACTION_FORMULA.finditer(clause)]
             if named and re.search(r'差|减|比|较|高于|低于|多于|少于',clause) or formula_ok:
                 for m in MEASURE.finditer(clause):
-
+                    # Equation operands/results belong to the exact equation
+                    # verifier, not a prose difference inherited from its label.
                     if any(start<=m.start()<end for start,end in formula_spans):continue
                     if unit_alias(m[2])!=unit:continue
-
+                    # Compare result magnitudes only, never permit a new scalar
+                    # that happens to equal another pair's arithmetic result.
                     full_before=clause[:m.start()]
                     before=re.split(r'[，,]',full_before)[-1]
                     ordered=subject+r'(?:年)?(?:的)?(?:减|-)'+other+r'(?:年)?'
                     magnitude=bool(re.search(r'(?:相差|差距|绝对差|绝对值)(?:为|是|约|了)?$',before))
-
+                    # '按 A-B 方向，差值为 ...' keeps its ordered operands;
+                    # an absolute magnitude starts its own unsigned assertion.
                     order_context=full_before if re.search(r'差值|分差|方向',before) and not magnitude else before
                     is_ordered=bool(re.search(ordered,order_context))
                     if is_ordered and not magnitude and not equal(m[1],value,unit):
@@ -468,12 +529,18 @@ def arithmetic_assertions(text,evidence,spec):
     allowed.extend(formula_allowances);errors.extend(formula_errors)
     return allowed,list(dict.fromkeys(errors))
 
+
 def constraint_inputs(question,evidence,spec):
     from packages.semantic_query.repair_delivery import reconcile_request
     return reconcile_request(question,evidence,spec)
 
+
 def numeric_roles(text,evidence,spec):
-    pass
+    """Identify labels and declared constants by syntax AND executed field role.
+
+    Returned spans are allowances for this occurrence only, never a whitelist
+    of numeric values. Ordinary measurements still pass the slot verifier.
+    """
     facts,_=scalar_inventory(evidence,spec)
     qids={str(f.get('question_id') or (f.get('scope') or {}).get('question_id')) for f in facts}
     qids.discard('None')
@@ -500,13 +567,15 @@ def numeric_roles(text,evidence,spec):
         scope=f.get('scope') or {}
         sem=scope.get('semantic_type') or {}
         if sem.get('allowed_transform')=='normalized_value_times_100':transforms.append(f['source_field'])
-
+    # An explicit transform is not proved by a coincidentally present score.
     for m in re.finditer(r'((?:登记)?归一(?:化)?值|标准化值|原始值)\s*(?:乘以?|[×*])\s*([+-]?\d+(?:\.\d+)?)',text):
         valid=False if m[1]=='原始值' or Decimal(m[2])!=100 else True if transforms else None
         record(m,2,'transform_constant',valid,transforms)
-
+    # A named item/value assertion is bound to that item's executed slot;
+    # seeing both correct numbers elsewhere cannot repair swapped labels.
     for m in re.finditer(r'(?:[Qq]\s*(\d+)|第\s*(\d+)\s*题)(?:的)?(标准分|标准化分|原始值|得分)?(?:为|是|[:：])?\s*([+-]?\d+(?:\.\d+)?)\s*('+_FORMULA_UNIT+r')',text):
-
+        # The right item in an ordered expression is not a scalar assertion:
+        # "Q2减Q1为..." is bound and checked as a subtraction elsewhere.
         if re.search(r'(?:Q\d+|第\d+题)\s*(?:减(?:去)?|[-−－])\s*$',text[:m.start()]):continue
         qid=m[1] or m[2];view='raw_value' if m[3]=='原始值' else 'normalized_score' if m[3] in {'标准分','标准化分'} else None
         candidates=[f for f in facts if str(f.get('question_id') or (f.get('scope') or {}).get('question_id'))==qid
@@ -523,8 +592,14 @@ def numeric_roles(text,evidence,spec):
         record(m,4,'item_value_binding',valid,[dict(source_field=f['source_field'],entity=f.get('entity'),period=f.get('period'),question_id=qid,value=f['value'],unit=f.get('unit')) for f in candidates])
     return proofs,list(dict.fromkeys(errors))
 
+
 def explicit_listing_order(text,question,evidence,spec):
-    pass
+    """A fact set has no order unless the user explicitly requires one.
+
+    Arithmetic operand order and ranking are checked separately. Only scalar
+    assertions establish listing positions; restating labels in a heading
+    cannot redeem a reversed listing.
+    """
     facts,_=scalar_inventory(evidence,spec)
     groups=[]
     for f in facts:
@@ -539,7 +614,7 @@ def explicit_listing_order(text,question,evidence,spec):
         for i,(f,names) in enumerate(groups):
             hits=[clause.find(n) for n in names if n and n in clause]
             if hits:requested.append((min(hits),i))
-
+        # Shared entity labels are not evidence of a requested metric order.
         requested.sort()
         if len(requested)<2 or len({p for p,_ in requested})!=len(requested):continue
         positions=[]
@@ -554,8 +629,14 @@ def explicit_listing_order(text,question,evidence,spec):
         if len(positions)==len(requested) and positions!=sorted(positions):errors.append('explicit_listing_order_mismatch')
     return errors
 
+
 def unit_evidence_review(evidence,spec):
-    pass
+    """Expose conflicting existing catalogue units; never invent equivalence.
+
+    A syntactically recognized unit is not a certified physical definition.
+    Normalized scores retain their executed score scale, independent of raw
+    catalogue disagreements. No question id or benchmark label is special.
+    """
     from packages.agent.indicator_catalog import PRESET_RULES
     facts,_=scalar_inventory(evidence,spec)
     rows=[];errors=[]
@@ -568,7 +649,9 @@ def unit_evidence_review(evidence,spec):
                  for i,r in enumerate(PRESET_RULES) if str(r.get('qid'))==str(qid) and r.get('unit')]
         units={unit_alias(r['unit']) for r in sources}|{unit_alias(f.get('unit') or '')}
         units.discard('')
-
+        # A catalogue entry explicitly spelling 个 + the counted noun proves
+        # that its generic classifier and that noun share this metric's unit.
+        # This does not make 个 a global synonym for any business unit.
         if '个' in units and any(r['unit']=='个'+str(f.get('unit') or '') for r in sources):units.discard('个')
         if '个' in units and f.get('unit'):
             from packages.semantic_query.catalogue import question_metric
@@ -582,8 +665,9 @@ def unit_evidence_review(evidence,spec):
             errors.append('unconfirmed:unit_definition_missing:'+f['source_field'])
     return rows,list(dict.fromkeys(errors))
 
+
 def verify_kind_items(text,evidence,spec):
-    pass
+    """Dynamic catalogue bindings for two raw counts and ordered difference."""
     rows=evidence.get('item_results') or [];derived=evidence.get('derived_result') or {}
     if len(rows)!=2 or not all(r.get('unit')=='种' for r in rows) or derived.get('operation')!='subtract':return None
     from packages.semantic_query.required_facts import _distinct_labels,_bound_comparison_claims,_verify_kind_count_difference
@@ -607,7 +691,7 @@ def verify_kind_items(text,evidence,spec):
     errors+=_bound_comparison_claims(answer,list(labels[li]),list(labels[ri]),left['target_value'],right['target_value'])
     difference=left['target_value']-right['target_value']
     if not equal(str(derived.get('value')),difference,'种'):errors.append('evidence_conflict:derived_result.value')
-
+    # Explicit count equations remain strict in value, unit and order.
     if re.search(r'\d+(?:种)?-\d+(?:种)?=',answer):errors+=_verify_kind_count_difference(answer,rows,derived)
     proven=False
     for clause in re.split(r'[。；;\n]',answer):

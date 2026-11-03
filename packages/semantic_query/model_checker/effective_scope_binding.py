@@ -1,6 +1,12 @@
+"""Bind scope observations to the supplied compiler projection, without parsing answers.
+
+Required dimensions are model claims. Literal quotes and scope set arithmetic
+can be checked; their semantic entailment is deliberately not certified here.
+"""
 import copy
 
 from packages.semantic_query.model_checker.semantic_model_checker import InvalidEvidence
+
 
 def scope_projection(summary, catalogue):
     if summary is None:
@@ -36,8 +42,9 @@ def scope_projection(summary, catalogue):
                 required_outputs=copy.deepcopy(summary.get('required_outputs') or []),
                 limitation='Execution scope observation only. Original requirements and semantic correctness must still be reviewed.')
 
+
 def validate_scope_binding(binding, scope, catalogue):
-    pass
+    """Check a model's required/covered/missing sets, retaining its raw opinion."""
     if not isinstance(binding, dict) or set(binding) != {
             'required_dimensions', 'covered_dimensions', 'missing_dimensions'}:
         return ['invalid_dimension_scope_binding']
@@ -52,7 +59,8 @@ def validate_scope_binding(binding, scope, catalogue):
     covered = binding['covered_dimensions']
     missing = binding['missing_dimensions']
     errors = []
-
+    # Membership is the scope check. Ordered direction remains a separate task
+    # requirement and is never certified by comparing these sets.
     if set(covered) != set(scope['covered_dimensions']):
         errors.append('covered_dimensions_mismatch_effective_task')
     if set(missing) != set(required) - set(scope['covered_dimensions']):

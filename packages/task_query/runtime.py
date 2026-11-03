@@ -1,10 +1,15 @@
+"""Native F/H product path: one parser, actual tools, deterministic delivery.
+
+Both arms share catalogue, compiler, database execution, calculation and native
+Matplotlib artifacts. No reference/gold/scoring imports or model-output cache.
+"""
 import copy, hashlib, json, os, re, threading
 from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 from . import plan
 from scripts.school_engine import connect, _db_path
-VERSION='structured-task-1.0'
+VERSION='native-fh-task-query-v1.0-20261006'
 _LOCK=threading.RLock()
 def write(p,v):p.write_text(json.dumps(v,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
 def now():return datetime.now(timezone.utc).isoformat()

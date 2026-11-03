@@ -1,3 +1,5 @@
+"""Prepare, commit, bind, and independently verify supported analysis tasks."""
+
 from __future__ import annotations
 
 import copy
@@ -45,6 +47,7 @@ from .capabilities import (
 from .schema import AnalysisContract, ExecutionReceipt, FieldSource
 from .state import ContractStore, StaleBaseRevision
 
+
 _STATISTIC_EVIDENCE = {
     "mean": ("均分", "平均分", "平均得分", "平均值", "平均数", "均值"),
     "median": ("中位数", "中位值"),
@@ -60,13 +63,14 @@ _AGGREGATION_EVIDENCE = {
     "answer_pooled_mean": ("作答池化", "池化平均", "合在一起平均", "所有作答合并平均", "不按学校汇总"),
 }
 
+
 def _requested_outputs(
     routed: Dict[str, Any],
     *,
     structured_key: str,
     default_charts: bool,
 ) -> Tuple[str, ...]:
-    pass
+    """Bind an experiment AnswerSpec to the contract without changing normal defaults."""
     selected = routed.get("requested_outputs")
     if not isinstance(selected, (list, tuple)) or not selected:
         values = ["direct_answer", structured_key]
@@ -83,6 +87,7 @@ def _requested_outputs(
             values.append(value)
     return tuple(values)
 
+
 def _semantic_evidence(routed: Dict[str, Any], field: str) -> Tuple[str, ...]:
     evidence = routed.get("semantic_evidence")
     if not isinstance(evidence, dict):
@@ -90,11 +95,13 @@ def _semantic_evidence(routed: Dict[str, Any], field: str) -> Tuple[str, ...]:
     value = str(evidence.get(field) or "").strip()
     return (value,) if value else ()
 
+
 class ContractViolation(RuntimeError):
     def __init__(self, failures: Iterable[str], *, test_control: Optional[Dict[str, Any]] = None):
         self.failures = tuple(sorted(set(failures)))
         self.test_control = test_control
         super().__init__("contract_verification_failed:" + ",".join(self.failures))
+
 
 class ControlledTestFailure(RuntimeError):
     def __init__(self, message: str, *, stage: str):
@@ -105,6 +112,7 @@ class ControlledTestFailure(RuntimeError):
             "product_evidence_scope": "failure_cleanup_only",
         }
         super().__init__(message)
+
 
 @dataclass
 class ConsistentReadSnapshot:
@@ -157,13 +165,16 @@ class ConsistentReadSnapshot:
         if role:
             self.mark("sql", sql_role=role)
 
+
 def _resolved_data_path(data_path: Optional[str] = None) -> Path:
     return Path(data_path or _db_path()).expanduser().resolve()
 
+
 def _data_source_id(data_path: str) -> str:
-    pass
+    """Return a non-reversible path identity for isolated-test diagnostics."""
     normalized = os.path.normcase(str(_resolved_data_path(data_path)))
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
 
 def _dataset_version(data_path: Optional[str] = None) -> str:
     path = _resolved_data_path(data_path)
@@ -174,7 +185,10 @@ def _dataset_version(data_path: Optional[str] = None) -> str:
         wal_part = f"wal:{wal_stat.st_size}:{wal_stat.st_mtime_ns}"
     else:
         wal_part = "wal:none"
-    return f"{path.name}:main:{stat.st_size}:{stat.st_mtime_ns}:{wal_part}"
+    version = f"{path.name}:main:{stat.st_size}:{stat.st_mtime_ns}:{wal_part}"
+    from packages.core.item_collection import enabled as r11_enabled, VERSION, rules
+    return version+':'+VERSION+':'+rules()['version'] if r11_enabled() else version
+
 
 def _test_gate(
     stage: str,
@@ -253,6 +267,7 @@ def _test_gate(
         time.sleep(0.05)
     snapshot.mark("test_gate_released", gate=stage)
 
+
 _SCHOOL_FACT_TAMPER_CASES = {
     "contract_school_id", "contract_school_name", "contract_period",
     "contract_metric_type", "contract_metric_key", "contract_metric_spec", "contract_indicator_ids",
@@ -262,8 +277,9 @@ _SCHOOL_FACT_TAMPER_CASES = {
     "result_component_complete", "result_ratio", "result_fact_data_status",
 }
 
+
 def school_fact_test_control_status(*, request_id: Optional[str] = None) -> Dict[str, Any]:
-    pass
+    """Describe the strictly gated in-memory school-fact tamper control."""
     case = str(os.environ.get("TEACHER_EVAL_SCHOOL_FACT_TAMPER_CASE") or "").strip()
     target_request_id = str(
         os.environ.get("TEACHER_EVAL_SCHOOL_FACT_TAMPER_REQUEST_ID") or ""
@@ -291,6 +307,7 @@ def school_fact_test_control_status(*, request_id: Optional[str] = None) -> Dict
         ),
     }
 
+
 def consistent_read_test_control_status() -> Dict[str, Any]:
     failure_stage = str(os.environ.get("TEACHER_EVAL_CONSISTENT_READ_TEST_FAIL_STAGE") or "").strip()
     explicit_mode = os.environ.get("TEACHER_EVAL_CONSISTENT_READ_TEST_MODE", "").strip() == "1"
@@ -308,6 +325,7 @@ def consistent_read_test_control_status() -> Dict[str, Any]:
         "requires_contract_override": True,
         "stage_supported": supported,
     }
+
 
 def _controlled_school_fact_tamper(
     contract: AnalysisContract,
@@ -396,6 +414,7 @@ def _controlled_school_fact_tamper(
         "product_evidence_scope": "verifier_rejection_only",
     }
 
+
 _N3_TAMPER_CASES = {
     "contract_entity", "contract_period", "contract_dimension",
     "contract_indicator_ids", "contract_dataset_version",
@@ -403,8 +422,9 @@ _N3_TAMPER_CASES = {
     "result_execution_scope_indicator_ids", "result_denominator", "result_score",
 }
 
+
 def n3_test_control_status(*, request_id: Optional[str] = None) -> Dict[str, Any]:
-    pass
+    """Describe the gated N3 school-evaluation/region-item tamper control."""
     case = str(os.environ.get("TEACHER_EVAL_N3_TAMPER_CASE") or "").strip()
     target_request_id = str(
         os.environ.get("TEACHER_EVAL_N3_TAMPER_REQUEST_ID") or ""
@@ -432,6 +452,7 @@ def n3_test_control_status(*, request_id: Optional[str] = None) -> Dict[str, Any
             else bool(not target_request_id or request_id == target_request_id)
         ),
     }
+
 
 def _controlled_n3_tamper(
     contract: AnalysisContract,
@@ -506,12 +527,14 @@ def _controlled_n3_tamper(
         "product_evidence_scope": "verifier_rejection_only",
     }
 
+
 _SCHOOL_COMPARE_TAMPER_CASES = {
     "contract_school_a_id", "contract_school_b_id", "contract_school_a_name", "contract_school_b_name",
     "contract_period", "contract_indicator_ids", "result_school_a_id", "result_school_b_id",
     "result_school_a_name", "result_school_b_name", "result_period", "result_scope",
     "result_score_a", "result_score_b", "result_diff", "result_dimension_score", "result_winner",
 }
+
 
 def school_compare_test_control_status(*, request_id: Optional[str] = None) -> Dict[str, Any]:
     case = str(os.environ.get("TEACHER_EVAL_SCHOOL_COMPARE_TAMPER_CASE") or "").strip()
@@ -540,6 +563,7 @@ def school_compare_test_control_status(*, request_id: Optional[str] = None) -> D
             else bool(not target_request_id or request_id == target_request_id)
         ),
     }
+
 
 def _controlled_school_compare_tamper(
     contract: AnalysisContract,
@@ -608,6 +632,7 @@ def _controlled_school_compare_tamper(
         "product_evidence_scope": "verifier_rejection_only",
     }
 
+
 _REGION_LONGITUDINAL_TAMPER_CASES = {
     "contract_region", "contract_period_a", "contract_period_b", "contract_indicator_ids",
     "contract_statistic", "contract_aggregation", "contract_filter",
@@ -617,10 +642,11 @@ _REGION_LONGITUDINAL_TAMPER_CASES = {
     "result_answer_count_a", "result_answer_count_b",
 }
 
+
 def region_longitudinal_test_control_status(
     *, request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    pass
+    """Describe the strictly gated in-memory two-period tamper control."""
     case = str(
         os.environ.get("TEACHER_EVAL_REGION_LONGITUDINAL_TAMPER_CASE") or ""
     ).strip()
@@ -652,6 +678,7 @@ def region_longitudinal_test_control_status(
             else bool(not target_request_id or request_id == target_request_id)
         ),
     }
+
 
 def _controlled_region_longitudinal_tamper(
     contract: AnalysisContract,
@@ -740,6 +767,7 @@ def _controlled_region_longitudinal_tamper(
         "product_evidence_scope": "verifier_rejection_only",
     }
 
+
 _REGION_RANKING_TAMPER_CASES = {
     "contract_region", "contract_period", "contract_indicator_ids", "contract_statistic",
     "contract_aggregation", "contract_filter", "contract_target_rank", "contract_target_top_n",
@@ -749,10 +777,11 @@ _REGION_RANKING_TAMPER_CASES = {
     "result_population", "result_school_count", "result_answer_count",
 }
 
+
 def region_ranking_test_control_status(
     *, request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    pass
+    """Describe the strictly gated in-memory region-ranking tamper control."""
     case = str(os.environ.get("TEACHER_EVAL_REGION_RANKING_TAMPER_CASE") or "").strip()
     target_request_id = str(
         os.environ.get("TEACHER_EVAL_REGION_RANKING_TAMPER_REQUEST_ID") or ""
@@ -781,6 +810,7 @@ def region_ranking_test_control_status(
             else bool(not target_request_id or request_id == target_request_id)
         ),
     }
+
 
 def _controlled_region_ranking_tamper(
     contract: AnalysisContract,
@@ -885,31 +915,11 @@ def _controlled_region_ranking_tamper(
         "product_evidence_scope": "verifier_rejection_only",
     }
 
+
 def _filter_sql(school_filter: Optional[str]) -> Tuple[str, Tuple[Any, ...]]:
-    if not school_filter:
-        return "", ()
-    clauses = []
-    if "九年一贯制" in school_filter:
-        clauses.append("(s.school_type LIKE '%九年一贯%' OR s.school_type='1-9' OR s.school_type LIKE 'D.%')")
-    elif "十二年一贯制" in school_filter:
-        clauses.append("(s.school_type LIKE '%十二年一贯%' OR s.school_type='1-12')")
-    elif "中职" in school_filter:
-        clauses.append("(s.school_type LIKE '%中职%' OR s.school_type LIKE '%中等职业%' OR s.school_type LIKE '%职业学校%')")
-    elif "幼儿园" in school_filter:
-        clauses.append("s.school_type LIKE '%幼儿园%'")
-    elif "初中" in school_filter or "初级中学" in school_filter:
-        clauses.append("(s.school_type LIKE '%初中%' OR s.school_type LIKE '%初级中学%' OR s.school_type LIKE '7-9%' OR s.school_type='1-9' OR s.school_type LIKE 'B.%')")
-    elif "小学" in school_filter:
-        clauses.append("(s.school_type LIKE '%小学%' OR s.school_type LIKE '1-6%' OR s.school_type LIKE '1-5%' OR s.school_type LIKE 'A.%')")
-    elif "高中" in school_filter or "高级中学" in school_filter:
-        clauses.append("(s.school_type LIKE '%高中%' OR s.school_type LIKE '%高级中学%' OR s.school_type LIKE '10-12%' OR s.school_type LIKE 'C.%')")
-    if "乡村" in school_filter or "农村" in school_filter:
-        clauses.append("(s.school_area_type LIKE '%乡村%' OR s.school_area_type LIKE '%农村%')")
-    elif any(token in school_filter for token in ("镇区", "城镇", "城区", "城市")):
-        clauses.append("(s.school_area_type LIKE '%镇区%' OR s.school_area_type LIKE '%城镇%' OR s.school_area_type LIKE '%城区%' OR s.school_area_type LIKE '%城市%')")
-    if not clauses or not filter_is_structured(school_filter):
-        raise CapabilityError(f"unsupported_filter:{school_filter}")
-    return " AND " + " AND ".join(clauses), ()
+    from packages.core.school_filters import filter_sql
+    return filter_sql(school_filter)
+
 
 def _indicator_ids(
     target_dimension: Optional[str],
@@ -930,6 +940,7 @@ def _indicator_ids(
     if not ids:
         raise CapabilityError(f"unknown_indicator_scope:{target_dimension}")
     return ids
+
 
 def _school_fact_spec(metric_info: Dict[str, Any]) -> Tuple[str, str, Tuple[int, ...], Dict[str, Any]]:
     metric_type = str(metric_info.get("type") or "")
@@ -984,6 +995,7 @@ def _school_fact_spec(metric_info: Dict[str, Any]) -> Tuple[str, str, Tuple[int,
     }
     return metric_type, metric_key, indicator_ids, metric_spec
 
+
 def _school_compare_template_spec() -> Tuple[str, str, Tuple[int, ...], Dict[str, Any]]:
     template = load_school_template()
     if not isinstance(template, dict):
@@ -1012,6 +1024,7 @@ def _school_compare_template_spec() -> Tuple[str, str, Tuple[int, ...], Dict[str
         "complete_template_required": True,
         "dimensions": dimensions,
     }
+
 
 def _school_evaluation_template_spec(
     target_dimension: Optional[str],
@@ -1054,6 +1067,7 @@ def _school_evaluation_template_spec(
         "dimensions": dimensions,
     }
 
+
 def _resolve_school_for_period(
     token: Any,
     period: str,
@@ -1087,6 +1101,7 @@ def _resolve_school_for_period(
         raise CapabilityError(f"unresolved_{error_prefix}:{raw}:{period}")
     return school
 
+
 def _source(
     value: Any,
     question: str,
@@ -1112,6 +1127,7 @@ def _source(
         return FieldSource(value=value, origin="inherited", source_turn=turn_id, inherited_from=previous.revision)
     return FieldSource(value=value, origin="catalogue_or_default", source_turn=turn_id)
 
+
 def _ranking_evidence_candidates(
     question: str,
     *,
@@ -1135,12 +1151,15 @@ def _ranking_evidence_candidates(
             matches.append(match.group(0))
     return tuple(dict.fromkeys(matches))
 
+
 class ContractService:
     def __init__(self, store: Optional[ContractStore] = None):
         self.store = store or ContractStore()
         self._pending_transition: Dict[str, Any] = {}
         self.pending_transition_result: Optional[Dict[str, Any]] = None
-
+        # Freeze the resolved data source for this request-scoped service. This
+        # prevents prepare/execute/replay from silently switching between two
+        # same-named SQLite files when environment state changes mid-request.
         self._data_path = str(_resolved_data_path())
 
     def _connect(self) -> sqlite3.Connection:
@@ -1162,7 +1181,7 @@ class ContractService:
 
     @staticmethod
     def context_from(contract: AnalysisContract) -> Dict[str, Any]:
-        pass
+        """Project a verified/NO_DATA contract into the legacy router context."""
         operation_alias = {
             "school_evaluation": "school_eval",
             "school_fact": "school_fact",
@@ -1384,7 +1403,7 @@ class ContractService:
         )
 
     def set_pending_transition(self, pending: Optional[Dict[str, Any]], *, applied: bool) -> None:
-        pass
+        """Bind request-local completion intent, never a conversational focus."""
         self._pending_transition = {
             "pending_id": pending["pending_id"],
             "pending_status": "RESOLVED" if applied else "SUPERSEDED",
@@ -1406,7 +1425,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Create a new head revision from a trusted historical task state."""
         head = self.store.latest(session_id)
         if head is None:
             raise ValueError("restore_without_revision_history")
@@ -1670,7 +1689,7 @@ class ContractService:
 
     @staticmethod
     def merge_pending_context(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """Keep a clarification self-contained without borrowing another task."""
         incompatible = any(
             patch.get(key) is not None and patch.get(key) != base.get(key)
             for key in ("last_school", "last_region", "last_school_compare_a", "last_school_compare_b",
@@ -1808,7 +1827,9 @@ class ContractService:
             requested_outputs=_requested_outputs(
                 routed,
                 structured_key=("ranking_result" if operation == "region_ranking" else "structured_result"),
-
+                # A single-item fact has no implicit visualization contract.
+                # Explicit chart requests remain honored through routed output
+                # requirements, while plain item questions stay text-only.
                 default_charts=metric_type != "question",
             ),
             requested_statistics=requested_statistics,
@@ -1936,7 +1957,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit one-region, one-period deterministic school ranking."""
         target_rank = routed.get("target_rank")
         target_top_n = routed.get("target_top_n")
         if (target_rank is None) == (target_top_n is None):
@@ -1981,7 +2002,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit a bounded two-region, one-period comparison."""
         aggregation = routed.get("aggregation") or "school_equal_mean"
         statistic = routed.get("target_stat")
         school_filter = routed.get("school_filter")
@@ -2131,7 +2152,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit one region across two annual cross-sections."""
         aggregation = routed.get("aggregation") or "school_equal_mean"
         statistic = routed.get("target_stat") or "mean"
         school_filter = routed.get("school_filter")
@@ -2293,7 +2314,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit a bounded two-school, one-period template comparison."""
         period = str(routed.get("year") or "").strip()
         period_a = str(routed.get("year_a") or (period.split(",")[0] if "," in period else period)).strip()
         period_b = str(routed.get("year_b") or (period.split(",")[1] if "," in period else period)).strip()
@@ -2474,7 +2495,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit one-school overall or one-dimension evaluation."""
         routed_years = list(routed.get("years") or ())
         period = str(
             routed.get("year") or (routed_years[0] if routed_years else "")
@@ -2635,7 +2656,7 @@ class ContractService:
         base_revision: Optional[int] = None,
         request_id: str,
     ) -> AnalysisContract:
-        pass
+        """Resolve and commit a school fact query before the fact engine executes."""
         metric_info = school_fact_metric_input(routed)
         metric_type, metric_key, indicator_ids, metric_spec = _school_fact_spec(metric_info)
         head = self.store.latest(session_id)
@@ -2849,7 +2870,7 @@ class ContractService:
 
     @contextmanager
     def consistent_read(self, contract: AnalysisContract):
-        pass
+        """Pin execution and independent replay to one SQLite read transaction."""
         conn = self._connect()
         snapshot = ConsistentReadSnapshot(connection=conn, snapshot_id=str(uuid.uuid4()))
         try:
@@ -2863,7 +2884,8 @@ class ContractService:
             conn.execute("PRAGMA query_only=ON")
             conn.execute("BEGIN")
             snapshot.mark("transaction_started")
-
+            # Establish the snapshot before checking the file fingerprint. A change
+            # before acquisition is rejected; a later commit cannot change this view.
             conn.execute("SELECT name FROM sqlite_schema ORDER BY name LIMIT 1").fetchone()
             observed_version = self._dataset_version()
             if observed_version != contract.dataset_version:
@@ -2893,7 +2915,9 @@ class ContractService:
     ) -> Dict[str, Any]:
         trusted = self.store.trusted(contract.task_id, contract.revision)
         if not verify_execution:
-
+            # A1 retains the committed task, consistent-read tool call and
+            # public AnswerSpec projection. Binding/replay are not evaluated.
+            # An unchecked execution must never be recorded as PASS.
             trusted.validate()
             if read_snapshot is None or not read_snapshot.connection.in_transaction:
                 raise ValueError("consistent_read_snapshot_required")
@@ -2985,7 +3009,9 @@ class ContractService:
                     test_control=test_control,
                 ) from exc
             raise
-
+        # Publication binding is part of this request's acceptance, before the
+        # atomic trusted-focus / Pending completion write. A rejected public
+        # view must never resolve a clarification or become inherited focus.
         result["contract"] = trusted.to_dict()
         result["execution_receipt"] = receipt.to_dict()
         result["contract_verification"] = {"status": "PASS" if not failures else "FAIL", "checks": checks, "failures": list(failures)}
@@ -3457,7 +3483,8 @@ class ContractService:
         ):
             if int(result.get(result_key) or 0) != int(expected or 0):
                 replay_failures.append(f"replay_{result_key}")
-
+        # Public text and charts consume these side aliases.  Verify the same
+        # dimension-specific population that the independent replay checked.
         if contract.dimension:
             for side, expected in (("a", replay_a["school_count"]), ("b", replay_b["school_count"])):
                 if result.get(f"school_count_{side}") != expected:
@@ -3474,7 +3501,8 @@ class ContractService:
             ):
                 replay_failures.append(f"replay_score_{label}")
         if all(score is not None for score in replay_scores):
-
+            # The independent query retains both means before display rounding.
+            # A delta is rounded only after their subtraction.
             expected_diff = round(float(replay_scores[0]) - float(replay_scores[1]), 2)
             if result.get("difference_basis") != "raw_means_then_round":
                 replay_failures.append("replay_difference_basis")
@@ -3832,9 +3860,15 @@ class ContractService:
         }
         if not expected_dimensions or actual_dimensions != set(expected_dimensions):
             coverage_failures.append("missing_school_dimensions")
+        extrema_rows = result.get('dimensions') or ()
+        from packages.core.item_collection import collected_ids, enabled as r11_enabled
+        if r11_enabled():
+            available_dimensions = {d['name'] for d in (contract.metric_spec or {}).get('dimensions', ())
+                                    if collected_ids(contract.period, d.get('indicator_ids', ()))}
+            extrema_rows = [row for row in extrema_rows if row.get('dimension') in available_dimensions]
         if "dimension_extrema" in contract.requested_statistics and (
             len(expected_dimensions) != 6
-            or any(not isinstance(row.get("score"), (int, float)) for row in (result.get("dimensions") or ()))
+            or any(not isinstance(row.get("score"), (int, float)) for row in extrema_rows)
         ):
             coverage_failures.append("missing_school_dimension_extrema_population")
         if contract.target_dimensions and (
@@ -4001,10 +4035,12 @@ class ContractService:
 
         coverage_failures = []
         expected_metric_count = len(contract.indicator_ids)
+        from packages.core.item_collection import collected_ids
         for label, side in (("a", school_a), ("b", school_b)):
+            expected_answered = len(collected_ids(exp_period_a if label == 'a' else exp_period_b, contract.indicator_ids))
             if (
                 int(side.get("total_metrics") or 0) != expected_metric_count
-                or int(side.get("answered") or 0) != expected_metric_count
+                or int(side.get("answered") or 0) != expected_answered
             ):
                 coverage_failures.append(f"incomplete_template_{label}")
         if not str(result.get("direct_answer") or "").strip():
@@ -4094,6 +4130,13 @@ class ContractService:
         }
         for name in expected_dimensions:
             row = actual_dim_rows.get(name) or {}
+            nullable_a = (replay_a.get('dimensions') or {}).get(name)
+            nullable_b = (replay_b.get('dimensions') or {}).get(name)
+            from packages.core.item_collection import enabled as r11_enabled
+            if r11_enabled() and (nullable_a is None or nullable_b is None):
+                if row.get('score_a') != nullable_a or row.get('score_b') != nullable_b or row.get('diff') is not None or row.get('lead_tag') != 'NO_DATA':
+                    replay_failures.append(f'replay_unavailable_dimension_{name}')
+                continue
             expected_a = float((replay_a.get("dimensions") or {}).get(name) or 0.0)
             expected_b = float((replay_b.get("dimensions") or {}).get(name) or 0.0)
             expected_diff = round(expected_a - expected_b, 2)
@@ -4470,9 +4513,10 @@ class ContractService:
             for row in rows
             if row["normalized_value"] is not None
         }
+        from packages.core.item_collection import collected_ids
         if (
             (contract.metric_spec or {}).get("complete_template_required") is True
-            and len(values) != len(contract.indicator_ids)
+            and len(values) != len(collected_ids(expected_period, contract.indicator_ids))
         ):
             raise ContractViolation(("incomplete_school_compare_template",))
         dimensions: Dict[str, Optional[float]] = {}

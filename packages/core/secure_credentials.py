@@ -1,3 +1,10 @@
+"""Local credentials encrypted by Windows DPAPI for the current OS user.
+
+This module never opens legacy plaintext configurations. Public status reports
+only file existence and storage capability; callers must not export load_* data.
+There is intentionally no plaintext fallback or automatic credential migration.
+"""
+
 import ctypes
 import base64
 import json
@@ -8,13 +15,16 @@ import uuid
 from ctypes import wintypes
 from pathlib import Path
 
+
 class SecureCredentialError(Exception):
-    pass
+    """A fixed safe code, never an OS exception or credential-bearing payload."""
+
 
 _FORMAT = "TeacherEval-DPAPI-v1"
 _ENTROPY = b"TeacherEval/local-credential-store/v1"
 _MAX_SIZE = 2 * 1024 * 1024
 _LOCK = threading.RLock()
+
 
 def storage_path() -> Path:
     configured = os.environ.get("TEACHER_EVAL_CREDENTIAL_STORE_PATH", "").strip()
@@ -25,8 +35,9 @@ def storage_path() -> Path:
     from packages.core.frozen_paths import app_dir
     return Path(app_dir()) / "output" / "secure_config" / "llm_profiles.dpapi"
 
-def _legacy_paths():
 
+def _legacy_paths():
+    # Do not call llm_config_path(): its old implementation copies plaintext.
     from packages.core.frozen_paths import app_dir
     appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
     return (
@@ -34,8 +45,10 @@ def _legacy_paths():
         Path(app_dir()) / "llm_config.json",
     )
 
+
 class _DataBlob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
 
 def _dpapi_libraries():
     if os.name != "nt":
@@ -57,9 +70,11 @@ def _dpapi_libraries():
     except Exception:
         raise SecureCredentialError("secure_storage_dpapi_unavailable") from None
 
+
 def _blob(data):
     buf = ctypes.create_string_buffer(data, len(data))
     return _DataBlob(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte))), buf
+
 
 def _crypt(data: bytes, *, decrypt: bool) -> bytes:
     crypt32, kernel32 = _dpapi_libraries()
@@ -67,7 +82,7 @@ def _crypt(data: bytes, *, decrypt: bool) -> bytes:
     entropy, entropy_buf = _blob(_ENTROPY)
     output = _DataBlob()
     try:
-
+        # CRYPTPROTECT_UI_FORBIDDEN; no CRYPTPROTECT_LOCAL_MACHINE flag.
         fn = crypt32.CryptUnprotectData if decrypt else crypt32.CryptProtectData
         description = None if decrypt else "TeacherEval local credentials"
         if not fn(ctypes.byref(source), description, ctypes.byref(entropy),
@@ -85,6 +100,7 @@ def _crypt(data: bytes, *, decrypt: bool) -> bytes:
         if output.pbData:
             ctypes.memset(output.pbData, 0, output.cbData)
             kernel32.LocalFree(ctypes.cast(output.pbData, ctypes.c_void_p))
+
 
 def _validated_store(store):
     if not isinstance(store, dict) or not isinstance(store.get("profiles"), list):
@@ -118,7 +134,7 @@ def _validated_store(store):
             value = fields[name]
             if any(secret in value or secret in normalized_key(value) for secret in candidates):
                 raise SecureCredentialError("secure_storage_secret_in_metadata")
-
+        # Public endpoint metadata must never carry URL-embedded credentials.
         from urllib.parse import urlsplit
         try:
             endpoint = urlsplit(fields["api_base"])
@@ -134,11 +150,13 @@ def _validated_store(store):
         raise SecureCredentialError("secure_storage_invalid_store")
     return {"active": active, "profiles": profiles}
 
+
 def _metadata(store):
     return {"active": store["active"], "profiles": [
         {**{k: p[k] for k in ("id", "name", "provider", "api_base", "model",
                               "credential_revision")},
          "has_api_key": bool(p["api_key"])} for p in store["profiles"]]}
+
 
 def _read_envelope(path):
     target = Path(path) if path is not None else storage_path()
@@ -157,6 +175,7 @@ def _read_envelope(path):
             raise SecureCredentialError("secure_storage_invalid_file")
         return envelope
 
+
 def _public_metadata(envelope):
     public = envelope.get("public")
     if not isinstance(public, dict) or set(public) != {"active", "profiles"}:
@@ -174,17 +193,19 @@ def _public_metadata(envelope):
             uuid.UUID(p["credential_revision"])
         except (ValueError, AttributeError):
             raise SecureCredentialError("secure_storage_invalid_file") from None
-
+    # Structural validation without synthesizing or loading any credential.
     _validated_store({"active": public["active"], "profiles": [
         {**p, "api_key": ""} for p in profiles]})
     return {"active": public["active"], "profiles": [dict(p) for p in profiles]}
 
+
 def public_store(*, path=None) -> dict:
-    pass
+    """Public metadata without decrypting credentials (including bridge prepare)."""
     envelope = _read_envelope(path)
     if envelope is None:
         return {"active": "", "profiles": []}
     return _public_metadata(envelope)
+
 
 def public_profile(profile_id: str, *, path=None) -> dict:
     if not isinstance(profile_id, str) or not profile_id:
@@ -194,9 +215,10 @@ def public_profile(profile_id: str, *, path=None) -> dict:
             return dict(profile)
     raise SecureCredentialError("secure_storage_profile_not_found")
 
+
 def load_store(*, path=None) -> dict:
-    pass
-    _dpapi_libraries()
+    """Private decrypted profiles in memory; never read old plaintext files."""
+    _dpapi_libraries()  # Fail closed even if there is no encrypted store yet.
     envelope = _read_envelope(path)
     if envelope is None:
         return {"active": "", "profiles": []}
@@ -214,8 +236,9 @@ def load_store(*, path=None) -> dict:
     except Exception:
         raise SecureCredentialError("secure_storage_invalid_file") from None
 
+
 def save_store(store: dict, *, path=None) -> None:
-    pass
+    """Encrypt before touching disk, then atomically replace encrypted bytes."""
     normalized = _validated_store(store)
     for profile in normalized["profiles"]:
         profile["credential_revision"] = str(uuid.uuid4())
@@ -250,12 +273,13 @@ def save_store(store: dict, *, path=None) -> None:
                 except OSError:
                     pass
 
+
 def storage_status(*, path=None) -> dict:
-    pass
+    """Display-safe metadata only; does not decrypt or open any credential file."""
     target = Path(path) if path is not None else storage_path()
     try:
         _dpapi_libraries()
-
+        # Synthetic in-memory capability probe; never use stored credentials.
         _crypt(b"TeacherEval DPAPI availability probe (not credentials)", decrypt=False)
         available, error = True, ""
     except SecureCredentialError as exc:
@@ -271,8 +295,9 @@ def storage_status(*, path=None) -> dict:
         "needs_resave": legacy_exists and not encrypted_exists,
     }
 
+
 def load_profile(profile_id: str, *, path=None) -> dict:
-    pass
+    """Internal bridge only: exact selected saved profile; no fallback source."""
     if not isinstance(profile_id, str) or not profile_id:
         raise SecureCredentialError("secure_storage_profile_required")
     store = load_store(path=path)

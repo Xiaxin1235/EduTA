@@ -1,3 +1,9 @@
+"""Opt-in semantic preflight. Inputs: original question, shared catalogue, parser JSON.
+
+No answer values, benchmark identifiers, reference packages, or database access.
+The two mechanisms are typed operator scope and literal metric-view conservation.
+Unknown paraphrases are information gaps, never deterministic contradictions.
+"""
 from __future__ import annotations
 
 import copy
@@ -7,23 +13,27 @@ import re
 from typing import Any
 from packages.experiment_protocol.mode import requirement_preservation_enabled
 
-VERSION = "semantic-preflight-1.0"
-CHECK_FIELDS = {'intent', 'regions', 'schools', 'periods', 'dimension', 'statistic',
+VERSION = "semantic-preflight-v16-targeted-shared-20261011"
+CHECK_FIELDS = {'topics', 'intent', 'regions', 'schools', 'periods', 'dimension', 'statistic',
                 'aggregation', 'school_filter', 'question_ids', 'value_view',
-                'compound_key', 'school_field', 'target_rank', 'target_top_n', 'requested_outputs'}
+                'compound_key', 'school_field', 'target_rank', 'target_top_n', 'requested_outputs',
+                'ranking_order', 'benchmark'}
+
 
 def model_checker_research_enabled() -> bool:
-    pass
+    """The retired LLM checker requires this explicit research opt-in everywhere."""
     import os
     return os.environ.get('TE_RESEARCH_LLM_SEMANTIC_CHECKER', '0') == '1'
 
+
 def public_requirement_coverage_enabled() -> bool:
-    pass
+    """One shared coverage-gate ablation; extraction/execution fixes stay shared."""
     import os
     return os.environ.get('TE_PUBLIC_REQUIREMENT_COVERAGE', '1') != '0'
 
+
 def dimension_pair_requirements(question: str) -> dict:
-    pass
+    """Reuse public affirmative aliases; never infer an unnamed second target."""
     from packages.semantic_query import runtime as rt
     text = rt._scope_assertion_text(question)
     matches = rt._explicit_dimension_aliases(question)
@@ -49,8 +59,13 @@ def dimension_pair_requirements(question: str) -> dict:
             'uncertain': unknown or bool(forward and reverse),
             'reason': 'unnamed_dimension_or_conflicting_operand_direction' if unknown or forward and reverse else None}
 
+
 def atomic_requirements(question: str) -> dict:
-    pass
+    """Explicit subset of original requirements, alongside the existing representation.
+
+    IDs depend on canonical meaning, not clause offsets, parser arrays or answers.
+    Evidence and order remain request-specific. UNKNOWN is not completeness proof.
+    """
     from packages.semantic_query import runtime as rt
     text = rt._scope_assertion_text(question)
     pair = dimension_pair_requirements(question)
@@ -78,7 +93,7 @@ def atomic_requirements(question: str) -> dict:
         if match: add('indicator', qid, match.group())
     for qid, quote in aliases:
         add('indicator', qid, quote)
-
+    # Explicit simultaneous item views are independent publication obligations.
     raw_view=re.search(r'原始(?:值|数量|作答)|原值|登记数量|登记数值',text)
     score_view=re.search(r'标准分|归一(?:化)?(?:分|值|得分)|百分制',text)
     if raw_view and score_view:
@@ -95,7 +110,7 @@ def atomic_requirements(question: str) -> dict:
         add('result', 'difference', match.group())
     if pair['uncertain']:
         add('unresolved', pair['reason'], next((m.group() for m in re.finditer(r'另一块尚未说明|另一(?:块|个维度|维度).{0,10}(?:未说明|未指明|待定|不清楚)', text)), text.strip()))
-
+    # Repeated synonyms refer to the same obligation; retain the first evidence.
     unique = {a['id']: a for a in reversed(atoms)}
     return {'version': 'explicit-atomic-requirements-v1',
             'question_sha256': hashlib.sha256(str(question).encode()).hexdigest(),
@@ -104,8 +119,9 @@ def atomic_requirements(question: str) -> dict:
             'dimension_pair': pair['dimensions'], 'difference_operands': pair['operands'] if pair['difference'] else [],
             'execution_dimensions': pair['operands'] if pair['difference'] else pair['dimensions']}
 
+
 def requirement_correspondence(requirements: dict, routed: dict, spec: dict) -> dict:
-    pass
+    """Compare original atoms to actual compiler fields, not a model checklist."""
     plan = routed.get('public_plan') or {}
     queries = plan.get('queries') or []
     dimensions = set(spec.get('target_dimensions') or []) | {routed.get('target_dimension')}
@@ -117,7 +133,7 @@ def requirement_correspondence(requirements: dict, routed: dict, spec: dict) -> 
     for atom in requirements['atoms']:
         kind, value = atom['kind'], atom['value']
         if kind == 'dimension':
-
+            # Item names can contain a parent alias without requesting its score.
             covered = value in dimensions or bool(ids - {None}) and not requirements['dimension_pair']
             fields = ['target_dimensions', 'target_dimension', 'public_plan.queries.dimension']
         elif kind == 'indicator':
@@ -138,8 +154,10 @@ def requirement_correspondence(requirements: dict, routed: dict, spec: dict) -> 
             'completeness_certified': False, 'rows': rows,
             'missing_ids': [r['requirement_id'] for r in rows if r['status'] == 'MISSING']}
 
-def _callback_result(callback, prompt, ledger):
 
+def _callback_result(callback, prompt, ledger):
+    # Optional receipt envelope from a future gateway adapter. Plain stub JSON
+    # has unknown monetary/token cost, never an invented zero-token receipt.
     ledger.update(usage=None, model=None, provider_response_id=None, elapsed_ms=None,
                   finish_reason=None, attempts=None, transport_retries=None, http_attempts=None)
     try:
@@ -153,7 +171,7 @@ def _callback_result(callback, prompt, ledger):
         if not isinstance(receipt, dict):
             raise ValueError('callback_receipt_invalid')
         ledger.update({k: receipt.get(k) for k in ('usage', 'model', 'provider_response_id', 'elapsed_ms', 'finish_reason', 'attempts', 'http_attempts','transport_retries','model_source','requested_model')})
-
+        # Adapters must enforce the single-attempt policy, independently of stubs.
         if (receipt.get('transport_retries') not in (0, None)
                 or (receipt.get('http_attempts') or 0) > 1
                 or isinstance(receipt.get('attempts'),list) and len(receipt['attempts'])>1):
@@ -161,18 +179,21 @@ def _callback_result(callback, prompt, ledger):
         response = response['result']
     return json.loads(response) if isinstance(response, str) else response
 
-def _clauses(text: str):
 
+def _clauses(text: str):
+    # Retain offsets so every independent requirement points to original text.
     for match in re.finditer(r"[^，,。；;！？!?\n]+", text):
         clause = match.group()
         if re.search(r"不问|不要|无需|不需要|不比较|不看|不按", clause):
             continue
         yield clause, match.start(), match.end()
 
+
 def derive_requirements(question: str, catalogue: list[dict]) -> dict:
     clauses = list(_clauses(question))
     affirmative = "，".join(c for c, _, _ in clauses)
-
+    # An item extremum within a dimension is a selection over questionnaire items,
+    # not a statistic over schools. Ambiguous clauses receive no auto-patch.
     extrema = []
     for clause, start, end in clauses:
         if not re.search(r"题项|题目|各题|各项", clause):
@@ -193,14 +214,15 @@ def derive_requirements(question: str, catalogue: list[dict]) -> dict:
         view = "raw_value"
     elif score_spans and not raw_spans and not extrema:
         view = "normalized_score"
-
+    # Both views can be legitimately requested; do not collapse them to one.
     return {"atomic_requirements": atomic_requirements(question), "extrema": extrema, "value_view": view, "raw_spans": raw_spans,
             "score_spans": score_spans, "dual_view": bool(raw_spans and score_spans),
             "block_scope_requested": bool(re.search(r"这一整块|这整块|整个维度|这一维度", affirmative)),
             "dimension_labels": sorted({str(i.get("dimension")) for i in catalogue if i.get("dimension")})}
 
+
 def _dimension_evidence(question: str, catalogue: list[dict]) -> list[dict]:
-    pass
+    """Catalogue retrieval is advisory: character overlap is NOT a semantic proof."""
     text = "，".join(c for c, _, _ in _clauses(question))
     grams = {text[i:i+2] for i in range(len(text)-1) if re.fullmatch(r"[\u4e00-\u9fff]{2}", text[i:i+2])}
     ranked = []
@@ -217,6 +239,7 @@ def _dimension_evidence(question: str, catalogue: list[dict]) -> list[dict]:
                        "items": sorted(hits, key=lambda x: -len(x['overlap']))[:4]})
     return sorted(ranked, key=lambda x: (-x['advisory_overlap'], x['dimension']))
 
+
 def constrain(question: str, model: dict, candidate: dict, catalogue: list[dict]) -> tuple[dict, dict]:
     requirements = derive_requirements(question, catalogue)
     patched = copy.deepcopy(candidate)
@@ -224,7 +247,7 @@ def constrain(question: str, model: dict, candidate: dict, catalogue: list[dict]
     items = {i['id']: i for i in catalogue}
     selected = candidate.get("question_ids") or []
     known_items = bool(selected) and all(type(q) is int and q in items for q in selected)
-
+    # This rule trusts the catalogue's level/type, not the model's evidence text.
     expected_view = requirements['value_view']
     if known_items and expected_view and candidate.get('value_view') != expected_view:
         findings.append({"code": "explicit_item_view_conflict", "status": "CONTRADICTION",
@@ -248,7 +271,7 @@ def constrain(question: str, model: dict, candidate: dict, catalogue: list[dict]
                   and len(candidate.get('schools') or []) == 1
                   and not selected and not candidate.get('regions'))
     if item_scope:
-
+        # Only remove an aggregate operator when all extremum clauses target items.
         outside = question
         for e in reversed(extrema):
             outside = outside[:e['span'][0]] + ' '*(e['span'][1]-e['span'][0]) + outside[e['span'][1]:]
@@ -257,7 +280,7 @@ def constrain(question: str, model: dict, candidate: dict, catalogue: list[dict]
                 patched['statistic'] = None
                 patches.append({"field": "statistic", "before": candidate['statistic'], "after": None})
                 findings.append({"code": "item_selection_as_school_statistic", "status": "CONTRADICTION", "evidence": extrema})
-
+            # The shared public task now executes the item selection in both arms.
     repair_recommended = False
     retrieval = []
     if (candidate.get('intent') == 'clarify' and requirements['block_scope_requested']
@@ -281,8 +304,9 @@ def constrain(question: str, model: dict, candidate: dict, catalogue: list[dict]
         return copy.deepcopy(candidate), trace
     return patched, trace
 
-def repair_prompt(question: str, candidate: dict, catalogue: list[dict], trace: dict) -> str:
 
+def repair_prompt(question: str, candidate: dict, catalogue: list[dict], trace: dict) -> str:
+    # Full shared catalogue prevents advisory retrieval from silently narrowing the answer.
     from packages.semantic_query.model_checker.semantic_model_checker import FIELD_SCHEMAS
     return "一次语义解析复核；不计算、不回答问题。使用同一共享目录，不添加题外知识。\n" + json.dumps({
         "question": question, "candidate": candidate, "findings": trace['findings'],
@@ -294,6 +318,7 @@ def repair_prompt(question: str, candidate: dict, catalogue: list[dict], trace: 
         "response": {"candidate": "同原解析器字段/schema的完整JSON对象", "conflict_explanation": "说明测量语义及依据原句的逐字片段；不能给业务数值"}},
         ensure_ascii=False, separators=(',', ':'))
 
+
 def check_prompt(question: str, candidate: dict, catalogue: list[dict], schema: dict) -> str:
     return "独立语义检查；不计算业务答案、不查询数据库。检查结论不以候选自述或confidence为依据。\n" + json.dumps({
         'question': question, 'candidate': candidate, 'shared_catalogue': catalogue, 'shared_schema': schema,
@@ -303,6 +328,7 @@ def check_prompt(question: str, candidate: dict, catalogue: list[dict], schema: 
                                           'original_quote': 'literal substring of question', 'reason': 'semantic conflict explanation',
                                           'suggested_value': 'schema-compatible value or null if not expressible'}],
                             'explanation': 'brief reason; no business numeric answers'}}, ensure_ascii=False, separators=(',', ':'))
+
 
 def check_once(question: str, candidate: dict, catalogue: list[dict], schema: dict, callback=None) -> dict:
     result = {'calls': 0, 'transport_retries': 0, 'status': 'CALLBACK_NOT_CONFIGURED',
@@ -337,6 +363,7 @@ def check_once(question: str, candidate: dict, catalogue: list[dict], schema: di
         result.update(status='REJECTED_OR_FAILED', error=type(exc).__name__ + ':' + str(exc))
     return result
 
+
 def run_preflight(question: str, model: dict, candidate: dict, catalogue: list[dict], *,
                   mode='code', checker=None, repair=None, validate=None, schema=None, context=None,
                   effective_summary=None):
@@ -357,7 +384,10 @@ def run_preflight(question: str, model: dict, candidate: dict, catalogue: list[d
         from packages.semantic_query.model_checker.diagnostic_contract import check_once as check_semantics
         from packages.semantic_query.model_checker.referent_boundary import process_decision, visible_context
         from packages.semantic_query.model_checker.repair_binding import authorize
-
+        # Sparse model opinions: structure, literal coverage/public fact checks,
+        # and independently certified semantic correctness remain separate.
+        # Use actual parser fields/types; the earlier descriptive schema bundle
+        # contains non-field keys and must not be passed as a candidate schema.
         parser_schema = {'type': 'object', 'properties': copy.deepcopy(FIELD_SCHEMAS), 'additionalProperties': False}
         summary = effective_summary(patched) if callable(effective_summary) else None
         receipt = check_semantics(question, patched, catalogue, parser_schema, expanded=True,
@@ -373,10 +403,14 @@ def run_preflight(question: str, model: dict, candidate: dict, catalogue: list[d
         opinion = trace['model_check']
         trace['code_repair_advisory'] = trace['repair_recommended']
         trace['repair_recommended'] = authorization['allowed']
-
+        # Insufficient information, invalid output and legal equivalence retain
+        # the draft. Lexical retrieval alone never authorizes semantic repair.
         final, trace['model_repair'] = repair_once(question, patched, catalogue, trace, repair, validate)
         trace['changed'] = final != candidate
-
+        # Continue the original parser path.  The checker cannot manufacture
+        # intent=clarify, or reinterpret its own failure as user ambiguity.
+        # A pre-existing clarify draft and shared deterministic changes remain
+        # distinguishable from any checker-directed repair.
         trace['original_parse_followup'] = {
             'policy': ('continue_repaired_parse_path' if trace['model_repair'].get('accepted')
                        else 'continue_original_parse_path'),
@@ -401,9 +435,10 @@ def run_preflight(question: str, model: dict, candidate: dict, catalogue: list[d
         return final, trace
     return patched, trace
 
+
 def repair_once(question: str, candidate: dict, catalogue: list[dict], trace: dict,
                 callback=None, validate=None) -> tuple[dict, dict]:
-    pass
+    """Injectable, single invocation. No gateway/network call is implemented here."""
     result = {"requested": trace['repair_recommended'], "calls": 0, "accepted": False,
               "status": "NOT_NEEDED" if not trace['repair_recommended'] else "CALLBACK_NOT_CONFIGURED"}
     if not trace['repair_recommended'] or callback is None:
@@ -425,7 +460,7 @@ def repair_once(question: str, candidate: dict, catalogue: list[dict], trace: di
         if check['changed'] or check['unsupported']:
             raise ValueError('repair_conflicts_with_original_requirements')
         result.update(accepted=True, status='ACCEPTED_UNVERIFIED_SEMANTICS', conflict_explanation=explanation)
-
+        # Explanation is audit data, not an independent correctness proof.
         return checked, result
     except Exception as exc:
         result.update(status='REJECTED_OR_FAILED', error=type(exc).__name__ + ':' + str(exc))

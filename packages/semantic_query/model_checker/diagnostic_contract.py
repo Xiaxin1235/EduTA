@@ -1,3 +1,9 @@
+"""Fixed, problem-only protocol for the paired input-expression diagnostic.
+
+No I/O, answer/reference access, retries or task repair. Public task values are
+read from the supplied candidate. Machine-valid quotations do not establish
+semantic entailment; a model opinion still requires independent evaluation.
+"""
 from __future__ import annotations
 
 import copy
@@ -11,7 +17,7 @@ from packages.semantic_query.model_checker.sparse_contract import (
     input_audit, literal_claim_errors, task_summary,
 )
 
-VERSION = "diagnostic-contract-1.0"
+VERSION = "project1-checker-dual-summary-20261011-v19-status-issues"
 STATUSES = frozenset(("legal_equivalent", "clearly_wrong", "cannot_determine"))
 ISSUE_TYPES = frozenset(("error", "uncertain"))
 SELECTED_INDICATOR_FIELDS = (
@@ -20,6 +26,7 @@ SELECTED_INDICATOR_FIELDS = (
     "coding_status", "notes", "aliases", "confusable_with",
 )
 
+# Both input conditions use this exact text. Only the public data JSON differs.
 PROMPT_INSTRUCTIONS = (
     "核对原问题与候选任务的语义一致性。先读original_question、task_summary和candidate，"
     "必要时核查完整共同目录。摘要只复述任务，不证明正确。"
@@ -79,10 +86,16 @@ PROMPT_INSTRUCTIONS = (
     "INPUT_DATA_JSON="
 )
 
+
 def prepare_input(question: str, candidate: dict, catalogue: list, schema: dict,
                   expanded: bool = False, *, context: dict | None = None,
                   effective_summary: dict | None = None) -> dict:
-    pass
+    """Clone and validate the complete public input without adding task facts.
+
+    Expansion copies only fields present in the shared catalogue, in the exact
+    order of the candidate's original IDs. It supplies no default, algorithm,
+    reference answer or expected diagnostic outcome.
+    """
     if type(expanded) is not bool:
         raise checker.InvalidEvidence("expanded_must_be_boolean")
     task, items, original_schema, _, _ = checker._prepare(
@@ -129,14 +142,16 @@ def prepare_input(question: str, candidate: dict, catalogue: list, schema: dict,
         ]
     return data
 
+
 def build_prompt(question: str, candidate: dict, catalogue: list, schema: dict,
                  expanded: bool = False, *, context: dict | None = None,
                  effective_summary: dict | None = None) -> str:
-    pass
+    """Exact fixed instructions plus lossless public inputs; no model call."""
     data = prepare_input(question, candidate, catalogue, schema, expanded, context=context,
                          effective_summary=effective_summary)
     return PROMPT_INSTRUCTIONS + json.dumps(
         data, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
 
 def _empty_result(candidate: Any) -> dict:
     return {
@@ -173,11 +188,18 @@ def _empty_result(candidate: Any) -> dict:
         "protocol_normalization": {"applied": False, "changes": []},
     }
 
+
 def _deduplicate(values: list) -> list:
     return list(dict.fromkeys(values))
 
+
 def _bounded_suggestion(issue: dict, candidate: dict, audit: dict) -> bool:
-    pass
+    """Only literal, quoted corrections can receive bounded repair support.
+
+    This flag is diagnostic metadata, never permission to modify the task.
+    In particular, restoring a missing output must preserve current outputs.
+    Free semantic corrections and catalogue meaning are not certified here.
+    """
     suggestion = issue.get("suggested")
     fields = issue.get("fields")
     if not isinstance(suggestion, dict) or not fields or set(suggestion) != set(fields):
@@ -204,15 +226,18 @@ def _bounded_suggestion(issue: dict, candidate: dict, audit: dict) -> bool:
             return False
     return True
 
-def _specific_uncertainty(reason: str) -> bool:
 
+def _specific_uncertainty(reason: str) -> bool:
+    # Reject only self-contained generic gap statements. This is a bounded
+    # language guard, not a claim that arbitrary missing-information prose is true.
     plain = re.sub(r"[\s，。！!?？:：;；、]", "", reason)
     return not bool(re.fullmatch(
         r"(?:信息|资料|证据|上下文|无法确定|无法判断|不确定|未知|信息不足|资料不足|证据不足|"
         r"缺少信息|缺少资料|缺少证据|缺少上下文|需要更多信息|需要更多资料|没有足够信息)", plain))
 
+
 def _suggestion_errors(issue, fields, allowed, normalized, items, ids, index):
-    pass
+    """Check proposals independently of evidence/field binding shape failures."""
     structure, field_errors, proposals = [], [], []
     if 'suggested' not in issue:
         return structure, field_errors, proposals
@@ -249,9 +274,16 @@ def _suggestion_errors(issue, fields, allowed, normalized, items, ids, index):
                 proposal(path, 'indicator_not_in_catalogue')
     return structure, field_errors, proposals
 
+
 def validate_response(content: Any, question: str, candidate: dict,
                       catalogue: list, schema: dict, *, effective_summary: dict | None = None) -> dict:
-    pass
+    """Return all machine-check results, retaining every model status verbatim.
+
+    A contradictory status is never changed to the code aggregate. Invalid
+    responses have no effective status and never become a user clarification.
+    Ordinary semantic mistakes remain expressed model opinions for independent
+    diagnosis; code does not infer missing model judgments from expected answers.
+    """
     result = _empty_result(candidate)
     result["raw_response"] = copy.deepcopy(content)
     try:
@@ -393,7 +425,8 @@ def validate_response(content: Any, question: str, candidate: dict,
         if not result["status_consistent"]:
             status_errors.append("status_issues_aggregate_mismatch")
     fact_errors.extend(literal_claim_errors("\n".join(reasons), audit, task))
-
+    # Only explicit claims about candidate values are checked here. A statement
+    # that the original question has semantic ambiguity is not a field-value denial.
     for reason in reasons:
         for match in re.finditer(
                 r"(?:candidate\.|候选(?:的)?|任务(?:的)?)([A-Za-z_]+)(?:字段)?\s*"
@@ -437,7 +470,8 @@ def validate_response(content: Any, question: str, candidate: dict,
     result["evidence_sufficient"] = bool(
         available and error_rows and "uncertain" not in types
         and all(row["bounded_suggestion_supported"] for row in error_rows))
-
+    # A bad optional proposal does not erase an independently grounded error.
+    # Keep the raw opinion intact, but never execute or silently repair it.
     for index, issue in enumerate(raw_issues):
         if not isinstance(issue, dict) or not isinstance(issue.get('suggested'), dict):
             continue
@@ -453,13 +487,19 @@ def validate_response(content: Any, question: str, candidate: dict,
         result['evidence_sufficient'] = False
     return result
 
+
 def check_once(question: str, candidate: dict, catalogue: list, schema: dict,
                expanded: bool = False, *, context: dict | None = None,
                model_call: Callable[[str], Any] | None = None,
                effective_summary: dict | None = None) -> dict:
-    pass
-    receipt = checker._receipt("semantic_check")
+    """Invoke the callback at most once, then apply the fixed validator.
 
+    Callback content may be a string/object, (content, receipt) pair, or the
+    existing gateway's {content, ...receipt metadata} mapping. No callback
+    failure, malformed response or uncertainty triggers another call or repair.
+    """
+    receipt = checker._receipt("semantic_check")
+    # The response validator must receive the same scope snapshot as the wire.
     effective_summary = copy.deepcopy(effective_summary)
     try:
         prompt = build_prompt(question, candidate, catalogue, schema, expanded, context=context,
@@ -523,6 +563,7 @@ def check_once(question: str, candidate: dict, catalogue: list, schema: dict,
     receipt["status"] = "validated_model_response" if result["checker_available"] else result["checker_failure_kind"]
     result["check_call"] = receipt
     return result
+
 
 __all__ = ["VERSION", "STATUSES", "ISSUE_TYPES", "SELECTED_INDICATOR_FIELDS",
            "PROMPT_INSTRUCTIONS", "prepare_input", "build_prompt", "validate_response", "check_once"]

@@ -1,3 +1,10 @@
+"""Experiment adapters over the shared semantic-query runtime.
+
+G1/G2 keep profile binding, outbound-stage audit, and treatment identity here.
+Catalogue loading, TaskDraft resolution, AnswerSpec, evidence projection,
+writer prompts, and verification live in ``packages.semantic_query.runtime``.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
@@ -15,12 +22,13 @@ from packages.semantic_query.runtime import (
     verify_answer_text,
 )
 
+
 def parse_llm_route(
     question: str,
     context: Optional[Dict[str, Any]],
     experiment_status: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Parse one G1/G2 request through the shared semantic implementation."""
     mode = str(experiment_status.get("active_mode") or "")
     if mode not in {"g1_llm_unconstrained", "g2_llm_constrained", "a1_no_execution_verification", "a2_no_output_verification_or_repair", "a3_no_answer_repair"}:
         raise ValueError("llm_experiment_mode_required")
@@ -45,13 +53,14 @@ def parse_llm_route(
         semantic_check_callback=checker, semantic_repair_callback=repair,
     )
 
+
 def generate_llm_answer(
     question: str,
     result: Dict[str, Any],
     answer_spec: Dict[str, Any],
     experiment_status: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Generate one G1/G2 answer while preserving experiment controls."""
     mode = str(experiment_status.get("active_mode") or "")
     if mode not in {"g1_llm_unconstrained", "g2_llm_constrained", "a1_no_execution_verification", "a2_no_output_verification_or_repair", "a3_no_answer_repair"}:
         raise ValueError("llm_experiment_mode_required")
@@ -64,6 +73,7 @@ def generate_llm_answer(
         record_stage=record_llm_stage,
         mechanisms=experiment_status.get("mechanisms"),
     )
+
 
 __all__ = [
     "COMMON_PATH_VERSION",

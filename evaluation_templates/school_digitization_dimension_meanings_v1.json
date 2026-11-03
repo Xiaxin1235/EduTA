@@ -1,0 +1,94 @@
+{
+  "version": "school-digitization-dimension-meanings-v1",
+  "source": "questions.level1_description/level2_name/level2_description",
+  "dimensions": [
+    {
+      "name": "数字资源",
+      "description": "用于评估数字教育资源的建设和应用情况",
+      "topics": [
+        {
+          "name": "资源规模",
+          "description": "各级平台课程资源、数字教材、数字图书、教学软件等数字教育资源量"
+        },
+        {
+          "name": "资源应用",
+          "description": "智慧教育平台资源的使用情况"
+        }
+      ]
+    },
+    {
+      "name": "教育教学",
+      "description": "用于评估教学、评价等要素的数字化程度",
+      "topics": [
+        {
+          "name": "教学方式",
+          "description": "师生、学校在数字化的教学环境中，以数字化教学模式开展教学活动的情况"
+        },
+        {
+          "name": "教学评价",
+          "description": "师生利用在线评估与反馈系统优化教育评价程序的情况"
+        }
+      ]
+    },
+    {
+      "name": "数字素养",
+      "description": "用于评估学生在教育教学过程中的数字技术思维和应用能力",
+      "topics": [
+        {
+          "name": "教师数字素养",
+          "description": "教师利用数字技术创新和变革教学活动的能力"
+        }
+      ]
+    },
+    {
+      "name": "基础设施",
+      "description": "用于评估学校为师生数字化教学提供的技术支撑情况",
+      "topics": [
+        {
+          "name": "终端",
+          "description": "班级教室交互式多媒体终端的使用情况"
+        },
+        {
+          "name": "教室",
+          "description": "教室配备交互式多媒体设备的情况"
+        },
+        {
+          "name": "网络",
+          "description": "学校网络建设情况"
+        }
+      ]
+    },
+    {
+      "name": "教育治理",
+      "description": "学校利用数字化改革赋能校园治理现代化",
+      "topics": [
+        {
+          "name": "学校治理",
+          "description": "学校利用数字化改革赋能校园治理现代化"
+        },
+        {
+          "name": "网络安全",
+          "description": "公共网络所存在的系统漏洞及漏洞披露方式等方面的情况"
+        }
+      ]
+    },
+    {
+      "name": "保障机制",
+      "description": "用于评估教育数字化保障能力",
+      "topics": [
+        {
+          "name": "组织保障",
+          "description": "学校数字化相关的规章制度的建设情况"
+        },
+        {
+          "name": "财力保障",
+          "description": "评价升级数字化相关业务的经费投入情况"
+        },
+        {
+          "name": "人力保障",
+          "description": "学校数字化相关业务的人员投入情况"
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+"""Selective clarification from evidence already discovered by public binding.
+
+No model, answer scoring, or business execution dependency. Supplements reuse
+the existing metadata binder. Intent uncertainty stays separate from data
+availability, and capture is request-local.
+"""
 from __future__ import annotations
 
 import copy
@@ -13,16 +19,19 @@ TTL_SECONDS = 900
 _CAPTURE = ContextVar("selective_binding_capture", default=None)
 _CONTEXT = ContextVar("selective_binding_context", default={})
 
+
 def pending_session(session_id, mode):
-    pass
+    """G1 clarification state is separate from both production and G2 focus."""
     if mode.get("active_mode") == "g1_llm_unconstrained":
         return "selective-g1:" + str(mode.get("run_id_hash") or "") + ":" + session_id
     return session_id
+
 
 def _option(label, difference, constraint, source, aliases=()):
     return {"option_id": hashlib.sha256(json.dumps(constraint, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16],
             "label": label, "difference": difference, "constraint": constraint,
             "evidence_source": source, "aliases": list(aliases)}
+
 
 def _slot_boundary(question, candidate, slot, token, options, remaining=None, original_question=None):
     issued = time.time()
@@ -30,12 +39,36 @@ def _slot_boundary(question, candidate, slot, token, options, remaining=None, or
             "working_question": question, "options": options, "issued_at": issued,
             "expires_at": issued + TTL_SECONDS, "task_candidate": copy.deepcopy(candidate),
             "original_route": {}, "resolved_constraints": {}, "unresolved_slots": remaining or [slot]}
-    labels = {"school": "所指学校", "value_view": "原始值或标准分", "aggregation": "统计单位", "statistic": "统计量"}
+    labels = {"school": "所指学校", "value_view": "原始值或标准分", "aggregation": "统计单位", "statistic": "统计量", "dimension": "要查询的维度"}
     return {"intent": "clarify", "reason": "selective_" + slot + "_ambiguity", "original": question,
             "missing": ["请确认" + labels[slot] + "，不同解释会改变结果。"], "selective_clarification": spec}
 
+
+def aspect_boundary(question,candidate):
+    """An explicit unresolved aspect is not permission to answer overall score."""
+    intent=candidate.get('intent') or ''
+    if intent in {'clarify','region_position'} or intent.endswith('_ranking'):return None
+    if any(candidate.get(k) for k in ('dimension','topics','question_ids','compound_key','school_field')):
+        return None
+    from packages.semantic_query import runtime as rt
+    text=rt._scope_assertion_text(question)
+    if rt._OVERALL_SCOPE_RE.search(text) or not re.search(r'得分|分数|均分|多少分|平均.{0,4}分|怎么样|如何|什么水平',text):
+        return None
+    aspect=re.search(r'在[^，,。；;！？!?]{1,60}?(?:上|方面|这[一二两几]块)|[^，,。；;！？!?]{1,40}?这一块',text)
+    if not aspect:
+        return None
+    from packages.semantic_query.catalogue import dimension_meanings
+    options=[_option(d['name'],d['description'],{'dimension':d['name']},'source_questionnaire_dimension_meanings') for d in dimension_meanings()]
+    return _slot_boundary(question,candidate,'dimension',aspect.group(0),options)
+
+
 def draft_boundary(question, candidate, context, by_id):
-    pass
+    """Bounded intent recovery from parsed slots + actual context/catalogue.
+
+    Defaults remain defaults. Unknown parser fields alone never manufacture
+    alternatives. A literal unresolved choice or a real multi-school reference
+    must be present, and the common capability must support both meanings.
+    """
     c = copy.deepcopy(candidate)
     q = question
     from packages.experiment_protocol.mode import requirement_preservation_enabled
@@ -43,9 +76,10 @@ def draft_boundary(question, candidate, context, by_id):
     if not preserve and c.get('intent') == 'clarify':
         return q, c, None
     from packages.semantic_query import runtime as rt
-
+    # Mask exclusions in place: option spans must retain original offsets.
+    # A quoted alternative rejected by the user is not an unresolved choice.
     affirmative = rt._scope_assertion_text(q)
-
+    # Only the existing one-subject evaluation/fact capabilities are extended.
     permitted = {"school_fact", "school_eval", "region_eval", "clarify"}
     if c.get("intent") not in permitted:
         return q, c, None
@@ -55,7 +89,7 @@ def draft_boundary(question, candidate, context, by_id):
     view = alternatives(r"(?:原始(?:登记)?(?:值|数量|作答)|原值)", r"(?:标准(?:化)?(?:分|得分)|归一化(?:得分|分数))")
     aggregation = alternatives(r"(?:学校等权(?:平均)?|先算每校均分再平均)", r"(?:作答池化(?:平均)?|所有作答合并平均)")
     statistic = alternatives(r"(?:均值|均分|平均值)", r"(?:中位数|中位值)")
-
+    # '分别给出/比较两种' is an explicit request for both, not an intent gap.
     if re.search(r"分别给出|两种都|两者都|比较两种", affirmative):
         view = aggregation = statistic = None
     if not preserve:
@@ -102,7 +136,7 @@ def draft_boundary(question, candidate, context, by_id):
                 remaining = ["school"] + (["value_view"] if view else []) + (["aggregation"] if aggregation else []) + (["statistic"] if statistic else [])
                 return q, c, _slot_boundary(q, c, "school", reference.group(), options, remaining, original_question=question)
             else:
-
+                # Do not let a model-selected school stand in for no antecedent.
                 return q, c, {"intent": "clarify", "reason": "scope_reference_not_unique", "original": q,
                               "missing": ["当前上下文不能唯一确定所指学校，请提供学校名称。"]}
     if view and len(qids) == 1 and qids[0] in by_id and c["intent"] == "school_fact":
@@ -132,13 +166,15 @@ def draft_boundary(question, candidate, context, by_id):
         return q, c, _slot_boundary(q, c, "statistic", statistic.group(), options, original_question=question)
     return q, c, None
 
+
 def carry_confirmations(routed, resolution):
     spec = routed.get("selective_clarification")
     if not resolution:
         return routed
     if not spec:
         if routed.get("intent") == "clarify":
-
+            # Unsupported cross-slot capabilities remain ordinary clarification,
+            # but the existing pending JSON still retains the same root task.
             routed["selective_task_state"] = {
                 "original_question": resolution["spec"]["original_question"],
                 "working_question": routed.get("original") or resolution["question"],
@@ -156,6 +192,7 @@ def carry_confirmations(routed, resolution):
                                                        "label": resolution["replacement"]}}
     return routed
 
+
 @contextmanager
 def capture_bindings():
     token = _CAPTURE.set([])
@@ -166,19 +203,28 @@ def capture_bindings():
         _CONTEXT.reset(context_token)
         _CAPTURE.reset(token)
 
-def set_binding_context(context, question):
 
+def set_binding_context(context, question):
+    # A stored focus is evidence only for an actual continuation, not an
+    # implicit default for every new question mentioning the same bare name.
     compatible = bool(re.search(r"继续|沿用|刚才|上次|同一|该地区|这个地区", question))
     _CONTEXT.set(copy.deepcopy(context) if compatible else {})
+
 
 def observations():
     return copy.deepcopy(_CAPTURE.get() or [])
 
+
 def region_identity(region):
     return {k: region.get(k) for k in ("province", "city", "district", "region_type", "full_name", "name")}
 
+
 def observe_regions(token, candidates):
-    pass
+    """Called ONLY at an existing binding's multiple-match branch.
+
+    Return a unique identity from compatible real context, otherwise retain
+    all distinct candidates; never truncate a larger set into a false choice.
+    """
     unique = {}
     for candidate in candidates:
         if not candidate.get("province") or not candidate.get("full_name"):
@@ -199,7 +245,9 @@ def observe_regions(token, candidates):
     if len(matched) == 1:
         capture = _CAPTURE.get()
         if capture is not None:
-
+            # An earlier API preflight may have observed the same ambiguity
+            # before durable focus restoration. A later proven binding settles
+            # that slot; do not keep stale evidence and ask again.
             capture[:] = [e for e in capture if e.get("token") != str(token)]
         return matched[0]
     capture = _CAPTURE.get()
@@ -208,6 +256,7 @@ def observe_regions(token, candidates):
                         "candidates": [region_identity(c) for c in candidates]})
     return None
 
+
 def _description(region):
     if not region.get("city"):
         return "统计" + region["province"] + "全省学校，覆盖省内各市。"
@@ -215,8 +264,13 @@ def _description(region):
         return "只统计" + region["full_name"] + "内的学校。"
     return "只统计" + region["full_name"] + "这一行政区县内的学校。"
 
+
 def attach(question, routed, context=None, *, evidence=None, now=None):
-    pass
+    """Attach choices only for one proven, result-affecting region slot.
+
+    Empty results, year/field coverage, unsupported capabilities, and parser
+    guesses without binding witnesses never produce interpretation choices.
+    """
     events = evidence if evidence is not None else observations()
     candidate = routed.get("_selective_task_candidate")
     task_intent = (candidate or routed).get("intent")
@@ -239,7 +293,7 @@ def attach(question, routed, context=None, *, evidence=None, now=None):
         if event.get("source") != "existing_region_binding_metadata" or not token or token not in question:
             continue
         if not token.endswith(("省", "市", "区", "县", "旗", "州", "盟")) and re.search(re.escape(token) + r"(?:省|市|区|县|旗|自治区)", question):
-            continue
+            continue  # An explicit level already settles a bare-name observation.
         if re.search(r"(?:排除|不含|不要|不包括|剔除)\s*$", question.split(token)[0]):
             continue
         usable[json.dumps(event, ensure_ascii=False, sort_keys=True)] = event
@@ -276,6 +330,7 @@ def attach(question, routed, context=None, *, evidence=None, now=None):
            "selective_clarification": spec}
     return out
 
+
 def public_spec(pending):
     spec = (pending.get("routed") or {}).get("selective_clarification") if pending else None
     if not spec:
@@ -287,12 +342,18 @@ def public_spec(pending):
             "options": [{k: option[k] for k in ("option_id", "label", "difference")} for option in spec["options"]],
             "allow_amend": True, "allow_none": True, "allow_cancel": True}
 
+
 def _amend_text(reply):
     text = str(reply.get("text") or "").strip()
     return re.sub(r"^(?:改成|改为|其实是|我要|是)", "", text).strip(" 。！!？?")
 
+
 def bind_supplement(pending, reply):
-    pass
+    """Bind a novel explicit place using the EXISTING metadata resolver only.
+
+    No model inference or task rewrite is accepted here. The trusted witness
+    is passed internally; external reply dictionaries cannot supply it.
+    """
     if not isinstance(reply, dict) or reply.get("action") != "amend" or not pending or reply.get("pending_id") != pending.get("pending_id"):
         return None
     spec = (pending.get("routed") or {}).get("selective_clarification") or {}
@@ -326,8 +387,9 @@ def bind_supplement(pending, reply):
         return None
     return {"source": "existing_region_binding_metadata", "text": text, "constraint": region_identity(region)}
 
+
 def resolve_reply(pending, reply, *, session_id, focus_task_id, focus_revision, now=None, flow_key=None, supplement=None):
-    pass
+    """Validate an opaque choice against the stored task, never interpret text as IDs."""
     if not isinstance(reply, dict) or set(reply) - {"pending_id", "action", "option_id", "text", "slot"}:
         raise ValueError("invalid_clarification_reply")
     if not pending or pending.get("session_id") != session_id or reply.get("pending_id") != pending.get("pending_id"):
@@ -369,7 +431,8 @@ def resolve_reply(pending, reply, *, session_id, focus_task_id, focus_revision, 
             raise ValueError("invalid_clarification_reply")
         options = [o for o in spec["options"] if o["option_id"] == reply.get("option_id")]
     else:
-
+        # Supplements/corrections bind only this slot. Novel identities need a
+        # new binding witness, so keep this task pending instead of guessing.
         if reply.get("option_id"):
             raise ValueError("invalid_clarification_reply")
         text = _amend_text(reply)
@@ -402,6 +465,7 @@ def resolve_reply(pending, reply, *, session_id, focus_task_id, focus_revision, 
     return {"action": action, "spec": spec, "question": question, "candidate": candidate,
             "slot": spec["slot"], "constraint": copy.deepcopy(chosen["constraint"]), "option_id": chosen["option_id"],
             "replacement": chosen["label"]}
+
 
 def stopped(session_id, reason, *, pending=None):
     return {"clarify": True, "session_id": session_id, "business_status": "CLARIFY",

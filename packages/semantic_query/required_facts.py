@@ -1,17 +1,31 @@
+"""Required numeric slots from tool evidence, never from question claims."""
 from __future__ import annotations
 
 import math
 import re
 from typing import Any, Dict, List
 
+
 def _numeric(value: Any) -> bool:
     return type(value) in {int, float} and math.isfinite(float(value))
+
 
 def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     facts = []
     def add(key, value, entity=None, unit="分", **extra):
         if entity in (evidence.get('request_entity_aliases') or {}):
             extra.setdefault('entity_aliases',evidence['request_entity_aliases'][entity])
+        dimension=(extra.get('scope') or {}).get('dimension')
+        from packages.semantic_query.catalogue import EXPECTED_DIMENSIONS,dimension_components
+        if not dimension and extra.get('label') in EXPECTED_DIMENSIONS:dimension=extra['label']
+        if not dimension and spec.get('granularity')=='dimension':dimension=evidence.get('target_dimension')
+        if unit=='分' and dimension and not (extra.get('scope') or {}).get('topic') and not extra.get('operation'):
+            period=extra.get('period',evidence.get('year'))
+            if period is None:
+                years={str(q['year']) for q in (spec.get('semantic_plan') or {}).get('queries',[]) if q.get('year')}
+                if len(years)==1:period=next(iter(years))
+            extra['dimension']=dimension
+            extra['dimension_components']=dimension_components(dimension,period)
         facts.append({"key": key, "source_field": key, "entity": entity,
                       "period": evidence.get("year"), "value": value,
                       "unit": unit, "available": _numeric(value), **extra})
@@ -20,10 +34,20 @@ def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[
         plan=spec.get("public_plan") or {}
         allowed={q["id"] for q in plan.get("queries",[])}|{q["id"] for q in plan.get("steps",[])}
         if (plan.get("selection") or {}).get("kind")=="middle":allowed.add("middle")
+        from packages.semantic_query.regional_capabilities import visible_ids,school_count_visible
+        allowed &= visible_ids(plan,evidence.get('task_outputs') or [])
         for node in evidence.get("task_outputs") or []:
             if node.get("id") not in allowed:continue
             scope=node.get("scope") or {}
             common=dict(entity=scope.get("entity"),period=scope.get("year"),label=node.get("label"),scope=scope)
+            identity=node.get('region_identity') or scope.get('region_identity') or {}
+            common['entity_aliases']=list(dict.fromkeys([*(evidence.get('request_entity_aliases') or {}).get(scope.get('entity'),[]),
+                next((identity[k] for k in ('district','city','province') if identity.get(k)),scope.get('entity'))]))
+            if node.get('ranking_scope'):common['ranking_scope']=node['ranking_scope']
+            if scope.get('topic'):
+                from packages.semantic_query.catalogue import topic_definition
+                common.update(topic=scope['topic'],topic_parent=topic_definition(scope['topic'])['dimension'],measurement_note=node.get('measurement_note'))
+                common['all_items_uncollected']=bool(node.get('all_items_uncollected'))
             if scope.get('source_id'):
                 source=next((q for q in plan.get('queries',[]) if q['id']==scope['source_id']),{})
                 common.update(entity=source.get('entity'),period=source.get('year'),selection_kind=(plan.get('selection') or {}).get('kind'))
@@ -37,6 +61,8 @@ def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[
                         **dict(common,entity=row.get("school_name"),rank=row.get("rank")))
             else:
                 add(node["id"],node.get("value"),unit=node.get("unit"),rank=node.get("rank"),**common)
+            if (plan.get('capability') and school_count_visible(plan) or plan.get('include_school_count') or scope.get('dimension') and scope.get('statistic')=='mean') and node.get('school_count') is not None and scope.get('statistic') != 'count':
+                add(node['id']+':school_count', node['school_count'], unit='所', **common)
         return facts
     if spec.get("operation") == "region_compare" and spec.get("target_stat") != "count":
         add("total_score_a", evidence.get("total_score_a"), evidence.get("region_name_a"))
@@ -87,7 +113,8 @@ def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[
         for key in keys:
             value=evidence.get(key);source=key;extra={}
             if key=='target_dimension_median_score' and evidence.get('target_dimension') and evidence.get('target_stat')=='median':
-
+                # The projected dimension-only median uses median_score on
+                # this execution route. Never substitute a mean or total.
                 if value is None:value=evidence.get('median_score');source='median_score'
                 elif _numeric(evidence.get('median_score')) and not _value_equal(str(value),evidence['median_score']):
                     extra['evidence_conflict']=True
@@ -114,8 +141,11 @@ def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[
     elif spec.get('operation')=='region_compare' and spec.get('target_stat')=='count':
         for side in ('a','b'):
             add('school_count_'+side,evidence.get('school_count_'+side),evidence.get('region_name_'+side),unit='所')
-
+    # Counts are requested outputs, not automatic extra facts. Public numeric
+    # contracts are shared with every group; only G2 invokes their verifier.
     requested=set(spec.get('requested_result_statistics') or [])
+    if spec.get('operation')=='region_eval' and spec.get('granularity')=='dimension' and spec.get('target_stat')=='mean' and evidence.get('school_count') is not None:
+        requested.add('school_count')
     if spec.get('operation')=='region_compare':
         for base in ('school_count','answer_count'):
             if base in requested:requested.discard(base);requested.update({base+'_a',base+'_b'})
@@ -126,16 +156,24 @@ def required_facts(evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[
         add(key,evidence.get(key),entity,unit='所' if 'school' in key else '条')
     return facts
 
+
 def verify_request_fact_slots(text,evidence,spec):
-    pass
+    """Required numeric delivery on existing legacy routes; no gold or tools.
+
+    Scope can be inherited for a short single-object reply. Explicitly named
+    measurements must bind to the executed object; an empty list cannot pass
+    a numeric task merely because every conditional check was skipped.
+    """
     from packages.semantic_query.fact_assertions import verify_scalar_slots
     return verify_scalar_slots(text,evidence,spec)
+
 
 def _compact(text):
     return re.sub(r"[ \t\r*`_（）()]", "", str(text or "")).replace("−", "-").replace("－", "-").replace("＝", "=").replace("％", "%")
 
+
 def _bind_public_view_line(line, previous, view):
-    pass
+    """Bind two views of one fact even when their values/units coincide."""
     patterns={'raw_value':r'原始(?:值|数量|作答)|原值|登记数量|登记数值',
               'normalized_score':r'标准分|归一(?:化)?(?:分|值|得分)|百分制(?:分数|得分)?'}
     matches=sorted((m.start(),m.end(),v) for v,p in patterns.items() for m in re.finditer(p,line))
@@ -162,8 +200,14 @@ def _bind_public_view_line(line, previous, view):
             return None,''
     return None,''
 
+
 def verify_public_facts(text, evidence, spec):
-    pass
+    """Bind requested public nodes to delivered objects/periods/values.
+
+    The contract determines slots; executed tool nodes determine values. No
+    reference answers, question-bank ids or school-specific rules are used.
+    Additional correct supported information is allowed by this slot check.
+    """
     if spec.get('operation')!='public_task':return []
     plan=spec.get('public_plan') or {}
     expected={q['id'] for q in plan.get('queries',[])}|{q['id'] for q in plan.get('steps',[])}
@@ -176,15 +220,20 @@ def verify_public_facts(text, evidence, spec):
     answer=_compact(text)
     errors=[]
     queries={q['id']:q for q in plan.get('queries',[])}
-
+    # A single requested dimension/rank may inherit its one scope from the
+    # question when the user asks only for score and rank.  Restrict this to
+    # a numeric response; foreign named objects/years are never erased.
     short_rank = (len(queries) == 1 and len(facts) == 1
                   and facts[0].get('rank') is not None
                   and re.fullmatch(r"[+-]?\d+(?:\.\d+)?分[，,、；;]?第\d+名(?:同分并列|同分并列。|同分并列[。.]?)?[。.]?", answer))
     if short_rank:
         answer = str(facts[0].get('entity') or '') + '/' + str(facts[0].get('period') or '') + '/' + answer
-
+    # Headings, prose and Markdown tables are all valid. Prefer a local row;
+    # a preceding heading may supply one entity or one period, never both
+    # alternative objects/years in an unbound list.
     ranked_entities={str(f.get('entity') or '') for f in facts if (f.get('scope') or {}).get('kind')=='region_item_rank'} - {''}
-
+    # Semicolons within a single explicitly named ranked row carry the same
+    # entity/year/value/rank. Do not lose that scope after four fragments.
     lines=[]
     for row in answer.replace('。','\n').splitlines():
         lines.extend([row] if sum(e in row for e in ranked_entities)==1 else row.replace('；','\n').splitlines())
@@ -209,7 +258,7 @@ def verify_public_facts(text, evidence, spec):
         found=False;mismatch=False;unknown_unit=False
         for i,line in enumerate(lines):
             local_found=False
-
+            # Scope carried by previous headings is valid only when unambiguous.
             context='\n'.join(lines[max(0,i-4):i+1])
             if entity and entity not in context:
                 named={str(q['entity']) for q in queries.values() if q.get('entity')}
@@ -224,7 +273,8 @@ def verify_public_facts(text, evidence, spec):
             other_years={str(q['year']) for q in queries.values() if str(q.get('year'))!=year}
             if entity and entity not in line and any(e in context for e in other_entities):continue
             if year and year not in line and any(y in context for y in other_years):continue
-
+            # Filtered cohorts are separate scalar slots even when they share
+            # one region/year heading. Bind the value to its literal cohort.
             cohort=scope.get('school_filter')
             if cohort and len({q.get('school_filter') for q in queries.values()
                                if q.get('entity')==scope.get('entity') and q.get('year')==scope.get('year')})>1:
@@ -256,7 +306,7 @@ def verify_public_facts(text, evidence, spec):
                 continue
             for m in re.finditer(number,line):
                 suffix=line[m.end():];prefix=line[:m.start()]
-
+                # Exclude ids, years, rank numbers and formula operands.
                 if suffix.startswith(('年','题','名')) or re.search(r'(?:Q|第)$',prefix,re.I):continue
                 from packages.semantic_query.fact_assertions import MEASURE, unit_alias
                 measured=MEASURE.match(line,m.start())
@@ -270,7 +320,8 @@ def verify_public_facts(text, evidence, spec):
                     if not re.search(r'减|差|高|低|增加|下降|上升|变化',line):continue
                     directed=float(m[1])
                     if not _value_equal(m[1],value):
-
+                        # A magnitude is valid when its direction matches the
+                        # explicitly named left/right operand relation.
                         args=scope.get('args') or []
                         left=queries.get(args[0],{}) if args else {}
                         lanchor=str(left.get('entity') or '')
@@ -293,13 +344,16 @@ def verify_public_facts(text, evidence, spec):
                 if not re.search(r'(?:第\s*'+rank+r'(?!\d)(?:\s*名)?|^\s*'+rank+r'[.、]|\|'+rank+r'\|)',rank_line):local_found=False
             found=found or local_found
         if not found:errors.append(('unconfirmed:public_unit_expression_unproved:' if unknown_unit else 'public_required_fact_missing:')+str(fact['key']))
-
+        # Wrong explicitly bound values cannot be redeemed by a correct value
+        # elsewhere. Only flag an unambiguous scalar row, not a two-value
+        # formula/table containing another legitimately requested slot.
         if mismatch:errors.append('public_required_fact_mismatch:'+str(fact['key']))
     errors.extend(_verify_public_comparison_claims(lines,plan,nodes))
     return list(dict.fromkeys(errors))
 
+
 def _verify_public_comparison_claims(lines, plan, nodes):
-    pass
+    """Check stated operand order and qualitative direction from executed nodes."""
     values={n.get('id'):n for n in nodes}
     queries={q['id']:q for q in plan.get('queries',[])}
     errors=[]
@@ -321,7 +375,7 @@ def _verify_public_comparison_claims(lines, plan, nodes):
         difference=lv-rv;la,ra=anchors(lq,rq),anchors(rq,lq)
         la=[a for a in la if a];ra=[a for a in ra if a]
         if not la or not ra:continue
-
+        # Ordinal pronouns refer to query order, not subtraction argument order.
         order=list(queries)
         if len(order)==2:
             for key,labels in ((lid,la),(rid,ra)):
@@ -330,10 +384,17 @@ def _verify_public_comparison_claims(lines, plan, nodes):
             errors.append('public_'+error+':'+step['id'])
     return list(dict.fromkeys(errors))
 
-def _bound_comparison_claims(text, left_labels, right_labels, left, right, *, expected_difference=None, expected_unit=None):
-    pass
-    answer=_compact(text).replace('－','-').replace('＝','=')
 
+def _bound_comparison_claims(text, left_labels, right_labels, left, right, *, expected_difference=None, expected_unit=None):
+    """Bind each asserted relation to its own operands, never a whole line.
+
+    Only execution-contract labels and their two-node ordinals are available.
+    Hypotheses and explicitly negated inference are not factual assertions.
+    """
+    answer=_compact(text).replace('－','-').replace('＝','=')
+    # A complete numeric equation is separately verified with bound operands
+    # and Decimal arithmetic. Only its result is a prose comparison value;
+    # its right operand must not become the named comparison's claimed delta.
     from packages.semantic_query.fact_assertions import _SUBTRACTION_FORMULA
     answer=_SUBTRACTION_FORMULA.sub(lambda m:m[6]+(m[7] or m[4] or m[2] or ''),answer)
     labels={_compact(label):side for side,items in enumerate((left_labels,right_labels))
@@ -366,7 +427,8 @@ def _bound_comparison_claims(text, left_labels, right_labels, left, right, *, ex
         for m in re.finditer('('+anchor+')(?:比|较)('+anchor+')(高|低|多|少)',clause):
             s,o=labels[m[1]],labels[m[2]]
             if s!=o and relation_unit_matches(clause,m.end()) and direction(s,o,m[3]):errors.append('comparison_direction_mismatch')
-
+        # "较高的是后项" and "后项这一项较高" have different grammar
+        # from "前项低于后项"; each has its own asserted subject.
         superlative=r'(较高|更高|最高|较低|更低|最低)(?:的)?(?:一项|项|指标|数值|得分)?(?:是|为)?[：:“”"]*('+anchor+')'
         for m in re.finditer(superlative,clause):
             s=labels[m[2]]
@@ -375,7 +437,8 @@ def _bound_comparison_claims(text, left_labels, right_labels, left, right, *, ex
             s=labels[m[1]]
             if direction(s,1-s,m[2]):errors.append('comparison_direction_mismatch')
         mentions=list(re.finditer(anchor,clause))
-
+        # Differences/changes use the last locally named ordered operand pair.
+        # Earlier measured values remain the responsibility of scalar binding.
         for i,m in enumerate(mentions):
             if i==0:continue
             prev=mentions[i-1];s,o=labels[prev[0]],labels[m[0]]
@@ -403,14 +466,17 @@ def _bound_comparison_claims(text, left_labels, right_labels, left, right, *, ex
                 errors.append('subtraction_order_mismatch' if subtract else 'comparison_value_mismatch')
     return list(dict.fromkeys(errors))
 
+
 def _value_equal(token, value):
     return _numeric(value) and abs(float(token) - float(value)) < 0.005000001
 
+
 def _distinct_labels(row, other):
-    pass
+    """Catalogue labels and literal distinctive fragments; no answer-key aliases."""
     name, other_name = _compact(row.get("metric_name")), _compact(other.get("metric_name"))
     labels = {f"Q{row.get('question_id')}", f"第{row.get('question_id')}题"}
-
+    # A catalogue's distinctive grammatical category is a valid short label.
+    # This derives e.g. role/category phrases without item-number exceptions.
     labels.update(part for part in re.findall(r'[\u4e00-\u9fff]{2,8}类',name)
                   for part in [part[-3:]] if part not in other_name)
     for size in range(len(name), 3, -1):
@@ -420,15 +486,16 @@ def _distinct_labels(row, other):
                 labels.add(part)
     return labels
 
+
 def _check_named_values(text, slots, failure):
-    pass
+    """Every explicitly labelled value must match; each slot must be delivered."""
     answer = _compact(text)
     labels = []
     for index, slot in enumerate(slots):
         for label in sorted(slot["labels"], key=len, reverse=True):
             for match in re.finditer(re.escape(label), answer, re.I):
                 labels.append((match.start(), match.end(), index))
-
+    # Longer labels at the same position dominate their substrings.
     labels = sorted(set(labels))
     found = set()
     errors = []
@@ -490,7 +557,7 @@ def _check_named_values(text, slots, failure):
         slot = slots[index]
         label = max((label for label in prior if label[2] == index), key=lambda label: label[0])
         gap = answer[label[1]:m.start()]
-
+        # A named subtraction's right operand is not an individual item value.
         named_operation = any(other[2] != index and other[1] <= operand[0]
                               and re.fullmatch(r"\s*(?:减|－|−|-)\s*", answer[other[1]:operand[0]])
                               for operand in prior if operand[2] == index and operand[1] == label[1]
@@ -499,7 +566,8 @@ def _check_named_values(text, slots, failure):
             and any(other[2]!=index and other[1]<=label[0]
                     and re.fullmatch(r'(?:年)?(?:比|较)',answer[other[1]:label[0]]) for other in labels))
         if comparative_magnitude:
-
+            # Ordered comparative magnitudes are checked separately; they are
+            # not a second scalar belonging to the nearest period/item label.
             continue
         if named_operation or re.search(r"分别|减|差|变化|增加|减少|上升|下降|增长|提高|提升|升高|降低|下滑|[=－-]", gap) or re.search(r"减(?:第[一二]项|前项|后项|前者|后者)$", answer[:label[1]]):
             continue
@@ -508,7 +576,7 @@ def _check_named_values(text, slots, failure):
         else:
             errors.append(failure + "_mismatch")
     if len(found) != len(slots):
-
+        # Ordered '分别' prose is equally valid as individually named rows.
         for clause in re.split(r"[。；;\n]", answer):
             if "分别" not in clause:
                 continue
@@ -533,8 +601,9 @@ def _check_named_values(text, slots, failure):
             errors.append(failure + "_missing")
     return list(dict.fromkeys(errors))
 
+
 def _verify_kind_count_difference(text, rows, derived):
-    pass
+    """Check explicit count equations and result claims at their actual positions."""
     if (derived.get('operation') != 'subtract' or derived.get('unit') != '种'
             or not _numeric(derived.get('value'))):
         return []
@@ -557,7 +626,8 @@ def _verify_kind_count_difference(text, rows, derived):
             errors.append('item_set_count_difference_formula_mismatch')
     scalar = r'(?:差值|数量差|差为|差是|第一项减第二项|前项减后项|前者减后者)(?:的差值)?[：:=为是]*' + number + unit
     for match in re.finditer(scalar, answer):
-
+        # The number before subtraction is an operand; a full formula checks
+        # the result after the equals sign independently.
         if re.match(r'[-－][+-]?\d+(?:\.\d+)?(?:种)?[=＝]', answer[match.end():]):
             continue
         if not count_equal(match[1], derived['value']) or match[2] not in (None, '种'):
@@ -566,13 +636,14 @@ def _verify_kind_count_difference(text, rows, derived):
     for match in re.finditer(r'(?<![\d.])' + number + r'(种|人次|次|%|分)', answer):
         token = match[1]
         if token.startswith('-') and any(match.end(1) == calc.end(3) and match.start(1) == calc.start(3)-1 for calc in formula_matches):
-            token = token[1:]
+            token = token[1:]  # The subtraction operator is not the right operand's sign.
         if match[2] != '种' or not any(count_equal(token, value) for value in supported):
             errors.append('item_set_count_measurement_unsupported')
     return list(dict.fromkeys(errors))
 
+
 def verify_bound_facts(text, evidence, spec):
-    pass
+    """Bind measured numbers to questionnaire items and requested periods."""
     if evidence.get("fact_data_status") == "NO_DATA":
         return []
     if spec.get("operation") == "region_longitudinal":
@@ -625,15 +696,17 @@ def verify_bound_facts(text, evidence, spec):
                         or not _value_equal(calc[1],derived.get('value'))):
                     errors.append('item_set_named_subtraction_mismatch')
         for match in re.finditer(r"(?:差值|比例差|相差|差为|差是|第一项减第二项|前项减后项|前者减后者)(?:的比例差)?[：:=为是]*([+-]?\d+(?:\.\d+)?)\s*(%|(?:个)?百分点)", answer):
-
+            # In a complete equation, the first percentage is an operand.
+            # The checked result is the number to the right of the equals sign.
             if match[2]=='%' and re.match(r'\s*[-－−]\s*[+-]?\d+(?:\.\d+)?%\s*[=＝]\s*[+-]?\d+(?:\.\d+)?(?:个)?百分点',answer[match.end():]):
                 continue
             if match[2] == "%" or not _value_equal(match[1], derived.get("value")):
                 errors.append("item_set_percentage_point_claim_mismatch")
     return list(dict.fromkeys(errors))
 
+
 def verified_fact_repair(evidence, spec):
-    pass
+    """Render only complete numeric facts; abstain on interpretation or charts."""
     if set(spec.get("required_outputs") or []) != {"direct_answer"}:
         return None
     if spec.get("operation") != "school_fact" or spec.get("granularity") != "item_set":
@@ -650,6 +723,7 @@ def verified_fact_repair(evidence, spec):
     parts.append(f"前项减后项的比例差为{derived['value']:+g}个百分点。")
     return "".join(parts)
 
+
 def verify_single_value(text: str, evidence: Dict[str, Any], spec: Dict[str, Any]) -> List[str]:
     if not spec.get("single_value_only") or evidence.get("fact_data_status") == "NO_DATA":
         return []
@@ -664,8 +738,9 @@ def verify_single_value(text: str, evidence: Dict[str, Any], spec: Dict[str, Any
         return ["required_single_value_mismatch"]
     return []
 
+
 def measurement_values(evidence: Dict[str, Any]) -> List[float]:
-    pass
+    """Only business value fields; omit years, item IDs and prose shortcuts."""
     keys = {
         "target_value", "normalized_score", "total_score", "max_score", "min_score",
         "median_score", "mean_median_difference", "target_dimension_median_score",
@@ -698,8 +773,9 @@ def measurement_values(evidence: Dict[str, Any]) -> List[float]:
     visit(evidence)
     return values
 
+
 def comparison_measurements_by_unit(evidence: Dict[str, Any], spec: Dict[str, Any]):
-    pass
+    """Bind mean-comparison measurements to result slots and their units."""
     if spec.get("operation") != "region_compare" or spec.get("target_stat") == "count":
         return None
     def values(keys):

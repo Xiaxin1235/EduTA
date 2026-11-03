@@ -1,1 +1,1 @@
-
+# packages/core 包：通用核心（权限、审计、配置、frozen 路径）— M11/M13

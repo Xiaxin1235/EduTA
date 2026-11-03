@@ -1,3 +1,9 @@
+"""学校具体指标与客观事实查询引擎 (Fact Engine)。
+
+针对开放式提问中的微观指标（如平板电脑配置、网络带宽、生机比、教师人数等），
+从 SQLite 底层 answers / schools / questions 提取高置信度事实数据与背景上下文。
+"""
+
 import os
 import sqlite3
 import sys
@@ -10,11 +16,14 @@ if ROOT not in sys.path:
 from packages.agent.indicator_catalog import match_indicator
 from scripts.school_engine import connect, find_schools, get_school
 
+
 def _is_missing_school_field(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
 
+
 def _school_field_or_none(value: Any) -> Any:
     return None if _is_missing_school_field(value) else value
+
 
 def query_school_fact(
     school_keyword_or_id: Union[str, int],
@@ -22,8 +31,14 @@ def query_school_fact(
     year: Optional[str] = None,
     connection: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
-    pass
+    """查询某所学校的具体指标事实。
 
+    参数:
+      school_keyword_or_id: 学校名关键词或学校 ID
+      metric_or_text: match_indicator 返回的 dict，或者用户原始文本
+      year: 指定年份（如 "2023"），若为 None 则默认最新年份
+    """
+    # 1. 规范化指标信息
     if isinstance(metric_or_text, dict):
         metric_info = metric_or_text
     else:
@@ -32,6 +47,7 @@ def query_school_fact(
     if not metric_info:
         return {"error": f"未能从提问中识别出具体指标项（支持：平板电脑、台式机、带宽、三个课堂、培训、师机比等）"}
 
+    # 2. 定位目标学校
     school = None
     if isinstance(school_keyword_or_id, int) or (
         isinstance(school_keyword_or_id, str)
@@ -60,6 +76,7 @@ def query_school_fact(
     conn = connection or connect()
     owns_connection = connection is None
 
+    # 3. 查寻同名学校全部建档历史，用于展示跨学年追踪
     hist_schools = conn.execute(
         "SELECT id, year, teacher_num, student_num, class_num FROM schools WHERE school_name=? ORDER BY year ASC",
         (school_name,),
@@ -92,6 +109,7 @@ def query_school_fact(
         "fact_data_status": "ANSWER",
     }
 
+    # 4. 分支执行
     if metric_info["type"] == "question_set":
         qids = [int(qid) for qid in metric_info["qids"]]
         specs = list(metric_info["items"])
@@ -194,7 +212,7 @@ def query_school_fact(
             out["direct_answer"] = f"{school_name}（{active_year}年）的【{metric_info['name']}】未登记（数据缺口）。"
         else:
             out["direct_answer"] = f"{school_name}（{active_year}年）的【{metric_info['name']}】为 **{raw_val} {unit}**。"
-
+        # 历史趋势
         for y, h in hist_dict.items():
             history_value = h.get(field)
             history_display = "-" if _is_missing_school_field(history_value) else history_value
@@ -253,6 +271,7 @@ def query_school_fact(
             out["fact_data_status"] = "NO_DATA"
             out["direct_answer"] = f"{school_name} 在 {active_year} 年未作答此项指标（数据缺口）。"
 
+        # 关联题号上下文提取（如查教师平板，一并查出台式机、笔记本、学生平板等）
         related_qids = metric_info.get("related", [])
         if related_qids:
             q_placeholders = ",".join("?" for _ in related_qids)
@@ -277,6 +296,7 @@ def query_school_fact(
                     r_unit = "Mbps"
                 out["context_facts"].append({"qid": r["id"], "label": clean_name, "value": f"{v_disp} {r_unit}"})
 
+        # 跨学年历史数据
         for y, h in hist_dict.items():
             sid_hist = h["id"]
             h_ans = conn.execute(
@@ -354,6 +374,7 @@ def query_school_fact(
                     f"（有效题项 {len(answer_rows)}/{len(qids)}），不能计算完整合计。"
                 )
 
+    # 补充基础规模上下文
     teacher_display = "-" if _is_missing_school_field(school.get("teacher_num")) else school.get("teacher_num")
     student_display = "-" if _is_missing_school_field(school.get("student_num")) else school.get("student_num")
     class_display = "-" if _is_missing_school_field(school.get("class_num")) else school.get("class_num")

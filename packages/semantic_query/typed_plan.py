@@ -1,3 +1,9 @@
+"""Mode-neutral semantic types for existing task plans (no model or data answers).
+
+Optional v1 metadata is derived from executable fields, never an authority to
+change them. Legacy plans infer the same metadata without changing their view,
+aggregation, operand order, or output selection.
+"""
 from __future__ import annotations
 import copy
 import hashlib
@@ -7,12 +13,14 @@ import re
 VERSION = 'typed-metric-plan-v1'
 NO_DATA_STATUSES = {'unavailable_year', 'empty_filter'}
 
+
 def explicit_view(question, runtime):
     view=runtime._explicit_value_view(question)
     if re.search(r'原值',runtime._scope_assertion_text(question)):
         if view=='normalized_score':return 'mixed_raw_and_normalized_score'
         if view is None:return 'raw_value'
     return view
+
 
 def explicit_aggregation(question, runtime):
     text=runtime._scope_assertion_text(question)
@@ -22,13 +30,15 @@ def explicit_aggregation(question, runtime):
         return 'school_equal_mean'
     return None
 
+
 def explicit_subtraction_operands(plan, question, runtime):
-    pass
+    """Return uniquely requested operand nodes, without changing a plan."""
     queries=plan['queries']
     if len(queries)!=2:
         return
     text=runtime._scope_assertion_text(question or '')
-
+    # Every discriminating component may name an operand. Shared entity/year
+    # do not make distinct questionnaire items the same execution identity.
     from packages.semantic_query.catalogue import load_semantic_catalogue, _EXPLICIT_QUESTION_PATTERNS, _question_number
     for pattern in _EXPLICIT_QUESTION_PATTERNS:
         text=pattern.sub(lambda m:'Q'+str(_question_number(m.group(1))),text)
@@ -70,8 +80,9 @@ def explicit_subtraction_operands(plan, question, runtime):
         return list(next(iter(unique)))
     return None
 
+
 def check_explicit_direction(plan, question, runtime):
-    pass
+    """Bind unambiguous literal/positional A-minus-B; leave other wording open."""
     wanted=explicit_subtraction_operands(plan, question, runtime)
     if wanted is not None:
         queries=plan['queries']
@@ -79,11 +90,19 @@ def check_explicit_direction(plan, question, runtime):
             if step.get('op',step.get('operation'))=='subtract' and set(step['args'])=={q['id'] for q in queries} and step['args']!=wanted:
                 raise ValueError('typed_explicit_comparison_direction_mismatch')
 
+
 def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode('utf8')).hexdigest()
 
+
 def metric_type(query, catalogue):
     ids = query.get('indicator_ids') or ([query['question_id']] if query.get('question_id') else [])
+    if query.get('topic'):
+        from packages.semantic_query.catalogue import topic_definition
+        members=topic_definition(query['topic'])['indicator_ids']
+        if (query.get('dimension') or query.get('question_id') or set(ids)!=set(members) or
+                query.get('view')!='normalized_score' or query.get('statistic')!='mean' or query.get('aggregation')!='school_equal_mean'):
+            raise ValueError('typed_topic_binding_mismatch')
     view = query.get('view')
     kind = query['kind']
     stat = query.get('statistic')
@@ -102,7 +121,7 @@ def metric_type(query, catalogue):
     elif view == 'normalized_score':
         family, scale, unit, transform = 'score', 'score_0_100', '分', 'normalized_value_times_100'
         if kind in {'school_score', 'school_assessment', 'school_dimension_rank'}:
-            transform = 'native_template_weighted_score'
+            transform = 'normalized_item_mean' if query.get('topic') else 'native_template_weighted_score'
     else:
         raise ValueError('typed_unknown_view')
     source_scales=[{k:catalogue[i].get(k) for k in ('id','unit','value_type','scale','coding_status')} for i in ids]
@@ -121,6 +140,7 @@ def metric_type(query, catalogue):
         raise ValueError('typed_metric_binding_mismatch')
     return result
 
+
 def operation_type(step, types):
     op = step.get('op', step.get('operation'))
     operands = [types[x] for x in step['args']]
@@ -130,7 +150,7 @@ def operation_type(step, types):
         raise ValueError('typed_incompatible_scales')
     if any(op not in x['allowed_operations'] for x in operands):
         raise ValueError('typed_operation_not_allowed_for_scale')
-
+    # Equal display units do not license arithmetic across different raw measures.
     result = copy.deepcopy(operands[0])
     result.update(source_view='derived', allowed_transform=op, statistical_unit='derived_operand',
                   aggregation='ordered_'+op, statistic=None,
@@ -147,8 +167,9 @@ def operation_type(step, types):
         raise ValueError('typed_operation_binding_mismatch')
     return result, direction
 
+
 def bind_types(plan, catalogue, *, emit=True):
-    pass
+    """Validate existing metadata or infer it; never rewrite execution fields."""
     result = copy.deepcopy(plan)
     version=result.get('semantic_type_version')
     if version is not None:
@@ -172,8 +193,14 @@ def bind_types(plan, catalogue, *, emit=True):
                 step['comparison'] = direction
     return result, types
 
+
 def bind_routed_plan(routed, spec, catalogue):
-    pass
+    """Project ordinary compiled scopes into the EXISTING public-plan format.
+
+    This closes the metadata handoff, without replacing native tools or changing
+    their values. Geography still needs the execution connection via bind_regions.
+    Unsupported task families retain their existing compiler, not a guessed plan.
+    """
     if routed.get('public_plan') is not None:
         result = bind_types(routed['public_plan'], catalogue)[0]
     else:
@@ -181,7 +208,7 @@ def bind_routed_plan(routed, spec, catalogue):
         if operation not in {'school_eval', 'region_eval', 'school_compare', 'region_compare'}:
             return None
         if routed.get('metric') or routed.get('metric_set') or routed.get('metric_info'):
-            return None
+            return None  # Existing item/public/native-FH paths own their leaf types.
         school = operation.startswith('school_')
         entities = ([routed.get('school_a'), routed.get('school_b')] if operation=='school_compare' else
                     [routed.get('region_a'), routed.get('region_b')] if operation=='region_compare' else
@@ -192,7 +219,7 @@ def bind_routed_plan(routed, spec, catalogue):
             return None
         dims = spec.get('target_dimensions') or [routed.get('target_dimension')]
         if len(entities)>1 and len(dims)>1:
-            return None
+            return None  # No flattening of an unimplemented cross-product.
         queries = []
         for entity in entities:
             for dimension in dims:
@@ -210,7 +237,7 @@ def bind_routed_plan(routed, spec, catalogue):
             steps.append(dict(id='d1',operation='subtract',args=operands))
         result=bind_types(dict(queries=queries,steps=steps,selection=None,
                                chart_requested=bool(spec.get('chart_requested'))),catalogue)[0]
-
+    # The metadata bridge must not silently certify the opposite operation.
     from packages.semantic_query import runtime
     check_explicit_direction(result, routed.get('original') or '', runtime)
     requirements=spec.get('atomic_requirements') or {}
@@ -230,17 +257,20 @@ def bind_routed_plan(routed, spec, catalogue):
     result['original_question_sha256']=requirements.get('question_sha256')
     return result
 
+
 def region_identity(region):
     level = {'省份':'province', '地级市':'city', '城市':'city', '区县':'district',
-             'province':'province', 'city':'city', 'district':'district'}.get(region.get('region_type'))
+             'province':'province', 'city':'city', 'district':'district', 'national':'national', 'corps':'corps', '单列兵团':'corps'}.get(region.get('region_type'))
     if not level:
         raise ValueError('typed_region_level_unresolved')
     location = {k:region.get(k) for k in ('province', 'city', 'district')}
+    if level == 'national':
+        location.update(province=None, city=None, district=None)
     if level == 'province':
         location.update(city=None, district=None)
     elif level == 'city':
         location['district'] = None
-    required = ['province'] + (['city'] if level in {'city', 'district'} else []) + (['district'] if level == 'district' else [])
+    required = ([] if level == 'national' else ['province']) + (['city'] if level in {'city', 'district'} else []) + (['district'] if level == 'district' else [])
     if any(not isinstance(location[k], str) or not location[k].strip() for k in required):
         raise ValueError('typed_region_parent_unresolved')
     exclusions = region.get('exclusions')
@@ -250,39 +280,60 @@ def region_identity(region):
         raise ValueError('typed_region_exclusion_invalid')
     exclusions = sorted(exclusions,key=lambda x:(x['field'],x['value']))
     payload = dict(level=level, exclusions=exclusions, **location)
+    if region.get('city_group'):
+        if level != 'city':
+            raise ValueError('typed_city_group_level_mismatch')
+        payload['city_group'] = True
     return dict(version=VERSION, stable_id='geo-path-sha256:'+_digest(payload), **payload)
 
+
 def region_sql(identity):
-    pass
+    """Generate exact SQL from validated identity; no caller-supplied SQL accepted."""
     expected = region_identity(dict(identity, region_type=identity.get('level')))
     if identity != expected:
         raise ValueError('typed_region_identity_mismatch')
+    if identity['level'] == 'national':
+        from packages.semantic_query.regional_capabilities import PROVINCES
+        return dict(where_sql='province IN ('+','.join('?' for _ in PROVINCES)+')', where_params=PROVINCES,
+                    name='全国', full_name='全国', region_type='national', province=None, city=None, district=None)
     fields = ['province'] + (['city'] if identity['level'] in {'city', 'district'} else []) + (['district'] if identity['level'] == 'district' else [])
     name = identity[fields[-1]]
-    clauses = [k+'=?' for k in fields]
-    params = [identity[k] for k in fields]
+    clauses = []; params = []
+    for k in fields:
+        if k == 'city' and identity.get('city_group'):
+            from packages.core.geography_registry import city_group_spellings
+            spellings = city_group_spellings(identity['province'], identity['city'])
+            clauses.append('TRIM(city) IN ('+','.join('?' for _ in spellings)+')')
+            params.extend(spellings)
+        else:
+            clauses.append(k+'=?'); params.append(identity[k])
     for exclusion in identity['exclusions']:
         field=exclusion['field'];clauses.append('('+field+' IS NULL OR '+field+'<>?)');params.append(exclusion['value'])
     return dict(where_sql=' AND '.join(clauses),
                 where_params=tuple(params), name=name,
-
+                # A display path may repeat the same name at different levels
+                # (municipalities). Keep both levels in identity and SQL, while
+                # using the resolver's canonical, non-repeated display name.
                 full_name=' '.join(dict.fromkeys(identity[k] for k in fields)),
-                region_type={'province':'省份','city':'地级市','district':'区县'}[identity['level']],
+                region_type={'province':'省份','city':'地级市','district':'区县','corps':'单列兵团'}[identity['level']],
                 **{k:identity[k] for k in ('province','city','district')})
 
+
 def bind_region(query, connection, context=None):
-    pass
+    """Use actual public geography/context; unresolved is explicit uncertainty."""
     from scripts.region_engine import detect_region
     from packages.core.research_data import enabled, geographic_request, REQUEST, SelectionError
+    if query['entity'] == '全国':
+        return region_identity(dict(region_type='national'))
     if enabled():
         try:
-            region = geographic_request(query['entity'], REQUEST.get() if context is None else context)
+            region = geographic_request(query['entity'], REQUEST.get() if context is None else context, active_year=query.get('year'))
         except SelectionError as exc:
             raise ValueError('typed_region_uncertain:'+str(exc)) from exc
     else:
         region = detect_region(query['entity'], connection=connection)
         if region is None and context:
-
+            # Explicit full names in the actual question can resolve a bare alias.
             aliases = []
             for field, suffix in [('province','省'), ('city','市')]:
                 names = {r[0] for r in connection.execute('SELECT DISTINCT '+field+' FROM schools') if r[0]}
@@ -293,7 +344,7 @@ def bind_region(query, connection, context=None):
     if not region:
         raise ValueError('typed_region_uncertain')
     identity = region_identity(region)
-
+    # A city alias embedded in a full province literal cannot select that city.
     explicit_province = query['entity'].endswith(('省','自治区','特别行政区'))
     if context and query['entity'] not in {identity['province'],identity['city'],identity['district']}:
         levels=[]
@@ -311,6 +362,7 @@ def bind_region(query, connection, context=None):
         raise ValueError('typed_region_binding_mismatch')
     return identity
 
+
 def bind_regions(plan, connection, context=None):
     result = copy.deepcopy(plan)
     for query in result['queries']:
@@ -318,14 +370,16 @@ def bind_regions(plan, connection, context=None):
             query['region_identity'] = bind_region(query, connection, context)
     return result
 
+
 def check_result_type(node, typ):
     if node.get('unit') != typ['unit']:
         raise ValueError('typed_execution_unit_mismatch')
     node['semantic_type'] = copy.deepcopy(typ)
     return node
 
+
 def no_data_result(raw):
-    pass
+    """Only documented empty populations/years are valid no-data results."""
     if 'error' in raw and raw.get('status') not in NO_DATA_STATUSES:
         raise ValueError('typed_execution_error:'+str(raw.get('status', 'query')))
     return raw.get('status') in NO_DATA_STATUSES

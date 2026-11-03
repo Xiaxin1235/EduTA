@@ -1,3 +1,9 @@
+"""Bounded school coreference policy; no answer lookup, task edits or I/O.
+
+The only context projection is the real parser's existing public context. A
+candidate never supplies its own antecedent. Unknown identity/alias mappings
+are not guessed. Policy decisions are distinct from the saved model opinion.
+"""
 import copy
 import re
 
@@ -9,6 +15,7 @@ SCHOOL_FIELDS = frozenset(('schools', 'intent', 'missing', 'clarify_reason', 'ev
 REF = re.compile(r'上述两所学校|前述两所学校|上述学校|前述学校|这两所学校|两校|'
                  r'该校|本校|这所学校|这个学校|前者|后者')
 
+
 def visible_context(context=None):
     if context is not None and not isinstance(context, dict):
         raise ValueError('context_must_be_real_context_mapping_or_none')
@@ -17,6 +24,7 @@ def visible_context(context=None):
             'limitation': 'Only supplied existing parser context fields are visible. Missing '
                           'fields/antecedents are not inferred from the candidate or a reference.'}
 
+
 def school_facts(question, candidate, context=None):
     public = visible_context(context)
     values = public['value']
@@ -24,14 +32,17 @@ def school_facts(question, candidate, context=None):
     known = list(dict.fromkeys(names.values()))
     pair = [names.get('last_school_compare_a'), names.get('last_school_compare_b')]
     pair_valid = all(pair) and pair[0] != pair[1]
-
+    # Bare 前者/后者 can refer to dimensions/metrics, not schools. Only a
+    # supplied ordered school antecedent makes this bounded rule applicable.
     references = [m for m in REF.finditer(question)
                   if m.group() not in ('前者','后者') or pair_valid]
-
+    # Explicit names already present in the actual public context can be read
+    # literally; no school vocabulary, answer bank or fuzzy identity guessing.
     explicit = [n for n in known if n in question and not REF.fullmatch(n)]
     expected, state, basis = None, 'not_applicable', []
     if explicit:
-
+        # Conservative scope: positive query clause only, with no negation,
+        # exclusion, method example or school identity qualification.
         if re.search(r'不查|不看|不问|不是|排除|例如|比如|假设|别名|简称', question):
             state = 'unrecognized_scope'
         else:
@@ -55,14 +66,14 @@ def school_facts(question, candidate, context=None):
             expected, state = list(selections[0]), 'resolved'
             basis = ['original_referent', 'supplied_existing_context_fields']
         elif selections and all(s is not None for s in selections):
-            state = 'unrecognized_scope'
+            state = 'unrecognized_scope'  # several ordered references require semantic direction checks
         else:
             state = 'multiple_candidates' if len(known) > 1 else 'missing_antecedent'
             basis = ['no_unique_antecedent_in_visible_input']
     actual = copy.deepcopy(candidate.get('schools', []))
     if state == 'resolved':
         if actual == expected or (set(actual) == set(expected) and len(actual) == len(expected)):
-
+            # Object membership only; this does not certify comparison direction.
             parse_state = 'matches_resolved_object'
         elif actual and all(n in known for n in actual):
             parse_state = 'wrong_known_object'
@@ -83,8 +94,14 @@ def school_facts(question, candidate, context=None):
                 original_requirement_uncertain=state in ('missing_antecedent', 'multiple_candidates'),
                 parser_unsupported_completion=parse_state == 'unsupported_completion')
 
+
 def process_decision(validation, question, candidate, context=None):
-    pass
+    """Keep raw verdict/issues; independently annotate a bounded rule decision.
+
+    Invalid model interfaces remain unavailable. Rule facts cannot rescue them.
+    Unresolved referents never pick a school or authorize a correction. Other
+    semantic issues remain visible and participate in the aggregate verdict.
+    """
     facts = school_facts(question, candidate, context)
     out = dict(model_status=validation.get('raw_status'),
                model_effective_status=validation.get('effective_status'),
@@ -111,7 +128,8 @@ def process_decision(validation, question, candidate, context=None):
     for i, issue in enumerate(validation.get('issues', [])):
         fields = set(issue.get('fields', []))
         quotes = issue.get('evidence', {}).get('quotes', [])
-
+        # Only a school-bound opinion is replaceable. Mixed issues retain all
+        # their assertions; no general semantic failure is swallowed here.
         school_only = bool(fields) and fields <= SCHOOL_FIELDS and 'schools' in fields
         anchored = any(q in question and (REF.search(q) or any(n in q for n in facts['known_context_objects'])) for q in quotes)
         direction_claim = bool(re.search(r'顺序|方向|相减|差值|减去|比较双方', issue.get('evidence', {}).get('reason', '')))
@@ -123,7 +141,8 @@ def process_decision(validation, question, candidate, context=None):
     out['rule_status'] = ('clearly_wrong' if school_status == 'clearly_wrong' or 'error' in other_types else
                           'cannot_determine' if school_status == 'cannot_determine' or 'uncertain' in other_types else
                           'legal_equivalent')
-
+    # An unsupported selection is separately blocked, rather than mislabeled
+    # as a known wrong school or hidden inside original demand ambiguity.
     out['original_task_follow_up'] = ('hold_unsupported_completion_without_selecting_school'
         if facts['parser_unsupported_completion'] else
         'preserve_original_clarification_need' if school_status == 'cannot_determine' else

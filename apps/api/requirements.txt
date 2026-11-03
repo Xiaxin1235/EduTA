@@ -1,1 +1,5 @@
--r ../../requirements.txt
+# M09 REST API 依赖。安装后启用完整 FastAPI；未安装时可降级为 BaseApp（见 main.py）。
+fastapi>=0.110
+uvicorn>=0.29
+# 其余运行依赖：PyYAML（评估模板）、（openai/httpx 用于 M06 模型网关，可选）
+PyYAML>=6.0

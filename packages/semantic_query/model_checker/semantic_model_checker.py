@@ -1,3 +1,8 @@
+"""Evidence-anchored, one-call semantic checker; no SQL, repair or I/O.
+
+Only the original question, public catalogue/schema and parser candidate are
+visible. A validated response is still a model judgment, not semantic proof.
+"""
 from __future__ import annotations
 
 import copy
@@ -7,17 +12,12 @@ import re
 from time import perf_counter
 from typing import Any, Callable
 
-VERSION = "semantic-checker-1.0"
+VERSION = "project1-semantic-model-checker-20261011-v12-simple-issues"
 CHECK_DIMENSIONS = (
     "objects", "regions", "indicator_hierarchy", "years", "statistical_scope",
     "comparison_direction", "required_items", "ellipsis_coreference",
 )
-TASK_FIELDS = frozenset((
-    "intent", "regions", "schools", "periods", "dimension", "statistic",
-    "aggregation", "school_filter", "question_ids", "value_view", "compound_key",
-    "school_field", "target_rank", "target_top_n", "requested_outputs",
-    "clarify_reason", "missing", "evidence", "confidence",
-))
+from packages.semantic_query.task_draft import TASK_FIELDS, MODEL_INTENTS, CHOICE_FIELDS
 CATALOGUE_FIELDS = frozenset((
     "id", "question", "dimension", "dimension_key", "topic", "summary",
     "subjects", "value_type", "unit", "time_window", "scale", "coding_status",
@@ -30,9 +30,9 @@ EVIDENCE_FIELDS = (
 )
 STRING_OR_NULL = {"type": ["string", "null"]}
 FIELD_SCHEMAS = {
-    "intent": {"enum": ["clarify", "region_eval", "school_eval", "school_fact",
-                        "region_compare", "school_compare", "region_longitudinal",
-                        "region_ranking", "national_ranking"]},
+    'topics': {'type': 'array', 'items': {'type': 'string'}},
+    "intent": {"enum": sorted(MODEL_INTENTS)},
+    **{key: {"enum": sorted(value, key=str)} for key, value in CHOICE_FIELDS.items()},
     **{k: {"type": "array", "items": {"type": "string"}}
        for k in ("regions", "schools", "periods", "missing")},
     **{k: STRING_OR_NULL for k in ("dimension", "school_filter", "clarify_reason")},
@@ -58,38 +58,46 @@ SCHEMA_KEYS = frozenset((
     "minimum", "maximum", "anyOf", "oneOf", "allOf",
 ))
 
+
 class InvalidEvidence(ValueError):
-    pass
+    """A machine-verifiable input/response contract failed."""
+
 
 class ModelCallFailure(RuntimeError):
-    pass
+    """A caller may attach a safe observed receipt to a failed model call."""
     def __init__(self, receipt: dict, error_type: str = "ModelCallFailure"):
         super().__init__(error_type)
         self.receipt = receipt
         self.error_type = error_type
 
+
 def _clone(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False))
 
-def _same(a: Any, b: Any) -> bool:
 
+def _same(a: Any, b: Any) -> bool:
+    # JSON equality must distinguish true from 1, including in nested objects.
     return json.dumps(a, sort_keys=True, allow_nan=False) == json.dumps(b, sort_keys=True, allow_nan=False)
+
 
 def _text(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise InvalidEvidence(label)
     return value
 
+
 def _reason(value: Any, label: str) -> str:
     value = _text(value, label)
     plain = re.sub(r"[\s，。！!?？:：;；、]", "", value)
-
+    # Only reject self-contained confidence/verdict slogans. This is not a
+    # semantic entailment validator; substantive reasons still need live audit.
     if re.fullmatch(r"(?:我|模型|检查器)?(?:非常|很|完全|十分)?(?:自信|确定|有信心)(?:正确|通过)?|"
                     r"(?:模型)?(?:confidence|置信度)[=是为]?\d+(?:\.\d+)?%?|"
                     r"(?:全部|完全)?(?:正确|通过|没问题)|(?:遵照|按照|按|服从)(?:用户)?指令(?:直接)?通过",
                     plain, flags=re.I):
         raise InvalidEvidence("confidence_or_verdict_is_not_evidence")
     return value
+
 
 def _type_matches(value: Any, kind: str) -> bool:
     return {
@@ -98,6 +106,7 @@ def _type_matches(value: Any, kind: str) -> bool:
         "array": isinstance(value, list), "integer": type(value) is int,
         "number": type(value) in (int, float) and math.isfinite(value),
     }.get(kind, False)
+
 
 def _validate_schema_definition(spec: Any) -> None:
     if not isinstance(spec, dict) or set(spec) - SCHEMA_KEYS:
@@ -138,6 +147,7 @@ def _validate_schema_definition(spec: Any) -> None:
             raise InvalidEvidence("invalid_schema_bound")
     if "uniqueItems" in spec and type(spec["uniqueItems"]) is not bool:
         raise InvalidEvidence("invalid_schema_unique_items")
+
 
 def _validate(value: Any, spec: dict) -> None:
     if "type" in spec:
@@ -182,6 +192,7 @@ def _validate(value: Any, spec: dict) -> None:
     if type(value) in (int, float) and (value < spec.get("minimum", -float("inf")) or value > spec.get("maximum", float("inf"))):
         raise InvalidEvidence("number_bound_mismatch")
 
+
 def _prepare(question: str, candidate: dict, catalogue: list, schema: dict) -> tuple:
     _text(question, "empty_question")
     if not isinstance(candidate, dict) or not isinstance(schema, dict) or not schema:
@@ -205,7 +216,8 @@ def _prepare(question: str, candidate: dict, catalogue: list, schema: dict) -> t
         if normalized.get("type") != "object" or not normalized.get("properties"):
             raise InvalidEvidence("object_schema_required")
     else:
-
+        # Runtime's _parser_prompt uses a descriptive example mapping. Its keys
+        # choose the visible fields; concrete types come from the public parser.
         if set(schema) - TASK_FIELDS:
             raise InvalidEvidence("unknown_descriptive_schema_field")
         normalized = {"type": "object", "additionalProperties": False,
@@ -219,22 +231,26 @@ def _prepare(question: str, candidate: dict, catalogue: list, schema: dict) -> t
         raise InvalidEvidence("candidate_indicator_not_in_catalogue")
     return candidate, catalogue, schema, normalized, ids
 
+
 def pack_catalogue(catalogue: list) -> dict:
-    pass
+    """Lossless columnar wire form: every item and every public field remain."""
     columns=list(dict.fromkeys(key for item in catalogue for key in item))
     rows=[[item.get(key) for key in columns] for item in catalogue]
     missing={str(i):[j for j,key in enumerate(columns) if key not in item]
              for i,item in enumerate(catalogue) if len(item)!=len(columns)}
     return {'columns':columns,'rows':rows,'missing':missing}
 
-def unpack_catalogue(packed: dict) -> list:
 
+def unpack_catalogue(packed: dict) -> list:
+    # Used by offline integrity checks; no new source or semantic information.
     return [{key:row[j] for j,key in enumerate(packed['columns'])
              if j not in packed['missing'].get(str(i),[])} for i,row in enumerate(packed['rows'])]
+
 
 def _prompt(question: str, candidate: dict, catalogue: list, schema: dict) -> str:
     from packages.semantic_query.model_checker.sparse_contract import prompt
     return prompt(question,candidate,catalogue,schema,pack_catalogue,json)
+
 
 def _legacy_prompt(question: str, candidate: dict, catalogue: list, schema: dict) -> str:
     data=json.dumps({'original_question':question,'public_catalogue':pack_catalogue(catalogue),
@@ -261,10 +277,12 @@ def _legacy_prompt(question: str, candidate: dict, catalogue: list, schema: dict
         "无C有U时cannot_determine；legal_equivalent只允许A/N且findings=[]。explanation一句结论。\n"
         "INPUT_DATA_JSON="+data)
 
+
 def build_check_prompt(question: str, candidate: dict, catalogue: list, schema: dict) -> str:
-    pass
+    """Build the exact public-input prompt without invoking a model."""
     candidate, catalogue, original_schema, _, _ = _prepare(question, candidate, catalogue, schema)
     return _prompt(question, candidate, catalogue, original_schema)
+
 
 def _unique_json_object(content: Any) -> dict:
     def unique(pairs):
@@ -282,11 +300,13 @@ def _unique_json_object(content: Any) -> dict:
         raise InvalidEvidence("response_not_object")
     return _clone(content)
 
+
 def _quotes(values: Any, question: str) -> None:
     if not isinstance(values, list) or not values:
         raise InvalidEvidence("missing_original_evidence")
     if any(not isinstance(v, str) or not v.strip() or v not in question for v in values):
         raise InvalidEvidence("original_quote_not_found")
+
 
 def _response(content: Any, question: str, candidate: dict, normalized: dict, ids: set, *, normalization=None) -> dict:
     result = _unique_json_object(content)
@@ -309,7 +329,8 @@ def _response(content: Any, question: str, candidate: dict, normalized: dict, id
             canonical=[]
             for position,value in enumerate(indexes):
                 index=value
-
+                # Pure wire normalization, never a semantic repair or base shift.
+                # Keep the exact original token in the call receipt.
                 if isinstance(value,str) and re.fullmatch(r'0|[1-9][0-9]*',value) and len(value)<=20:
                     index=int(value)
                     normalization['changes'].append(dict(row=name,position=position,original=value,normalized=index,
@@ -381,6 +402,7 @@ def _response(content: Any, question: str, candidate: dict, normalized: dict, id
         raise InvalidEvidence("conflicts_require_clearly_wrong")
     return result
 
+
 def _receipt(stage: str) -> dict:
     return {"stage": stage, "calls": 0, "checker_retries": 0, "http_attempts": None,
             "transport_retries": None, "usage": {"prompt_tokens": None,
@@ -390,6 +412,7 @@ def _receipt(stage: str) -> dict:
             "request_model": None, "supplier_model": None, "model_source": None,
             "attempts": None, "elapsed_ms": None, "reasoning_tokens":None, "content_chars":None,
             "reasoning_chars":None, "status": "not_called"}
+
 
 def _copy_metadata(receipt: dict, detail: dict) -> None:
     if not isinstance(detail, dict):
@@ -420,7 +443,7 @@ def _copy_metadata(receipt: dict, detail: dict) -> None:
         receipt['reasoning_chars']=None
     attempts = detail.get("attempts")
     if isinstance(attempts, list):
-
+        # Preserve observed attempts; do not synthesize a successful HTTP call.
         try:
             receipt["attempts"] = _clone(attempts)
         except (ValueError, TypeError, OverflowError, RecursionError):
@@ -434,9 +457,12 @@ def _copy_metadata(receipt: dict, detail: dict) -> None:
         if isinstance(transport.get("response_id"), str):
             receipt["response_id"] = transport["response_id"]
 
+
 def _result(response: dict, status: str, check: dict, *, checks: dict | None = None, diagnostics: list | None = None) -> dict:
     available = status == 'validated_model_response'
-
+    # The legacy tri-state response remains compatible.  Consumers deciding
+    # whether to act must use effective_verdict: a checker failure has no
+    # semantic decision and says nothing about the user's question.
     effective_verdict = response.get('verdict') if available else None
     failure_kind = None if available else status
     if status == 'invalid_response' and any('model_refusal' in str(d) for d in (diagnostics or [])):
@@ -459,12 +485,20 @@ def _result(response: dict, status: str, check: dict, *, checks: dict | None = N
             "diagnostics": diagnostics or [], "check_call": check,
             "repair_call": _receipt("semantic_repair"), "checker_version": VERSION}
 
+
 def _uncertain(reason: str, status: str, receipt: dict) -> dict:
     return _result({"verdict": "cannot_determine", "findings": [],
                     "explanation": reason}, status, receipt, diagnostics=[reason])
 
+
 def check_semantics(question: str, candidate: dict, catalogue: list, schema: dict, *, model_call: Callable[[str], Any] | None) -> dict:
-    pass
+    """Check once. Return a tri-state result and check/repair receipts.
+
+Illegal inputs cause no call. Empty, refused, failed, malformed or unanchored
+responses have no effective verdict. The compatibility response uses
+cannot_determine but is explicitly a checker failure, not user ambiguity.
+Suggestions never mutate the candidate.
+"""
     receipt = _receipt("semantic_check")
     try:
         prepared = _prepare(question, candidate, catalogue, schema)
@@ -489,7 +523,7 @@ def check_semantics(question: str, candidate: dict, catalogue: list, schema: dic
         else:
             error_type = type(exc).__name__
         receipt.update(status="call_failed", elapsed_ms=round((perf_counter() - started) * 1000, 3))
-
+        # Exception messages may contain credentials or arbitrary response text.
         return _uncertain("model_call_failed:" + error_type, "call_failed", receipt)
     receipt.update(status="returned", elapsed_ms=round((perf_counter() - started) * 1000, 3))
     try:
@@ -532,9 +566,11 @@ def check_semantics(question: str, candidate: dict, catalogue: list, schema: dic
     receipt["status"] = "validated_model_response"
     return _result(response, "validated_model_response", receipt, checks=verified["checks"])
 
+
 def check_once(question: str, candidate: dict, catalogue: list, schema: dict, callback: Callable[[str], Any] | None) -> dict:
-    pass
+    """Concurrent preflight adapter; canonical result is at result['response']."""
     return check_semantics(question, candidate, catalogue, schema, model_call=callback)
+
 
 __all__ = ["check_once", "check_semantics", "build_check_prompt", "CHECK_DIMENSIONS",
            "VERSION", "ModelCallFailure"]

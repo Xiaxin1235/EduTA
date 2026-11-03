@@ -1,12 +1,23 @@
+# -*- coding: utf-8 -*-
+"""EducationalChartBuilder · 教育评估可视化代码专家生成器。
+
+为各类评估场景生成结构优雅、带完整中文标注的 Matplotlib Python 脚本：
+1. build_radar_code: 多维能力雷达图（支持单实体与双线对比）；
+2. build_ranking_code: 区域梯队排位与基准线对照条形图；
+3. build_equipment_fact_code: 办学规模与终端设备客观指标横纵对比图；
+4. build_region_macro_code: 区域宏观大盘（多维能力雷达 + 顶尖标杆校排行榜）。
+"""
+
 import json
 from typing import Dict, List, Optional, Tuple
 
+
 class EducationalChartBuilder:
-    pass
+    """教育数字化评估图表 Python 脚本生成器。"""
 
     @staticmethod
     def build_task_values_code(nodes: List[Dict], kind: str, unit: str) -> str:
-        pass
+        """Plot executed task outputs in order, with their literal scopes and units."""
         if kind not in {'bar', 'line'} or not nodes:
             raise ValueError('invalid_task_chart')
         labels = [str(n['label']) for n in nodes]
@@ -31,7 +42,7 @@ fig.tight_layout()
 
     @staticmethod
     def build_school_item_set_code(title: str, items: List[Dict], derived: Optional[Dict] = None) -> str:
-        pass
+        """Build verified item bars, including a requested additive total."""
         labels = []
         for item in items:
             name = str(item["metric_name"])
@@ -74,13 +85,14 @@ fig.tight_layout()
         comp_values: Optional[List[float]] = None,
         max_val: Optional[float] = None,
     ) -> str:
-        pass
+        """生成极坐标多维雷达图代码。"""
         dims_json = json.dumps(dimensions, ensure_ascii=False)
         vals_json = json.dumps([round(float(v), 2) for v in values])
         comp_vals_json = json.dumps([round(float(v), 2) for v in comp_values]) if comp_values else "None"
         comp_title_str = repr(comp_title) if comp_title else "None"
         title_literal = repr(title)
 
+        # 动态计算雷达图上限刻度
         all_vals = list(values) + (list(comp_values) if comp_values else [])
         highest = max(all_vals) if all_vals else 20.0
         ceil_val = max_val or (round(highest * 1.25) if highest > 10 else 20.0)
@@ -142,8 +154,8 @@ print(f"雷达图生成完成：涵盖 {{N}} 个维度")
         rank: int,
         total_schools: int,
     ) -> str:
-        pass
-
+        """生成区域学校排位梯队水平对比条形图。"""
+        # 准备数据：提取临近梯队校名和得分
         names = []
         scores = []
         is_target_list = []
@@ -153,6 +165,7 @@ print(f"雷达图生成完成：涵盖 {{N}} 个维度")
             scores.append(round(float(p.get("score", 0.0)), 2))
             is_target_list.append(bool(p.get("is_target", False)))
 
+        # 若目标校不在梯队里，补充进去
         if not any(is_target_list):
             names.insert(0, school_name)
             scores.insert(0, round(float(target_score), 2))
@@ -220,7 +233,7 @@ print("排位梯队对比柱状图生成完毕")
         ranking_items: List[Dict],
         eligible_school_count: int,
     ) -> str:
-        pass
+        """Draw only the verified schools in a region ranking result."""
         if not ranking_items:
             return ""
         labels = [
@@ -259,15 +272,15 @@ fig.tight_layout()
         context_facts: List[Dict[str, any]],
         history: Optional[List[Dict[str, any]]] = None,
     ) -> str:
-        pass
-
+        """生成具体指标事实与办学规模对比柱状图/折线图。"""
+        # 整合要对比的几项核心指标
         labels = [metric_name]
         values = [float(target_value)]
 
         for c in context_facts[:4]:
             lbl = c.get("label", "")
             val_str = str(c.get("value", "0"))
-
+            # 提取纯数字
             num = ""
             for ch in val_str:
                 if ch.isdigit() or ch == '.':
@@ -281,6 +294,7 @@ fig.tight_layout()
         labels_json = json.dumps(labels, ensure_ascii=False)
         values_json = json.dumps(values)
 
+        # 检查是否有跨年度历史
         hist_years = []
         hist_vals = []
         if history and len(history) > 1:
@@ -369,7 +383,7 @@ print("指标事实与配置规模图表生成完成")
         dimension: str,
         score: float,
     ) -> str:
-        pass
+        """One verified school dimension as one bar; item counts stay in prose."""
         school_repr = repr(str(school_name))
         year_repr = repr(str(year))
         dimension_repr = repr(str(dimension))
@@ -406,7 +420,7 @@ print('单校单维柱状图生成完成')
         school_count: int,
         answer_count: int,
     ) -> str:
-        pass
+        """区域单维学校等权均分的单柱图。"""
         return f'''# 区域单维均分；学校筛选、分母和图形保持同一范围
 import matplotlib.pyplot as plt
 
@@ -445,7 +459,7 @@ print('区域单维学校等权均分图生成完成')
         school_count: int,
         answer_count: int,
     ) -> str:
-        pass
+        """生成区域单题定向图，只呈现题名、归一均分与两个分母。"""
         region_repr = repr(str(region_name))
         year_repr = repr(str(year))
         metric_repr = repr(str(metric_name))
@@ -492,10 +506,11 @@ print("区域单题归一均分图生成完成")
         target_school_name: Optional[str] = None,
         target_rank: Optional[int] = None,
     ) -> str:
-        pass
+        """生成区域宏观双联综合图：左侧五维能力雷达，右侧顶尖学校排行榜（支持高亮目标位次）。"""
         dims = list(dimension_scores.keys())
         dim_vals = [round(float(v), 2) for v in dimension_scores.values()]
 
+        # 顶尖学校
         top_n = min(len(top_schools), 6)
         school_names = [s.get("school_name", "") for s in top_schools[:top_n]][::-1]
         def _get_school_score(item: dict) -> float:
@@ -600,7 +615,7 @@ print("区域宏观综合透视图生成完成")
         values_b: List[float],
         year_desc: str = "",
     ) -> str:
-        pass
+        """生成双校数字化多维对比双联图（左：双线能力雷达；右：六维得分逐项分组对比柱状图）。"""
         dims_json = json.dumps(dimensions, ensure_ascii=False)
         vals_a_json = json.dumps([round(float(v), 2) for v in values_a])
         vals_b_json = json.dumps([round(float(v), 2) for v in values_b])
@@ -703,7 +718,7 @@ print("双校对比全景图表生成完成")
         dimension: str, year: str, school_filter: str = "all",
         difference: Optional[float] = None,
     ) -> str:
-        pass
+        """One dimension, one pair of vertical bars in question order."""
         from packages.agent.tools.chart_scope import comparison_filter_label
         filter_label = comparison_filter_label(school_filter)
         if filter_label != "全部学校":
@@ -740,7 +755,7 @@ print('单维区域比较图生成完成')
         region_b: str, score_b: float, schools_b: Optional[int], year: str,
         difference: Optional[float] = None,
     ) -> str:
-        pass
+        """Plot only the two verified overall means requested for a region pair."""
         title = f"{year}年 · 整体数字化学校等权均分"
         display_difference = float(difference) if difference is not None else float(score_a) - float(score_b)
         difference_label = f"{region_a}减{region_b}：{display_difference:+.2f}分"
@@ -780,7 +795,7 @@ print('整体双区域比较图生成完成')
         values_b: List[float],
         year_desc: str = "",
     ) -> str:
-        pass
+        """生成双区域数字化宏观横向对比双联图（左：双区能力雷达；右：六维均分分组柱状图）。"""
         dims_json = json.dumps(dimensions, ensure_ascii=False)
         vals_a_json = json.dumps([round(float(v), 2) for v in values_a])
         vals_b_json = json.dumps([round(float(v), 2) for v in values_b])
@@ -893,7 +908,7 @@ print("双区域宏观比对图表生成完成")
         diff: float,
         trend: str = "提升",
     ) -> str:
-        pass
+        """旧版未调用构图入口；保留兼容，不用于重复截面契约输出。"""
         dims_json = json.dumps(dimensions, ensure_ascii=False)
         vals_a_json = json.dumps([round(float(v), 2) for v in values_a])
         vals_b_json = json.dumps([round(float(v), 2) for v in values_b])
@@ -1007,7 +1022,7 @@ print("旧版区域两期多维对照图表生成完成（非契约输出）")
         school_filter: str = "全部学校",
         target_dimension: str = "",
     ) -> str:
-        pass
+        """生成两期重复截面主比较值图，不混入契约范围外的维度结论。"""
         from packages.agent.tools.chart_scope import comparison_filter_label
         filter_label = comparison_filter_label(school_filter)
         return f'''# 绘制单区域两期年度重复截面变化图
@@ -1075,7 +1090,7 @@ print("区域两期年度重复截面变化图生成完成")
         school_counts: List[int],
         tiers: List[str],
     ) -> str:
-        pass
+        """生成全国各省份教育数字化水平横向排行榜条形图代码。"""
         prov_json = json.dumps(provinces, ensure_ascii=False)
         scores_json = json.dumps([round(float(s), 2) for s in scores])
         counts_json = json.dumps([int(c) for c in school_counts])
@@ -1135,7 +1150,7 @@ ax.spines['left'].set_color('#9ca3af')
 ax.spines['bottom'].set_color('#9ca3af')
 
 metric_str = f"【{{target_dim}}】维度" if target_dim else "数字化综合均分"
-plt.title(f"{title}\\n(橙色: 规模化样本≥1000所 | 蓝色: 常态化100~999所 | 灰色: 小微样本<100所)",
+plt.title(f"{title}\\n(橙色: 规模化样本≥1000所 | 蓝色: 常态化100~999所 | 灰色: 小微样本<100所)", 
           fontsize=12.5, weight='bold', pad=12, color='#111827')
 plt.xlabel(f"省域监测{{metric_str}}（分）", fontsize=10.5, color='#4b5563', labelpad=8)
 plt.tight_layout()

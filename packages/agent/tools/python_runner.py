@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+"""PythonInterpreterTool · 本地 Python 数据分析与绘图执行工具。
+
+功能特性：
+1. 类似市面上现代 Agent（Code Interpreter / Advanced Data Analysis）：
+   - 支持动态执行 Python 代码，自动捕获标准输出与绘图生成物；
+2. 绘图能力专精（Matplotlib / Seaborn / Pandas）：
+   - 自动预配置中文字体（Microsoft YaHei, SimHei, DengXian），彻底杜绝方块乱码 (□□□)；
+   - 注入契合前端 Claude 温暖极简美学的统一配色与画布样式；
+   - 强制使用无头模式 ('Agg')，绝不弹出阻塞窗口；
+3. 输出标准化：
+   - 自动抓取当前所有活动 Figure，输出高分辨率 PNG；
+   - 双通道交付：本地文件 (output/charts/<id>.png) + 内联 Base64 Data URI（保证内网穿透/离线秒开）；
+   - 详细记录执行耗时、标准输出与工具调用轨迹。
+"""
+
 import base64
 import contextlib
 import io
@@ -12,25 +28,35 @@ from typing import Any, Dict, Optional
 from packages.agent.tools.base import BaseTool, ToolResult
 from packages.core.frozen_paths import charts_dir
 
+
 def _charts_dir() -> str:
-    pass
+    """持久化图表存放目录：<app_dir>/output/charts/"""
     return charts_dir()
+
 
 _PYTHON_SITE_PACKAGES_RE = re.compile(
     r"(?i)(?:^|[\\/])python(?P<major>\d)(?:[._-]?(?P<minor>\d{1,2}))?"
     r"[\\/](?:lib[\\/])?site-packages(?:[\\/]|$)"
 )
 
+
 def _site_packages_runtime_tag(path: str) -> Optional[str]:
-    pass
+    """Return an explicit Python runtime tag embedded in a site-packages path."""
     match = _PYTHON_SITE_PACKAGES_RE.search(str(path or ""))
     if not match or not match.group("minor"):
         return None
     return f"Python{match.group('major')}{match.group('minor')}"
 
+
 @contextlib.contextmanager
 def _compatible_scientific_import_path():
-    pass
+    """Temporarily exclude site-packages built for another Python runtime.
+
+    Some Windows launchers append both Python 3.10 and 3.12 user package
+    directories.  NumPy may then resolve a package and binary extension from
+    different runtimes.  Keep frozen bundle paths and unversioned paths, and
+    expose only non-sensitive runtime tags for verification evidence.
+    """
     original = list(sys.path)
     current_tag = f"Python{sys.version_info.major}{sys.version_info.minor}"
     filtered = []
@@ -47,8 +73,9 @@ def _compatible_scientific_import_path():
     finally:
         sys.path[:] = original
 
+
 def _is_meaningful_figure(fig) -> bool:
-    pass
+    """检查 Figure 是否包含有效的绘图数据（防止捕获空画布或仅有刻度线的幽灵 axes）。"""
     if not getattr(fig, "axes", None):
         return False
     for ax in fig.axes:
@@ -64,8 +91,9 @@ def _is_meaningful_figure(fig) -> bool:
             return True
     return False
 
+
 class PythonInterpreterTool(BaseTool):
-    pass
+    """本地 Python 代码执行与绘图工具。"""
 
     name: str = "python_interpreter"
     description: str = (
@@ -105,25 +133,31 @@ class PythonInterpreterTool(BaseTool):
             re.search(r"\b(?:matplotlib|pyplot|numpy|plt\.|np\.)", code)
         )
 
+        # 1. 预设安全与便利的执行环境
         env_globals: Dict[str, Any] = {
             "__name__": "__main__",
             "__builtins__": __builtins__,
         }
 
+        # 图表生命周期必须始终使用同一组兼容路径。Matplotlib/NumPy 会在
+        # 执行绘图和 savefig 时延迟导入子模块；如果只隔离首次 import，恢复
+        # 污染后的 sys.path 后仍可能混入另一 Python ABI 的二进制扩展。
         with _compatible_scientific_import_path() as filtered_runtime_tags:
-
+            # 绘图栈与可选 pandas 分开加载，避免 pandas 的非关键故障拖垮 Matplotlib。
             try:
                 import numpy as np
                 import matplotlib
-                matplotlib.use("Agg")
+                matplotlib.use("Agg")  # 强制无头后台渲染
                 import matplotlib.pyplot as plt
                 import matplotlib.font_manager as fm
 
+                # 配置中文字体优先级
                 plt.rcParams["font.sans-serif"] = [
                     "Microsoft YaHei", "SimHei", "DengXian", "PingFang SC", "Hiragino Sans GB", "sans-serif"
                 ]
                 plt.rcParams["axes.unicode_minus"] = False
 
+                # 配置美学风格：柔和网格、无杂边框、清晰字重
                 plt.rcParams["figure.facecolor"] = "#ffffff"
                 plt.rcParams["axes.facecolor"] = "#fdfcfb"
                 plt.rcParams["axes.edgecolor"] = "#e8e6df"
@@ -141,7 +175,7 @@ class PythonInterpreterTool(BaseTool):
                     "plt": plt,
                     "matplotlib": matplotlib,
                 })
-                plt.close("all")
+                plt.close("all")  # 清空旧状态
             except Exception as exc:
                 plotting_error = exc
                 if requires_plotting:
@@ -165,6 +199,8 @@ class PythonInterpreterTool(BaseTool):
                         f"[warn] 可选 pandas 未加载: {type(exc).__name__}\n"
                     )
 
+            # 2. 捕获重定向 stdout/stderr 并执行代码。仍处于同一兼容路径
+            # 上下文中，保证生成代码里的重复 import 与延迟 import 不漂移。
             exec_err = None
             with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
                 if plotting_error is not None and requires_plotting:
@@ -180,6 +216,8 @@ class PythonInterpreterTool(BaseTool):
                         failure_code = "chart_code_execution_failed"
                         traceback.print_exc(file=stderr_buf)
 
+            # 3. 收集并抽取 Matplotlib 生成的所有图表。同一隔离持续到
+            # savefig 与 Base64 编码完成，避免导出阶段再次加载错误 ABI。
             charts_saved = 0
             try:
                 fig_nums = plt.get_fignums() if plt is not None else []

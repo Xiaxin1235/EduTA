@@ -1,3 +1,16 @@
+"""学校数字化评估引擎（真实数据）。
+
+数据源：data/real/education_digitization.sqlite
+模板：evaluation_templates/school_digitization_v1.yaml
+
+口径：
+  单题得分 = normalized_value × 100（0~100）
+  维度得分 = 该维度已作答题的等权均值（题权当前全为 1）
+  综合得分 = 已覆盖一级维度按模板权重加权
+  覆盖率   = 已作答题数 / 模板总题数
+  缺口     = 无答案的题，显式列出（最多 8 条）
+"""
+
 import os
 import re
 import sqlite3
@@ -11,7 +24,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from packages.core.frozen_paths import resource_root
+from packages.core.frozen_paths import resource_root  # noqa: E402
+
 
 def _db_path():
     from packages.core.research_data import enabled, config
@@ -22,7 +36,6 @@ def _db_path():
         return os.path.abspath(os.path.expanduser(configured))
     candidates = [
         os.path.join(resource_root(), "data", "real", "education_digitization.sqlite"),
-        os.path.join(resource_root(), "data", "synthetic", "education_digitization.sqlite"),
         os.path.join(ROOT, "data", "real", "education_digitization.sqlite"),
         os.path.join(os.path.dirname(sys.executable), "data", "real", "education_digitization.sqlite")
         if getattr(sys, "frozen", False) else "",
@@ -32,8 +45,14 @@ def _db_path():
             return p
     return candidates[0]
 
+
 def connect(data_path=None):
-    pass
+    """Open the selected data source read-only.
+
+    ``data_path`` lets a contract request keep using the exact source selected
+    when its service instance was created instead of resolving a mutable
+    environment variable again between preparation and execution.
+    """
     p = os.path.abspath(os.path.expanduser(str(data_path))) if data_path else _db_path()
     if not os.path.isfile(p):
         raise FileNotFoundError(
@@ -46,9 +65,11 @@ def connect(data_path=None):
         attach(conn, p)
     return conn
 
+
 def _research_identity():
     from packages.core.research_data import enabled, identity
     return identity() if enabled() else None
+
 
 def data_source_status():
     p = _db_path()
@@ -59,9 +80,9 @@ def data_source_status():
         "active_source": "environment_override" if configured else "packaged_or_source_default",
         "configured_by_environment": configured,
         "read_only": True,
-        "data_kind": "synthetic" if (Path(p).parent / "SYNTHETIC_DATA.json").is_file() else "user_supplied",
         "research_dataset": _research_identity(),
     }
+
 
 @lru_cache(maxsize=4)
 def load_school_template():
@@ -74,6 +95,7 @@ def load_school_template():
         path = os.path.join(ROOT, "evaluation_templates", "school_digitization_v1.yaml")
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
 
 _ALIAS_RULES = [
     ("华中师大一附中", "华中师范大学第一附属中学"),
@@ -107,23 +129,37 @@ _ALIAS_RULES = [
     ("十中", "第十中学"),
 ]
 
+
 def expand_school_alias(keyword: str) -> str:
-    pass
-    kw = str(keyword).strip()
+    """将学校常见简称、高校简称与附属学校俗称规范化为主校全名。"""
+    from packages.core.school_names import normalize_school_numbers
+    kw = normalize_school_numbers(str(keyword).strip(),'chinese')
     curr = kw
     for src, dst in _ALIAS_RULES:
         if src in curr:
-            curr = curr.replace(src, dst)
+            curr = re.sub(re.escape(src)+(r'(?!学)' if src.endswith('中') else ''),lambda _:dst,curr)
     return curr
 
+
 def find_schools(keyword, year=None, limit=20, connection=None):
-    pass
+    """根据关键词模糊检索学校，支持关键词出现在校名开头、中间或结尾，支持别名与区域联合消解。
+
+    匹配与排序规则（非仅开头匹配）：
+    1. 完全匹配用户原词 / 规范别名 / 城市补全名（最高优先级）
+    2. 结尾匹配（如搜“朝阳学校”匹配“华中师范大学第一附属中学朝阳学校”，搜“王家河中学”匹配“武汉市黄陂区王家河街王家河中学”）
+    3. 开头匹配（如搜“华中师范大学”匹配“华中师范大学第一附属中学”）
+    4. 中间包含匹配（原词或别名出现在校名中间任意位置，如搜“第一附属中学”匹配“华中师范大学第一附属中学初中部”）
+    5. 行政区划+校名联合匹配（如搜“武汉市王家河中学”自动联合匹配市域与校名）
+    6. 校名字符长度升序（越接近检索词长度越优先） -> 最新年份降序
+    """
     conn = connection or connect()
     owns_connection = connection is None
     kw = str(keyword).strip()
     expanded_kw = expand_school_alias(kw)
-    variants = [kw, expanded_kw]
+    from packages.core.school_names import normalize_school_numbers
+    variants = [kw,expanded_kw,normalize_school_numbers(kw)]
 
+    # 支持 2 字城市名简称自动补齐“市”（如 北京二中 -> 北京市第二中学，武汉二中 -> 武汉市第二中学）
     m_city = re.match(r"^(北京|天津|上海|重庆|武汉|长沙|广州|深圳|杭州|南京|成都|西安|沈阳|大连|青岛|厦门|济南|宁波|哈尔滨|长春|福州|南昌|郑州|合肥|南宁|海口|贵阳|昆明|兰州|西宁|银川|石家庄|太原)(.+)$", kw)
     if m_city:
         city_full = m_city.group(1) + "市"
@@ -139,6 +175,7 @@ def find_schools(keyword, year=None, limit=20, connection=None):
         where_parts.append("school_name LIKE ?")
         params.append(f"%{v}%")
 
+    # 1. 检查是否包含行政区划前缀（如 武汉市王家河中学、北京市朝阳学校）
     m_reg = re.match(r"^((?:[\u4e00-\u9fff]{2,6}?(?:省|市|区|县|旗))+)(.+)$", kw)
     if m_reg:
         reg_prefix, core_name = m_reg.group(1), m_reg.group(2).strip()
@@ -148,6 +185,7 @@ def find_schools(keyword, year=None, limit=20, connection=None):
         )
         params.extend([f"%{reg_prefix}%", f"%{core_name}%"])
 
+    # 2. 检查是否包含空格/逗号分隔的多词（如 武汉 华师一附中）
     tokens = [t for t in re.split(r"[\s,，]+", kw) if len(t) >= 2]
     if len(tokens) >= 2:
         parts = [
@@ -187,6 +225,7 @@ def find_schools(keyword, year=None, limit=20, connection=None):
         conn.close()
     return [dict(r) for r in rows]
 
+
 def get_school(school_id, connection=None):
     conn = connection or connect()
     owns_connection = connection is None
@@ -195,6 +234,7 @@ def get_school(school_id, connection=None):
         conn.close()
     return dict(row) if row else None
 
+
 def evaluate_school(
     school_id,
     template=None,
@@ -202,7 +242,11 @@ def evaluate_school(
     target_dimension=None,
     target_dimensions=None,
     indicator_ids=None,
+    topic=None,
 ):
+    if topic is not None:
+        from packages.semantic_query.topic_tasks import school_score
+        return school_score(school_id,topic,connection)
     template = template or load_school_template()
     if template is None:
         return {"error": "学校数字化评估模板不可用"}
@@ -322,7 +366,7 @@ def evaluate_school(
     return {
         "object_type": "school",
         "analysis_operation": "school_evaluation",
-        "teacher_id": str(school["id"]),
+        "teacher_id": str(school["id"]),          # composer 复用字段名
         "teacher_dept": f"{school.get('province')}/{school.get('city')}",
         "school_id": school["id"],
         "school_name": school.get("school_name"),
@@ -362,6 +406,7 @@ def evaluate_school(
         },
     }
 
+
 def compare_schools(
     school_a_kw_or_id,
     school_b_kw_or_id,
@@ -369,7 +414,10 @@ def compare_schools(
     connection=None,
     require_complete_template=False,
 ):
-    pass
+    """双校数字化多维对比评估核心引擎。
+
+    输入两所学校的关键词或 ID，可指定年份，返回维度级、指标级与总分的全面对比结果。
+    """
     if connection is None:
         conn = connect()
         try:
@@ -401,6 +449,7 @@ def compare_schools(
     if not candidates_b:
         return {"error": f"未检索到对比学校 B「{school_b_kw_or_id}」" + (f"（年份 {year}）" if year else "")}
 
+    # 年份对齐：若未指定年份，优先选取两校共同存在的最新年份
     row_a = candidates_a[0]
     row_b = candidates_b[0]
     if year and str(row_a.get("year") or "") != str(year):
@@ -434,11 +483,14 @@ def compare_schools(
 
     name_a = res_a.get("school_name") or "学校A"
     name_b = res_b.get("school_name") or "学校B"
+    from packages.core.item_collection import collected_ids, enabled as r11_enabled
+    r11_active = r11_enabled()
     if require_complete_template:
         for label, name, side in (("A", name_a, res_a), ("B", name_b, res_b)):
             answered = int(side.get("answered") or 0)
             total_metrics = int(side.get("total_metrics") or 0)
-            if total_metrics <= 0 or answered != total_metrics:
+            expected_answered = len(collected_ids(side['school_years'][0], side['execution_scope']['indicator_ids'])) if r11_active else total_metrics
+            if total_metrics <= 0 or expected_answered <= 0 or answered != expected_answered:
                 return {
                     "error": (
                         f"学校 {label}【{name}】尚未录入有效问卷作答"
@@ -453,8 +505,10 @@ def compare_schools(
     tot_b = float(res_b.get("total_score") or 0.0)
     total_diff = round(tot_a - tot_b, 2)
 
-    dims_a = {d["dimension"]: float(d.get("score") or 0.0) for d in res_a.get("dimensions", [])}
-    dims_b = {d["dimension"]: float(d.get("score") or 0.0) for d in res_b.get("dimensions", [])}
+    # 六大维度比对
+    missing_score = None if r11_active else 0.0
+    dims_a = {d["dimension"]: float(d['score']) if d.get('score') is not None else missing_score for d in res_a.get("dimensions", [])}
+    dims_b = {d["dimension"]: float(d['score']) if d.get('score') is not None else missing_score for d in res_b.get("dimensions", [])}
     all_dims = [d["dimension"] for d in res_a.get("dimensions", [])]
     if not all_dims:
         all_dims = sorted(list(set(dims_a.keys()) | set(dims_b.keys())))
@@ -465,10 +519,13 @@ def compare_schools(
     ties = 0
 
     for d_name in all_dims:
-        sc_a = dims_a.get(d_name, 0.0)
-        sc_b = dims_b.get(d_name, 0.0)
-        diff = round(sc_a - sc_b, 2)
-        if diff > 0.01:
+        sc_a = dims_a.get(d_name)
+        sc_b = dims_b.get(d_name)
+        diff = round(sc_a - sc_b, 2) if sc_a is not None and sc_b is not None else None
+        if diff is None:
+            lead_tag = 'NO_DATA'
+            leader = '没有可比较的有效维度分'
+        elif diff > 0.01:
             lead_tag = "A"
             leader = name_a
             a_wins += 1
@@ -494,6 +551,7 @@ def compare_schools(
     year_b = str(row_b.get("year") or "")
     year_desc = f"{year_a} 年" if year_a == year_b else f"{name_a}({year_a}年) vs {name_b}({year_b}年)"
 
+    # 胜出判定与结论构建
     if name_a == name_b and year_a != year_b:
         direction = "往下走（下降）" if tot_b < tot_a else ("往上走（上升）" if tot_b > tot_a else "持平")
         diff_abs = round(abs(tot_b - tot_a), 2)
@@ -577,13 +635,14 @@ def compare_schools(
         ),
     }
 
+
 if __name__ == "__main__":
     for s in (sys.stdout, sys.stderr):
         try:
             s.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
-    hits = find_schools("示例市示例区示例二小学", year="2020", limit=3)
+    hits = find_schools("长沙县成绩小学", year="2020", limit=3)
     print("hits:", hits)
     if hits:
         from packages.agent.composer import render_markdown

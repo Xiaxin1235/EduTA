@@ -1,3 +1,8 @@
+"""Shared frozen research data/selection contract; no scoring imports or models.
+
+All arms resolve the same public dictionary and explicit constraints. This is
+input compilation, not G2 original-record correction, replay or output checking.
+"""
 from __future__ import annotations
 import copy, functools, hashlib, json, os, re
 from contextvars import ContextVar
@@ -17,19 +22,8 @@ def config_path():
 def _load(path):
     return json.loads(Path(path).read_text('utf-8'))
 
-def config():
-    cfg = copy.deepcopy(_load(str(config_path().resolve())))
-    for item in cfg['data'].values():
-        path = Path(item['path']).expanduser()
-        if not path.is_absolute():
-            path = config_path().resolve().parent / path
-        item['path'] = str(path.resolve())
-    return cfg
-def registry():
-    path = Path(config()['registry']).expanduser()
-    if not path.is_absolute():
-        path = config_path().resolve().parent / path
-    return _load(str(path.resolve()))
+def config(): return _load(str(config_path().resolve()))
+def registry(): return _load(str((ROOT/config()['registry']).resolve()))
 
 @functools.lru_cache(maxsize=8)
 def _verify_file(path, expected, size, mtime):
@@ -43,10 +37,15 @@ def identity():
         p=Path(v['path']); st=p.stat()
         result[k]={'SHA256':_verify_file(str(p),v['SHA256'],st.st_size,st.st_mtime_ns),'bytes':st.st_size}
     result['registry_version']=registry()['version']
+    if cfg.get('uncollected_items'):
+        from packages.core.item_collection import VERSION, rules
+        path=ROOT/cfg['uncollected_items']
+        result['item_collection']={'version':VERSION, 'list_version':rules()['version'],
+                                   'SHA256':hashlib.sha256(path.read_bytes()).hexdigest()}
     return result
 
 def attach(conn, source_path):
-    pass
+    """TEMP shadow view, complete LEFT JOIN by annual ID AND year; original facts stay read-only."""
     cfg=config();identity()
     if Path(source_path).resolve()!=Path(cfg['data']['source']['path']).resolve():
         raise SelectionError('RESEARCH_SOURCE_PATH_MISMATCH')
@@ -71,6 +70,9 @@ def attach(conn, source_path):
       province AS raw_province,city AS raw_city,district AS raw_district,
       query_province,query_city,query_district,research_status,metadata_source,additional_format_rule
       FROM research_schools''')
+    if cfg.get('uncollected_items'):
+        from packages.core.item_collection import install
+        install(conn)
     conn.execute('PRAGMA query_only=ON')
 
 def request_scope(fn):
@@ -85,7 +87,7 @@ def request_scope(fn):
     return run
 
 def _public_text(text):
-
+    # School place words are entity labels, never implied administrative limits.
     from packages.semantic_query.runtime import _literal_school_name_spans
     for school in _literal_school_name_spans(text):
         if re.search(r'(?:乡村|农村|城区|城镇|城市|镇区)(?:的)?(?:小学|初中|高中|幼儿园)$',school) or school in ('小学','初中','高中','幼儿园'):continue
@@ -95,16 +97,22 @@ def _public_text(text):
 def _positive(text, literal):
     return bool(re.search(r'(?<![\u4e00-\u9fff])'+re.escape(literal),text)) or bool(re.search(re.escape(literal),text))
 
+
 def _registered_metadata_region(keyword, question, active_year):
-    pass
+    """Use the same frozen v5 school view for scopes outside the city subset.
+
+    The city registry is a curated subset, not the whole dataset. Existing
+    metadata binding supplies real ambiguity witnesses; no scenario aliases
+    or expected result values are involved. Exact typed identity is retained.
+    """
     reg = registry()
     years = re.findall(r'(?<!\d)((?:19|20)\d{2})(?!\d)', question)
     from packages.experiment_protocol.mode import requirement_preservation_enabled
     if not requirement_preservation_enabled():
-        years = []
+        years = []  # Validate the task's active year below, without an original-text veto.
     if any(y not in reg['application_years'] for y in years) or (active_year is not None and str(active_year) not in reg['application_years']):
         raise SelectionError('UNSUPPORTED_OR_MISSING_YEAR')
-
+    # Do not silently discard an exclusion in the bounded metadata fallback.
     if re.search(r'排除|不含|不包括|剔除|不要纳入|除去', question):
         raise SelectionError('UNSUPPORTED_METADATA_REGION_EXCLUSION')
     if re.search(r'(?:不要|不是|不看)\s*[^，,。；;！？!?]{0,12}(?:省|市|县|区|旗)', question):
@@ -116,7 +124,8 @@ def _registered_metadata_region(keyword, question, active_year):
     from packages.semantic_query.runtime import _literal_region_spans, _scope_assertion_text
     positive = _scope_assertion_text(_public_text(question))
     literals = _literal_region_spans(positive)
-
+    # The ordinary cardinality helper deliberately masks generic 城区; that
+    # cannot erase a literal child such as 新城区 in a full province/city path.
     complete_paths = re.findall(r'[\u4e00-\u9fff]{2,10}?(?:自治区|特别行政区|省|市)(?:\s*[\u4e00-\u9fff]{2,10}?(?:市|州|盟))?\s*[\u4e00-\u9fff]{2,10}?(?:区|县|旗)', positive)
     for path in complete_paths:
         path = re.sub(r'^(?:只看|只查|只统计|仅限|仅统计|纳入|统计)+', '', path)
@@ -124,7 +133,8 @@ def _registered_metadata_region(keyword, question, active_year):
         if path not in literals:
             literals.append(path)
     literals = [re.sub(r'^(?:只看|只查|只统计|仅限|仅统计|纳入|统计)+', '', value) for value in literals]
-
+    # Original explicit parent/child limits take precedence over a shortened
+    # parser label. Multiple non-nested scopes are outside this single slot.
     components = re.findall(r'[\u4e00-\u9fff]{2,10}?(?:自治区|特别行政区|省|市|县|区|旗)', ' '.join(literals))
     def level(value):
         if value.endswith(('省', '自治区', '特别行政区')): return 'province'
@@ -139,7 +149,7 @@ def _registered_metadata_region(keyword, question, active_year):
             name = str(found['name'])
             bare = re.sub(r'(?:省|市|县|区|旗|自治区)$', '', name)
             if name not in positive and bare and bare in positive:
-
+                # A model-expanded province/city cannot resolve a bare name.
                 found = detect_region(bare, connection=conn, _metadata_only=True)
     if not found:
         raise SelectionError('UNSUPPORTED_OR_AMBIGUOUS_CITY')
@@ -152,10 +162,16 @@ def _registered_metadata_region(keyword, question, active_year):
     return scope
 
 def geographic_request(keyword, question='', active_year=None):
-    pass
+    """Resolve only the registered dictionary, consuming positive and negative explicit levels."""
     reg=registry(); text=str(keyword); whole=_public_text(question) if question else text
-
+    # Indicator reporting level is not an administrative population constraint.
+    # Mask only an institution-level phrase immediately attached to education-cloud.
     whole=re.sub(r'(?:区县|区、县|区级|县级)(?:及以上|以上)(?=教育云)', lambda m:' '*len(m.group()), whole)
+    if reg['version'].startswith('geo-select-v5-full-'):
+        from packages.core.geography_registry import resolve
+        # Administrative identity and peer level belong to the shared input
+        # resolver, including callers that disable task-requirement correction.
+        return resolve(text, whole, active_year)
     for name in sorted(set(reg['city_aliases'])|set(reg['parent_by_city']),key=len,reverse=True):
         text=re.sub(r'(?:排除|不含|不包括|剔除|不要纳入|除去)\s*'+re.escape(name),' ',text)
     aliases=reg['city_aliases']; cities=[]
@@ -167,7 +183,7 @@ def geographic_request(keyword, question='', active_year=None):
     if len(cities)!=1: raise SelectionError('UNSUPPORTED_OR_AMBIGUOUS_CITY')
     city=cities[0]; parent=reg['parent_by_city'][city]
     positives=[];exclusions=[];cleanwhole=whole
-
+    # Consume geographic negation before checking positive parent/child levels.
     for field,names in [('province',set(reg['parent_by_city'].values())),('city',set(aliases)|set(reg['parent_by_city']))]:
         for name in sorted(names,key=len,reverse=True):
             pattern=r'(?:排除|不含|不包括|剔除|不要纳入|除去)\s*'+re.escape(name)
@@ -179,7 +195,8 @@ def geographic_request(keyword, question='', active_year=None):
     if len(wholecities)==1 and city not in wholecities:
         raise SelectionError('CONFLICTING_EXPLICIT_REQUEST_CITY')
     for alias,p in reg['province_aliases'].items():
-
+        # Full province spelling only; bare city aliases such as Shanghai must
+        # not turn a school name or another region into a positive parent.
         if alias.endswith(('省','自治区')) and alias in cleanwhole: positives.append(p)
     from scripts.region_engine import PROVINCES
     for short in PROVINCES:
@@ -203,7 +220,7 @@ def geographic_request(keyword, question='', active_year=None):
         elif name in text or re.search(r'(?:市|只看|仅限|在|纳入|、|\s)'+re.escape(alias)+r'(?:区|县)?',cleanwhole):
             if district and district!=name:raise SelectionError('AMBIGUOUS_DISTRICT')
             district=name
-
+    # An explicitly named but unregistered district cannot disappear.
     unknown=re.findall(r'([\u4e00-\u9fff]{2,6}(?:区|县))',cleanwhole)
     for token in unknown:
         if token in ('城区','城镇或城区','市区','地区','区域','本区') or token.endswith(('地区','城区','镇区')):continue
@@ -223,18 +240,23 @@ def resolve_region(keyword):
     return geographic_request(keyword,REQUEST.get())
 
 def explicit_school_filter(question):
-    text=_public_text(question)
+    from packages.core.school_filters import area_assertion_text, generic_school_text
+    text=generic_school_text(area_assertion_text(_public_text(question)))
     area=list(dict.fromkeys(re.findall(r'乡村|农村|城区|城镇|城市|镇区',text)))
     stage=list(dict.fromkeys(re.findall(r'九年一贯制|十二年一贯制|小学|初级中学|初中|高级中学|高中|幼儿园|中职',text)))
-
+    # Multiple alternative cohorts are handled by the existing common plan;
+    # never collapse a two-cohort comparison into a single subset.
     if len(area)>1 or len(stage)>1:return None
     if re.search(r'(?:排除|不含|不包括|剔除|不要纳入)\s*(?:乡村|农村|城区|城镇|城市|镇区|小学|初中|高中|幼儿园)',text):
         return None
     return ' '.join(area+stage) or None
 
 def bind_public_constraints(question,routed):
-    pass
-    if not enabled() or routed.get('intent')=='clarify':return routed
+    """Common request compiler; never performs model answer checks or retries."""
+    if not enabled() or routed.get('intent') in {'clarify', 'unavailable'}:return routed
+    if (routed.get('public_plan') or {}).get('capability'):
+        from packages.semantic_query.regional_capabilities import research_constraints
+        return research_constraints(question, routed)
     out=copy.deepcopy(routed)
     intent=out.get('intent');targets=[]
     if intent=='public_task':targets=[q for q in out['public_plan']['queries'] if q['kind'].startswith('region_')]
@@ -247,10 +269,13 @@ def bind_public_constraints(question,routed):
         raise SelectionError('UNSUPPORTED_NEGATED_SCHOOL_ATTRIBUTE')
     literal=(explicit_school_filter(question) or _literal_school_filter(question)) if preserve else None
     years=set(re.findall(r'(?<!\d)(20\d{2})(?!\d)',question)) if preserve else set()
+    if years and intent=='public_task' and any(q.get('topic') for q in targets):
+        from packages.semantic_query.regional_capabilities import years as capability_years
+        years=set(capability_years(question,{})[0])
     for q in targets:
         entity=q.get('entity') if intent=='public_task' else (q.get('region_keyword') or q.get('region'))
         if not entity:continue
-
+        # Bind existing annual nodes; preserve the comparison and direction.
         if intent=='region_longitudinal' or q.get('year_a') is not None or q.get('year_b') is not None:
             if not q.get('year_a') or not q.get('year_b'):raise SelectionError('UNSUPPORTED_OR_MISSING_YEAR')
             annual_nodes=[('year_a',q['year_a']),('year_b',q['year_b'])]

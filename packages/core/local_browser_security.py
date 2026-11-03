@@ -1,3 +1,8 @@
+"""Small, loopback-only browser boundary for the local research application.
+
+The session cookie and synchronizer token protect browser requests. This is not
+an account system; processes already running as the Windows user are trusted.
+"""
 from __future__ import annotations
 
 import hmac
@@ -12,6 +17,7 @@ from starlette.responses import JSONResponse
 SESSION_COOKIE = "teachereval_local_session"
 TOKEN_HEADER = "x-teachereval-csrf"
 SESSION_PATH = "/api/v1/local/session"
+
 
 class LocalBrowserSecurityMiddleware:
     def __init__(self, app, *, ttl_seconds=3600, max_sessions=64):
@@ -94,7 +100,8 @@ class LocalBrowserSecurityMiddleware:
             cookie = self._cookies(headers).get(SESSION_COOKIE)
             session = self.sessions.get(cookie.value if cookie else "")
             if session and session[2] == origin:
-
+                # Browser tabs share cookies but each retains its fetched token.
+                # Reuse a valid pair without renewing either expiry or cookie.
                 response = JSONResponse({"csrf_token": session[0],
                                          "expires_in": math.ceil(session[1] - now)})
                 return await response(scope, receive, secure_send)

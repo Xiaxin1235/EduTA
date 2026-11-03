@@ -1,3 +1,5 @@
+"""Production contracts for region, ranking, comparison, longitudinal, and school queries."""
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -6,8 +8,9 @@ if TYPE_CHECKING:
 
 __all__ = ["ContractService", "ContractViolation", "StaleBaseRevision"]
 
+
 def __getattr__(name: str):
-    pass
+    """Load public classes on demand so capability imports stay dependency-neutral."""
     if name in {"ContractService", "ContractViolation"}:
         from .service import ContractService, ContractViolation
 
@@ -23,6 +26,7 @@ def __getattr__(name: str):
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     globals()[name] = value
     return value
+
 
 def __dir__():
     return sorted(set(globals()) | set(__all__))

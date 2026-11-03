@@ -1,3 +1,8 @@
+"""Native F/H task representation, compiler and database execution.
+
+Promoted reusable contract logic; no experiment imports, reference answers,
+model-output caches, HTML rendering, scoring or question-ID branches.
+"""
 import copy, json, math, re
 from packages.semantic_query.catalogue import load_semantic_catalogue
 from scripts.school_engine import evaluate_school, load_school_template
@@ -6,7 +11,7 @@ from packages.semantic_query import typed_plan
 OPS = {'subtract','divide','divide_percent','add','mean'}
 FIELDS = ('kind','entity','year','dimension','topic','view','aggregation','statistic','school_filter','rank','top_n','semantic_type','region_identity')
 def knowledge():
-    return {'catalogue': copy.deepcopy(load_semantic_catalogue()['items']),
+    return {'catalogue': copy.deepcopy(load_semantic_catalogue()['items']), 'topics':copy.deepcopy(load_semantic_catalogue()['topics']),
             'school_template': load_school_template(), 'context': {},
             'rules': {'region_mean': 'Native school_equal_mean: average non-NULL item scores per school, then equal school mean; normalized_value*100.',
                       'school_assessment': 'Use supplied native template, weights and missing-value rules.',
@@ -84,6 +89,16 @@ def compile_task(path, task, shared=None):
         if q.get('view') not in {'raw_value','normalized_score','school_count'}: raise ValueError('invalid_view')
         if q.get('dimension') in dimension_keys: q['dimension']=dimension_keys[q['dimension']]
         if q.get('dimension') is not None and q['dimension'] not in dims: raise ValueError('unknown_dimension')
+        if q.get('topic'):
+            from packages.semantic_query.catalogue import topic_definition
+            topic=topic_definition(q['topic'])
+            if q.get('dimension') not in (None,topic['dimension']):raise ValueError('parent_binding_mismatch')
+            q['dimension']=None
+            if not q.get('indicator_ids'):q['indicator_ids']=list(topic['indicator_ids'])
+            if q['view']!='normalized_score' or q.get('statistic')!='mean' or q.get('aggregation')!='school_equal_mean':
+                raise ValueError('topic_normalized_mean_only')
+            if topic.get('collapse_to_dimension'):
+                q.update(topic=None,dimension=topic['collapse_to_dimension'],indicator_ids=[],aggregation='template_weighted_dimension_mean' if q['kind']=='school_assessment' else 'school_equal_mean')
         ids=q.get('indicator_ids',[])
         if not isinstance(ids,list) or len(ids)!=len(set(ids)) or any(type(i)!=int or i not in catalogue for i in ids): raise ValueError('invalid_indicators')
         for i in ids:
@@ -91,11 +106,11 @@ def compile_task(path, task, shared=None):
             if q.get('topic') and q['topic']!=catalogue[i]['topic']: raise ValueError('parent_binding_mismatch')
         if q['kind']=='school_fact':
             if len(ids)!=1 or q.get('aggregation')!='none': raise ValueError('fact_requires_one_leaf')
-
+            # This path retrieves one registered answer; no statistical reduction runs.
             if q.get('statistic') not in {None,'mean','count','median','max','min'}: raise ValueError('unsupported_statistic')
             q['statistic']=None
         elif q['kind']=='school_assessment':
-            if q['view']!='normalized_score' or q.get('aggregation')!='template_weighted_dimension_mean': raise ValueError('invalid_school_assessment')
+            if q['view']!='normalized_score' or q.get('aggregation')!=('school_equal_mean' if q.get('topic') else 'template_weighted_dimension_mean'): raise ValueError('invalid_school_assessment')
         else:
             count_scope=q.get('statistic')=='count' and q['view']=='school_count' and q.get('aggregation')=='distinct_schools_with_valid_answer'
             if not count_scope and (q['view']!='normalized_score' or q.get('aggregation') not in {'school_equal_mean','answer_pooled_mean'}): raise ValueError('unsupported_region_view_or_aggregation')
@@ -132,7 +147,7 @@ def compile_task(path, task, shared=None):
     return typed_plan.bind_types(task,catalogue)[0]
 
 def canonical_task(task,shared=None):
-    pass
+    """Compare executable semantics, retaining operation direction and requested delivery."""
     shared=shared or knowledge(); catalogue={x['id']:x for x in shared['catalogue']}
     nodes={}; queries=[]; steps=[]
     for q in task['queries']:
@@ -147,17 +162,17 @@ def canonical_task(task,shared=None):
         key=json.dumps({'op':step['op'],'args':[nodes[i] for i in step['args']]},sort_keys=True,ensure_ascii=False)
         nodes[step['id']]=key; steps.append(key)
     ch=task['chart']; an=task['analysis']
-
+    # A compiler-validated third analysis node repeats an already checked step.
     delivery={'outputs':sorted(nodes[i] for i in task['outputs']),
               'chart_requested':ch['requested'],'chart_outputs':sorted(nodes[i] for i in ch['outputs']) if ch['requested'] else [],
               'chart_kind':ch['kind'] if ch['requested'] else None,
               'analysis_kind':an['kind'],'analysis_args':[nodes[i] for i in an['args'][:2]]}
     return {'queries':sorted(queries),'steps':steps},delivery,nodes
 
-def query(kind,entity,year,dimension=None,ids=None,view=None,statistic='mean',aggregation=None,**kw):
-    return dict(kind=kind,entity=entity,year=str(year),dimension=dimension,topic=None,
+def query(kind,entity,year,dimension=None,ids=None,view=None,statistic='mean',aggregation=None,topic=None,**kw):
+    return dict(kind=kind,entity=entity,year=str(year),dimension=dimension,topic=topic,
                 indicator_ids=ids or [],view=view or ('school_count' if statistic=='count' else 'raw_value' if kind=='school_fact' else 'normalized_score'),
-                statistic=statistic,aggregation='distinct_schools_with_valid_answer' if statistic=='count' else aggregation or ('none' if kind=='school_fact' else 'template_weighted_dimension_mean' if kind=='school_assessment' else 'school_equal_mean'),
+                statistic=statistic,aggregation='distinct_schools_with_valid_answer' if statistic=='count' else aggregation or ('school_equal_mean' if topic else 'none' if kind=='school_fact' else 'template_weighted_dimension_mean' if kind=='school_assessment' else 'school_equal_mean'),
                 school_filter=None,rank=None,top_n=None,**kw)
 
 class Executor:
@@ -202,19 +217,28 @@ class Executor:
                 if q['view']=='normalized_score' and value is not None: value*=100
                 unit=cat[i]['unit'] if q['view']=='raw_value' else '分'
             else:
-                raw=evaluate_school(sid,connection=c,target_dimension=q.get('dimension'),indicator_ids=q.get('indicator_ids'))
-                value=raw.get('target_dimension_score') if q.get('dimension') else raw.get('total_score')
+                raw=evaluate_school(sid,connection=c,target_dimension=q.get('dimension'),indicator_ids=q.get('indicator_ids'),topic=q.get('topic'))
+                value=raw.get('topic_score') if q.get('topic') else raw.get('target_dimension_score') if q.get('dimension') else raw.get('total_score')
                 if q.get('dimension') and value is None: value=next((x.get('score') for x in raw.get('dimensions',[]) if x.get('dimension',x.get('name'))==q['dimension']),None)
         else:
-            raw=evaluate_region(q['entity'],year=q['year'],target_dimension=q.get('dimension'),target_stat=q['statistic'],school_filter=q.get('school_filter'),aggregation='school_equal_mean' if q['statistic']=='count' else q['aggregation'],indicator_ids=q.get('indicator_ids'),value_view='normalized_score' if q['statistic']=='count' else q['view'],target_rank=q.get('rank'),target_top_n=q.get('top_n'),operation='region_ranking' if kind=='region_ranking' else 'region_evaluation',connection=c,region_identity=q.get('region_identity'))
+            raw=evaluate_region(q['entity'],year=q['year'],target_dimension=q.get('dimension'),target_stat=q['statistic'],school_filter=q.get('school_filter'),aggregation='school_equal_mean' if q['statistic']=='count' else q['aggregation'],indicator_ids=q.get('indicator_ids'),value_view='normalized_score' if q['statistic']=='count' else q['view'],target_rank=q.get('rank'),target_top_n=q.get('top_n'),operation='region_ranking' if kind=='region_ranking' else 'region_evaluation',topic=q.get('topic'),connection=c,region_identity=q.get('region_identity'))
             empty=typed_plan.no_data_result(raw)
             field='target_dimension_score' if q.get('dimension') and q['statistic']=='mean' else {'mean':'total_score','count':'school_count','median':'median_score','max':'max_score','min':'min_score'}[q['statistic']]
             value=None if empty else raw.get('ranking_items') if kind=='region_ranking' else raw.get(field); unit='所' if q['statistic']=='count' else '分'
         scope=';'.join('Q'+str(i)+':'+cat[i]['question'] for i in q.get('indicator_ids',[])) if q.get('indicator_ids') else q.get('dimension') or 'overall'
-        return ({'value':value,'unit':unit,'status':'ANSWER' if value is not None else 'NO_DATA','label':q['entity']+'/'+q['year']+'/'+scope},raw)
+        if q.get('topic'):
+            from packages.semantic_query.topic_tasks import label
+            scope=label(q['topic'])
+        node={'value':value,'unit':unit,'status':'ANSWER' if value is not None else 'NO_DATA','label':q['entity']+'/'+q['year']+'/'+scope}
+        if q.get('topic'):
+            from packages.semantic_query.topic_tasks import NOTE
+            node.update(topic=q['topic'],measurement_note=NOTE,all_items_uncollected=bool(raw.get('all_items_uncollected')))
+            if not node['all_items_uncollected']:node['school_count']=raw.get('school_count',0)
+            node['label']+='。'+NOTE
+        return node,raw
 
 def calculation_explanation(task,result,step):
-    pass
+    """Describe the executed operation using its operands' measurement semantics."""
     if step is None: return '未找到可验证的计算步骤，未生成计算结论。'
     queries={q['id']:q for q in task['queries']}
     def measure(node_id):

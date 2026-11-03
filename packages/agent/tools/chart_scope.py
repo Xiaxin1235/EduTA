@@ -1,12 +1,15 @@
+"""Checks against the rendered Matplotlib scene, not the builder's input claims."""
 import base64
 import hashlib
 import math
 import re
 
+
 def comparison_filter_label(value):
     if not value or value == "all":
         return "全部学校"
     return {"rural": "乡村", "urban": "城镇"}.get(value, str(value))
+
 
 def dimension_compare_scope(result):
     value = result.get("overview") or result
@@ -22,7 +25,8 @@ def dimension_compare_scope(result):
     answer_scope = result.get("answer_scope") or value.get("answer_scope") or {}
     requested = set(answer_scope.get("requested_result_statistics") or ())
     counts = [value.get("school_count_a"), value.get("school_count_b")]
-
+    # A chart does not acquire denominators just because it was requested.
+    # Existing count-bearing results remain strict even without AnswerSpec.
     count_required = bool(
         requested & {"school_count", "school_count_a", "school_count_b"}
         or any(count is not None for count in counts)
@@ -36,8 +40,9 @@ def dimension_compare_scope(result):
         "diff": value.get("diff"),
     }
 
+
 def capture_figure_scene(fig):
-    pass
+    """Read the actual artists after drawing; generated code cannot supply this record."""
     from matplotlib.container import BarContainer
     fig.canvas.draw()
     axes = []
@@ -65,6 +70,7 @@ def capture_figure_scene(fig):
             "x_inverted": bool(ax.xaxis_inverted()),
         })
     return {"version": "matplotlib-scene-v1", "texts": [t.get_text() for t in fig.texts], "axes": axes}
+
 
 def validate_dimension_compare_charts(result, charts):
     expected = dimension_compare_scope(result)
@@ -136,8 +142,9 @@ def validate_dimension_compare_charts(result, charts):
             failures.append("dimension_compare_difference_value_missing")
     return {"status": "FAIL" if failures else "PASS", "scope": "rendered_region_dimension_compare", "failures": sorted(set(failures))}
 
+
 def validate_overall_compare_charts(result, charts):
-    pass
+    """Check the rendered two-bar overall view against contract-bound values."""
     value = result.get("overview") or result
     scope = result.get("answer_scope") or value.get("answer_scope") or {}
     if (value.get("object_type") != "region_compare" or value.get("target_dimension")
@@ -199,8 +206,9 @@ def validate_overall_compare_charts(result, charts):
                 failures.append("overall_compare_difference_direction_or_value_mismatch")
     return {"status": "FAIL" if failures else "PASS", "scope": "rendered_region_overall_compare", "failures": sorted(set(failures))}
 
+
 def validate_dimension_pair_charts(result, charts):
-    pass
+    """Verify a two-dimension chart against the rendered bars and trusted result."""
     scope = result.get("overview") or result
     names = list(scope.get("target_dimensions") or [])
     if scope.get("object_type") not in {"school", "region"} or len(names) != 2:
@@ -254,8 +262,9 @@ def validate_dimension_pair_charts(result, charts):
             failures.append("dimension_pair_rendered_extra_marks")
     return {"status": "FAIL" if failures else "PASS", "scope": "rendered_dimension_pair", "failures": sorted(set(failures))}
 
+
 def validate_school_item_set_total_chart(result, charts):
-    pass
+    """Check the rendered artists and PNG for a requested item plus total chart."""
     scope = result.get("answer_scope") or {}
     if not (
         scope.get("operation") == "school_fact"

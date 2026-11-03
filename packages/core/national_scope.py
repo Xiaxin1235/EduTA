@@ -1,7 +1,10 @@
+"""Interpret the administrative scope of a national province ranking question."""
+
 import re
 
+
 def province_only_scope(question: str) -> bool:
-    pass
+    """A request for a 省份 means an administrative province, not a municipality."""
     text = str(question or "")
     if re.search(r"只(?:算|看|比较|包括)?省(?:份)?|仅(?:限|看|比较)?省(?:份)?|不(?:含|包含|包括|计入|算)直辖市|排除直辖市", text):
         return True

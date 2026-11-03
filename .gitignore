@@ -45,3 +45,7 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Research registration resources stay local
+/research_rules/GEOGRAPHY_*
+/research_rules/RESEARCH_DATASET_PRE_R11_v1.json

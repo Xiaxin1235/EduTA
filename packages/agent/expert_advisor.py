@@ -1,7 +1,15 @@
+"""专家视导与研判保底引擎 (Local Expert Policy Advisor Engine).
+
+当云端模型（如 grok-4.6、deepseek）网络超时或瞬时繁忙时，
+基于本地 SQLite 真实确凿的六大维度得分、排位百分比及分差数据，
+毫秒级生成专业、严谨、零幻觉的教育数字化视导研判与对标互鉴建议。
+"""
+
 from typing import Any, Dict, List, Optional
 
+
 def generate_expert_advice(data: Dict[str, Any], question: str = "") -> str:
-    pass
+    """根据结构化数据和提问意图生成高水准专家研判报告。"""
     obj_type = data.get("object_type") or "school"
 
     if obj_type == "school_compare":
@@ -18,6 +26,7 @@ def generate_expert_advice(data: Dict[str, Any], question: str = "") -> str:
         return _region_advice(data)
     else:
         return _school_eval_advice(data)
+
 
 def _national_ranking_advice(d: Dict[str, Any]) -> str:
     year = d.get("year", "2023")
@@ -52,6 +61,7 @@ def _national_ranking_advice(d: Dict[str, Any]) -> str:
         f"各省份填报在册学校覆盖度存在客观阶段性差异。对在册样本极少的小微样本省份，其均分受单校偶发值影响波动较大，在制定全省教育现代化推进规划时，应立足全域普查常态化数据进行增值性复盘。"
     ]
     return "\n".join([line for line in adv if line])
+
 
 def _school_compare_advice(d: Dict[str, Any]) -> str:
     name_a = d.get("school_name_a") or "标的学校A"
@@ -95,6 +105,7 @@ def _school_compare_advice(d: Dict[str, Any]) -> str:
         f"建议所属教育行政主管部门建立两校数字化结对帮扶共同体，以标杆校优秀数字教研成果为抓手，开展跨校虚拟教研与联合集体备课，有效缩小校际数字化发展落差，赋能区域教育优质均衡发展。"
     )
 
+
 def _school_ranking_advice(d: Dict[str, Any]) -> str:
     name = d.get("school_name") or "本校"
     rank = d.get("rank", 1)
@@ -126,6 +137,7 @@ def _school_ranking_advice(d: Dict[str, Any]) -> str:
         f"建议学校管理团队建立常态化数字化发展监测档案，每学期对照区域指标大盘进行增值性复盘，持续巩固示范引领地位。"
     )
 
+
 def _region_compare_advice(d: Dict[str, Any]) -> str:
     name_a = d.get("region_name_a") or "区域A"
     name_b = d.get("region_name_b") or "区域B"
@@ -153,6 +165,7 @@ def _region_compare_advice(d: Dict[str, Any]) -> str:
         f"2. 资源互通互认：推动两地优质数字化名师课例、数字孪生教学空间等资源共建互通，全面提升区域整体教育现代化水平。"
     )
 
+
 def _school_fact_advice(d: Dict[str, Any]) -> str:
     name = d.get("school_name") or "该校"
     metric = d.get("metric_name") or "核查指标"
@@ -175,6 +188,7 @@ def _school_fact_advice(d: Dict[str, Any]) -> str:
         f"该数值仅反映当前数据版本中的登记事实；未提供适用阈值或规范条款，因此不据此判断是否达标。"
     )
 
+
 def _region_advice(d: Dict[str, Any]) -> str:
     name = d.get("region_name") or "本区域"
     sc = d.get("total_score", 0)
@@ -189,6 +203,7 @@ def _region_advice(d: Dict[str, Any]) -> str:
         f"1. 相对优势：该区在「{strong}」维度成效显著，校园基础联通与智能终端配置具备较高水准。\n"
         f"2. 主要攻坚点：相对薄弱项集中在「{weak}」，建议区教育局重点健全常态化经费保障制度与校级数据安全治理规程。"
     )
+
 
 def _school_eval_advice(d: Dict[str, Any]) -> str:
     name = d.get("school_name") or "学校"

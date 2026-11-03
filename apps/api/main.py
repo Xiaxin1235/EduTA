@@ -1,3 +1,26 @@
+"""M09 · REST API（FastAPI，可降级）。
+
+FastAPI 未安装时降级为 BaseApp（仅提供 serve() 提示 + 核心逻辑可直接 import）；
+安装 fastapi+uvicorn 后提供完整端点（对齐《系统设计文档-v0.1.md》§6 API 草案）：
+
+  POST /api/v1/chat              对话式评估入口（宽泛问题 → 结构报告+证据）
+  POST /api/v1/evaluations       发起批量评估（同步；队列化留待后续）
+  GET  /api/v1/evaluations/{id}  取单份结果
+  GET  /api/v1/teachers/{id}/reports   教师历次报告
+  GET  /api/v1/teachers/{id}/trends    多周期趋势（雷达数据，供 M10 用）
+  GET  /api/v1/templates         模板列表（评估框架即配置的读接口）
+  GET  /api/v1/teachers          演示教师列表
+  GET  /api/v1/teachers/{id}/profile  教师简介（档案+数据覆盖）
+  GET  /api/v1/schools           按校名检索
+  GET  /api/v1/schools/{id}/profile   学校简介（档案+作答覆盖）
+  GET  /api/v1/llm/status            模型密钥配置状态（不回完整 key）
+  POST /api/v1/llm/config            保存官方/中转 API 地址与密钥
+  POST /api/v1/llm/ping              探测模型接口是否通
+
+只读原则：本模块不写任何业务库，结果驻留内存（持久化交给 M05/M11 之后）。
+权限为占位（get_current_user 桩 + TODO），完整授权在 M11。
+"""
+
 import copy
 import csv
 import json
@@ -11,25 +34,26 @@ _SRC_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 if _SRC_ROOT not in sys.path:
     sys.path.insert(0, _SRC_ROOT)
 
-from packages.core.frozen_paths import resource_root
-from scripts.indicator_engine import evaluate_teacher, load_yaml
-from packages.agent.planner import parse_question, plan
-from packages.agent.critic import review as critic_review
-from packages.agent.composer import compose, render_markdown
-from packages.indicator_engine.calibration import attach_calibration
-from packages.agent.router import route_query
-from packages.analysis_contract import StaleBaseRevision
-from packages.semantic_query.tool_adapter import school_fact_metric_input
+from packages.core.frozen_paths import resource_root  # noqa: E402
+from scripts.indicator_engine import evaluate_teacher, load_yaml  # noqa: E402
+from packages.agent.planner import parse_question, plan  # noqa: E402
+from packages.agent.critic import review as critic_review  # noqa: E402
+from packages.agent.composer import compose, render_markdown  # noqa: E402
+from packages.indicator_engine.calibration import attach_calibration  # noqa: E402
+from packages.agent.router import route_query  # noqa: E402
+from packages.analysis_contract import StaleBaseRevision  # noqa: E402
+from packages.semantic_query.tool_adapter import school_fact_metric_input  # noqa: E402
 
 ROOT = resource_root()
 
-_MEMORY: dict = {}
+_MEMORY: dict = {}          # result_id -> 结果
 _TEACHERS: List[str] = []
 _TEMPLATE_CACHE = {}
 _CONTRACT_STORE_RUNTIME_STATUS: Optional[dict] = None
 
+
 def initialize_contract_store_status(*, force: bool = False) -> dict:
-    pass
+    """Turn store availability into diagnostic state, never a startup error."""
     global _CONTRACT_STORE_RUNTIME_STATUS
     if force or _CONTRACT_STORE_RUNTIME_STATUS is None:
         try:
@@ -44,9 +68,11 @@ def initialize_contract_store_status(*, force: bool = False) -> dict:
             }
     return dict(_CONTRACT_STORE_RUNTIME_STATUS)
 
+
 def _public_path_name(value) -> Optional[str]:
     text = str(value or "").strip()
     return os.path.basename(text) if text else None
+
 
 def _public_data_source_status(status: dict) -> dict:
     return {
@@ -55,9 +81,9 @@ def _public_data_source_status(status: dict) -> dict:
         "active_source": status.get("active_source"),
         "configured_by_environment": bool(status.get("configured_by_environment")),
         "read_only": bool(status.get("read_only")),
-        "data_kind": status.get("data_kind"),
         "paths_redacted": True,
     }
+
 
 def _public_contract_store_status(status: dict) -> dict:
     candidates = []
@@ -80,8 +106,9 @@ def _public_contract_store_status(status: dict) -> dict:
         "paths_redacted": True,
     }
 
+
 def _public_active_contract_store(contract_service) -> dict:
-    pass
+    """Project an opened contract store into public response metadata."""
     return {
         "status": "available",
         "file": _public_path_name(contract_service.store.path),
@@ -89,8 +116,9 @@ def _public_active_contract_store(contract_service) -> dict:
         "paths_redacted": True,
     }
 
+
 def _public_error_text(value, *, fallback: str) -> str:
-    pass
+    """Keep public diagnostics useful without echoing local absolute paths."""
     text = str(value or "").strip()
     if not text:
         return fallback
@@ -98,8 +126,9 @@ def _public_error_text(value, *, fallback: str) -> str:
         return fallback
     return text
 
+
 def _experiment_parser_error_code(value) -> str:
-    pass
+    """Promote only stable, allowlisted parser diagnostics to the public code."""
     detail = _public_error_text(value, fallback="experiment_llm_parse_failed")
     if re.fullmatch(
         r"experiment_explicit_statistic_mismatch:(?:median|mean_and_median)",
@@ -114,8 +143,9 @@ def _experiment_parser_error_code(value) -> str:
         return "experiment_parser_gateway_failed"
     return "experiment_llm_parse_failed"
 
+
 def _experiment_parser_diagnostic(value) -> Optional[dict]:
-    pass
+    """Parse allowlisted parser summaries without exposing model text."""
     detail = _public_error_text(value, fallback="experiment_llm_parse_failed")
     prefixes = (
         "experiment_parser_empty_content:",
@@ -223,8 +253,9 @@ def _experiment_parser_diagnostic(value) -> Optional[dict]:
             )
     return diagnostic
 
+
 def _public_chart_artifact(artifact: dict) -> dict:
-    pass
+    """Expose a chart handle without its server-local filesystem location."""
     public = dict(artifact or {})
     local_path = (
         public.pop("file_path", None)
@@ -236,8 +267,9 @@ def _public_chart_artifact(artifact: dict) -> dict:
     public["paths_redacted"] = True
     return public
 
+
 def _public_tool_call(tool_call: dict, charts_by_id: dict) -> dict:
-    pass
+    """Project tool evidence while reusing the redacted public chart objects."""
     public = dict(tool_call or {})
     public_artifacts = []
     for artifact in public.get("artifacts") or []:
@@ -254,8 +286,9 @@ def _public_tool_call(tool_call: dict, charts_by_id: dict) -> dict:
             )
     return public
 
+
 def _presentation_verification(result: dict, tool_calls: list, charts: list, *, requested_outputs=None) -> dict:
-    pass
+    """Describe post-contract chart delivery without changing trusted computation state."""
     contract = result.get("contract") or {}
     requested_outputs = tuple(contract.get("requested_outputs") or ()) if requested_outputs is None else tuple(requested_outputs)
     chart_requested = "charts" in requested_outputs
@@ -319,8 +352,9 @@ def _presentation_verification(result: dict, tool_calls: list, charts: list, *, 
         "trusted_computation_unchanged": True,
     }
 
+
 def _apply_presentation_coverage(response: dict) -> None:
-    pass
+    """Overlay truthful delivery coverage while preserving the committed core PASS."""
     presentation = response.get("presentation_verification") or {}
     verification = response.get("contract_verification")
     if not isinstance(verification, dict) or not presentation.get("chart_requested"):
@@ -370,6 +404,7 @@ def _apply_presentation_coverage(response: dict) -> None:
         nested_projection["presentation_verification"] = dict(presentation)
         response["result"] = nested_projection
 
+
 def _load_teachers():
     global _TEACHERS
     if not _TEACHERS:
@@ -381,10 +416,12 @@ def _load_teachers():
             _TEACHERS = []
     return _TEACHERS
 
+
 def _load_tpl():
     if "tpl" not in _TEMPLATE_CACHE:
         _TEMPLATE_CACHE["tpl"] = load_yaml("2025-2026_v1")
     return _TEMPLATE_CACHE["tpl"]
+
 
 def _run_evaluation(teacher_id: str, years: List[str]):
     tpl = _load_tpl()
@@ -397,6 +434,7 @@ def _run_evaluation(teacher_id: str, years: List[str]):
     result_id = str(uuid.uuid4())
     _MEMORY[result_id] = {"_id": result_id, **res}
     return _MEMORY[result_id]
+
 
 def _finish(
     result: dict,
@@ -418,6 +456,7 @@ def _finish(
         evidence.extend(d.get("evidence", []))
     c = critic_review(result, evidence, with_llm=False)
 
+    # 模块化 Agent 工具调用编排：自动调用本地 Python 工具画图
     tool_calls = []
     charts = []
     chart_requested = requested_outputs is None or "charts" in requested_outputs
@@ -452,6 +491,10 @@ def _finish(
     )
     report["presentation_verification"] = presentation
 
+    # The chart builder consumes the same dimension rows as the trusted
+    # computation.  Expose that source packet to the multimodal auditor so a
+    # generated regional chart can be checked against the exact values used
+    # for the plotted coordinates, rather than being left NOT_CHECKED.
     if charts and result.get("dimensions"):
         chart_dims = [
             {
@@ -467,6 +510,7 @@ def _finish(
             }
             report["dimensions_comparison"] = chart_dims
 
+    # 质检审计与四大系统性能量化指标核算（针对基础结果）
     audit_data = None
     system_metrics = None
     try:
@@ -538,6 +582,18 @@ def _finish(
         "presentation_verification": dict(presentation),
     }
 
+
+def _unavailable_response(routed, session_id, request_id, base_revision, parser_trace=None):
+    """Terminal data-availability message; no pending clarification or tools."""
+    return dict(clarify=False, business_status='UNAVAILABLE', question=routed,
+                message=routed['message'], markdown=routed['message'], session_id=session_id,
+                tool_calls=[], fact_tool_calls=[], charts=[], fallback=False,
+                revision_control=_revision_control(request_id, base_revision, 'NOT_COMMITTED_UNAVAILABLE'),
+                llm_parser=parser_trace,
+                execution_guard=dict(fact_execution_started=False, fact_tool_calls=0,
+                                     pending_opened=False, revision_committed=False))
+
+
 def _run_school_evaluation(
     keyword: str,
     years: List[str],
@@ -585,6 +641,7 @@ def _run_school_evaluation(
     _MEMORY[result_id] = {"_id": result_id, **res}
     return _MEMORY[result_id]
 
+
 def _run_school_fact(
     school_keyword: str,
     metric_info: dict,
@@ -600,8 +657,10 @@ def _run_school_fact(
     _MEMORY[result_id] = packed
     return packed
 
+
 _SESSIONS: dict = {}
 _EXPERIMENT_SESSIONS: dict = {}
+
 
 def _run_region_evaluation(
     region_keyword: str,
@@ -645,6 +704,7 @@ def _run_region_evaluation(
     _MEMORY[result_id] = packed
     return packed
 
+
 def _run_school_ranking(school_keyword: str, region_keyword: Optional[str] = None, year: Optional[str] = None) -> dict:
     from scripts.region_engine import query_school_ranking
     res = query_school_ranking(school_keyword, region_keyword=region_keyword, year=year)
@@ -654,6 +714,7 @@ def _run_school_ranking(school_keyword: str, region_keyword: Optional[str] = Non
     packed = {"_id": result_id, **res}
     _MEMORY[result_id] = packed
     return packed
+
 
 def _run_school_compare(
     school_a: str,
@@ -698,6 +759,7 @@ def _run_school_compare(
     packed = {"_id": result_id, **res}
     _MEMORY[result_id] = packed
     return packed
+
 
 def _run_school_item_compare(
     school_a: str,
@@ -756,6 +818,7 @@ def _run_school_item_compare(
     _MEMORY[result_id] = res
     return res
 
+
 def _run_multi_school_compare(
     schools: List[str],
     year: Optional[str] = None,
@@ -806,6 +869,7 @@ def _run_multi_school_compare(
     _MEMORY[result_id] = res
     return res
 
+
 def _run_region_compare(
     region_a: str,
     region_b: str,
@@ -837,6 +901,7 @@ def _run_region_compare(
     packed = {"_id": result_id, **res}
     _MEMORY[result_id] = packed
     return packed
+
 
 def _run_region_longitudinal(
     region_keyword: str,
@@ -870,12 +935,19 @@ def _run_region_longitudinal(
     _MEMORY[result_id] = packed
     return packed
 
+
 def _run_unconstrained_experiment(routed: dict) -> dict:
-    pass
+    """Execute G1 with the same deterministic tools but without proposed checks.
+
+    This path intentionally does not create a task contract, revision, trusted
+    focus, independent replay, or presentation-verification receipt. Basic
+    typed tool arguments and read-only database boundaries still apply.
+    """
     from packages.experiment_protocol.trace import stage_event
 
     def _invoke_tool(fn, *args, **kwargs):
-
+        # Record the arguments actually passed to the shared tool, including
+        # defaults and derived values that are absent from the routed draft.
         stage_event(
             "actual_tool_request",
             function=fn.__name__,
@@ -997,14 +1069,19 @@ def _run_unconstrained_experiment(routed: dict) -> dict:
         return result
     raise ValueError("experiment_intent_not_supported_by_common_tools")
 
+
 def _update_public_composition_context(ctx: dict, routed: dict, result: dict) -> None:
-    pass
+    """Project successful executed school nodes; never infer focus from prose.
+
+    This is shared conversational memory, without trusted revision semantics.
+    Ambiguous referents are kept as an ordered set for later user selection.
+    """
     plan = result.get("public_plan") or {}
     queries = plan.get("queries") or []
     outputs = {x.get("id"): x for x in result.get("task_outputs") or []}
     if result.get("fact_data_status") != "ANSWER" or not queries:
         return
-
+    # Restrict this bridge to executed school nodes at one annual scope.
     if any(q.get("kind") not in {"school_fact", "school_item_extremum"} or
            outputs.get(q.get("id"), {}).get("status") != "ANSWER" for q in queries):
         return
@@ -1029,13 +1106,15 @@ def _update_public_composition_context(ctx: dict, routed: dict, result: dict) ->
     if len(views) == 1:
         ctx["last_value_view"] = views[0]
 
+
 def _update_unconstrained_experiment_context(ctx: dict, routed: dict, result: dict) -> None:
-    pass
+    """Maintain ordinary G1 conversation context without trusted-contract semantics."""
     for key in list(ctx):
         if key.startswith("pending_") or key == "_pending_clarification":
             ctx.pop(key, None)
     intent = routed.get("intent")
-
+    # Only this successful-execution path publishes the view. Clarification
+    # drafts and failed requests cannot replace it.
     ctx["last_value_view"] = routed.get("value_view") or (
         "raw_value" if intent == "school_fact" else "normalized_score"
     )
@@ -1112,6 +1191,7 @@ def _update_unconstrained_experiment_context(ctx: dict, routed: dict, result: di
         ctx["last_scope_granularity"] = "multi_scope"
         ctx["last_scope_metric_key"] = None
 
+
 def _run_national_ranking(
     year: Optional[str] = None,
     target_dimension: Optional[str] = None,
@@ -1138,6 +1218,7 @@ def _run_national_ranking(
     _MEMORY[result_id] = packed
     return packed
 
+
 def _pending_public(pending: Optional[dict], *, restored: bool = False, applied: bool = False) -> Optional[dict]:
     if not pending:
         return None
@@ -1154,13 +1235,20 @@ def _pending_public(pending: Optional[dict], *, restored: bool = False, applied:
         "resolution": pending.get("resolution"),
     }
 
+
 def _clarification_execution_guard(
     routed: dict,
     pending: Optional[dict],
     *,
     model_parser_invoked: bool,
 ) -> dict:
-    pass
+    """Publish the actual no-business-execution receipt for a clarification.
+
+    A durable pending is an allowed clarification-state write, not a business
+    fact execution or contract revision. Exposing both facts prevents tests
+    from having to infer zero side effects from an absent field while retaining
+    the pending needed for a later bounded answer.
+    """
     return {
         "version": "clarification-execution-guard-v1",
         "reason": routed.get("reason") or routed.get("clarify_reason"),
@@ -1172,6 +1260,7 @@ def _clarification_execution_guard(
         "pending_opened": pending is not None,
         "revision_committed": False,
     }
+
 
 def _clarification_allows_pending(routed: dict) -> bool:
     return str(routed.get("reason") or "") not in {
@@ -1185,8 +1274,9 @@ def _clarification_allows_pending(routed: dict) -> bool:
         "selective_region_scope_required",
     }
 
+
 def _public_clarification_prompt(routed: dict, original_question: str) -> str:
-    pass
+    """Keep parser field names out of the user-facing clarification."""
     missing = [str(item) for item in (routed.get("missing") or [])]
     reason = str(routed.get("reason") or routed.get("clarify_reason") or "")
     if reason == "device_category_required" or "device_category" in missing:
@@ -1197,6 +1287,7 @@ def _public_clarification_prompt(routed: dict, original_question: str) -> str:
         )
     return "；".join(missing) if missing else "请补充本次查询缺少的具体范围。"
 
+
 def _is_pending_cancel(question: str) -> bool:
     normalized = re.sub(r"[\s，,。.!！?？]", "", question)
     return normalized in {
@@ -1204,16 +1295,19 @@ def _is_pending_cancel(question: str) -> bool:
         "取消这个问题", "取消这次查询", "取消刚才的问题", "放弃这次查询",
     }
 
+
 def _is_explicit_new_task(question: str) -> bool:
     return bool(re.search(r"(?:换个|换一个|另起(?:一个)?|新建(?:一个)?|开始(?:一个)?)(?:新)?任务|另一个任务|重新开始", question))
 
+
 def _should_apply_pending(pending: dict, question: str) -> bool:
-    pass
+    """Apply a pending patch only to a plausible clarification reply."""
     reason = pending.get("reason")
     context = pending.get("context") or {}
     if _is_explicit_new_task(question):
         return False
-
+    # A complete object/year request stands on its own, even when it happens
+    # to fill the missing field of an unrelated clarification.
     years = re.findall(r"20\d{2}", question)
     if years and re.search(r"(?:[\u4e00-\u9fff]{2,}(?:市|县|区|小学|中学|附中|学校)|\bid\s*:\s*\d+)", question, re.I):
         return False
@@ -1222,7 +1316,8 @@ def _should_apply_pending(pending: dict, question: str) -> bool:
             return False
     missing = pending.get("missing") or []
     if reason == "device_category_required" or "device_category" in missing:
-
+        # Only the requested category fills this field. A general short reply
+        # such as '那就总体' must not activate school/device context.
         entity_text = re.sub(r"学校(?:统一)?(?:配备|配的)", "", question)
         if re.search(r"[\u4e00-\u9fff]{2,}(?:小学|中学|附中|高中|初中|学校|市|县|区)|\bid\s*:", entity_text, re.I):
             return False
@@ -1262,6 +1357,7 @@ def _should_apply_pending(pending: dict, question: str) -> bool:
         )
     )
 
+
 def _parse_revision_restore(question: str) -> Optional[int]:
     patterns = (
         r"(?:恢复|回到|还原|切回)\s*(?:到\s*)?(?:修订|revision)\s*#?\s*(\d+)",
@@ -1274,10 +1370,12 @@ def _parse_revision_restore(question: str) -> Optional[int]:
             return int(match.group(1))
     return None
 
+
 def _looks_like_revision_restore(question: str) -> bool:
     return bool(
         re.search(r"(?:恢复|回到|还原|切回).{0,8}(?:修订|revision|版本|上一版)", question, flags=re.IGNORECASE)
     )
+
 
 _PERSISTED_CONTEXT_REFERENCE_TOKENS = (
     "那", "它", "它们", "该校", "这所学校", "这两所学校", "两校", "二者", "这个学校",
@@ -1294,8 +1392,9 @@ _DURABLE_FOCUS_SCOPE_RETURN_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+
 def _durable_focus_object_hint(question: str) -> Optional[str]:
-    pass
+    """Return the explicit object class in a durable scope-return phrase."""
     match = _DURABLE_FOCUS_SCOPE_RETURN_RE.search(str(question or "").strip())
     if match is None:
         return None
@@ -1306,24 +1405,34 @@ def _durable_focus_object_hint(question: str) -> Optional[str]:
         return "region"
     return None
 
+
 def _persisted_context_matches_object_hint(
     question: str, restored_context: dict
 ) -> bool:
-    pass
+    """Prevent an object-qualified return from inheriting another object type."""
     requested = _durable_focus_object_hint(question)
     if requested is None:
         return True
     stored = str(restored_context.get("last_scope_object_type") or "").strip()
     return stored == requested
 
+
 def _needs_persisted_context_restore(question: str) -> bool:
-    pass
+    """Return whether an empty memory session must reload its trusted head.
+
+    A model/profile or service restart clears process-local experiment context
+    but not committed revisions. Explicit scope-return utterances are
+    contextual follow-ups even without a pronoun; a bare fresh request such as
+    ``请评估总体情况`` remains ambiguous and cannot inherit unrelated state.
+    """
     text = str(question or "").strip()
     return bool(
         any(token in text for token in _PERSISTED_CONTEXT_REFERENCE_TOKENS)
         or _DURABLE_FOCUS_SCOPE_RETURN_RE.search(text)
         or text.endswith(("呢", "呢？", "呢?"))
     )
+
+
 
 def _revision_control(
     request_id: str,
@@ -1337,6 +1446,7 @@ def _revision_control(
         "outcome": outcome,
         **extra,
     }
+
 
 def _committed_audit_revision_control(
     request_id: str,
@@ -1357,6 +1467,7 @@ def _committed_audit_revision_control(
         accepted_base_revision=contract.parent_revision or 0,
         committed_revision=contract.revision,
     )
+
 
 def _stale_revision_response(
     *,
@@ -1387,6 +1498,7 @@ def _stale_revision_response(
         ),
         "contract_store": _public_active_contract_store(contract_service),
     }
+
 
 from packages.core.research_data import request_scope as _research_request_scope
 
@@ -1455,6 +1567,7 @@ def chat(question: str, session_id: Optional[str] = "default", *, base_revision:
                 service.close_pending(resolution["pending"]["pending_id"], status="RESOLVED",
                                       resolution="confirmed_intent_attempt_finished")
 
+
 def _chat_impl(
     question: str,
     session_id: Optional[str] = "default",
@@ -1465,7 +1578,13 @@ def _chat_impl(
     fh_arm: Optional[str] = None,
     selective_resolution: Optional[dict] = None,
 ) -> dict:
-    pass
+    """开放式多意图对话评估入口（支持多轮上下文与实体继承）：
+    自由提问 → 上下文消解与路由 → 教师评估 / 学校评估 / 事实指标问答 / 区域大盘 / 相对排位 / 双校对比 / 双区域对比。
+
+    返回 dict：
+      {clarify: true, question, next_prompt, session_id}          需澄清引导
+      {result_id, result, report, critic, markdown, session_id}   完成
+    """
     from time import perf_counter
     request_started = perf_counter()
     sid = session_id or "default"
@@ -1519,13 +1638,19 @@ def _chat_impl(
         if llm_experiment else sid
     )
     session_store = _EXPERIMENT_SESSIONS if llm_experiment else _SESSIONS
-
+    # Parser and pending overlays belong to this request until a successful
+    # state transition. In particular, parser ERROR must not mutate a cached
+    # trusted focus or leave pending flags on the next request.
     ctx = copy.deepcopy(session_store.get(experiment_session_key, {}))
     session_was_empty = not ctx
     answer_spec = None
     llm_parser_trace = None
     semantic_profile_id = None
 
+    # Treatment-invariant, explicit unsupported scopes close before the model
+    # parser, pending-state access, contract creation or any deterministic fact
+    # tool. The explicit empty tool list and receipt make zero side effects
+    # auditable rather than inferred from missing fields.
     from packages.semantic_query.runtime import (
         preflight_school_fact_statistic_boundary,
         preflight_semantic_scope_boundary,
@@ -1536,6 +1661,8 @@ def _chat_impl(
         or preflight_school_fact_statistic_boundary(question)
     )
     if boundary_preflight is not None:
+        if boundary_preflight.get('intent') == 'unavailable':
+            return _unavailable_response(boundary_preflight, sid, rid, base_revision)
         execution_guard = dict(
             boundary_preflight.get("pre_execution_guard") or {}
         )
@@ -1636,7 +1763,9 @@ def _chat_impl(
             restored_context = state["context"] if may_need_persisted_context else {}
             if (may_need_persisted_context and ctx.get("public_context_source") == "successful_public_composition"
                     and ctx.get("public_context_base_revision") == state["head_revision"]):
-
+                # A newer successful composition has no revision of its own.
+                # Keep its actual same-process focus while the store head is
+                # unchanged; a later committed revision invalidates it.
                 restored_context = copy.deepcopy(ctx)
             context_restore["attempted"] = bool(may_need_persisted_context)
             if llm_experiment or semantic_product or may_need_persisted_context:
@@ -1684,7 +1813,9 @@ def _chat_impl(
     from packages.semantic_query import selective_clarification as selective
     selective.set_binding_context(ctx, question)
     if g1_unconstrained:
-
+        # G1's ordinary clarification memory is separate from successful focus.
+        # Only a matching reply overlays this request; parser failures never
+        # publish the overlay, and G1 still has no production Pending identity.
         volatile_pending = ctx.pop("_pending_clarification", None)
         if selective_resolution or (volatile_pending or {}).get("selective_pending_id"):
             from packages.analysis_contract import ContractService
@@ -1743,7 +1874,8 @@ def _chat_impl(
                 ctx["last_school"] = selective_resolution["constraint"]["school"]
             pending_applied = True
         elif active_pending and (active_pending.get("routed") or {}).get("selective_clarification"):
-
+            # Free text is never a choice instruction. Explicit new questions
+            # go through ordinary parsing; short replies keep this slot pending.
             if not _is_explicit_new_task(question) and len(question.strip()) <= 18 and not re.search(r"20\d{2}", question):
                 return selective.stopped(sid, "clarification_requires_structured_reply", pending=active_pending)
             contract_service.close_pending(active_pending["pending_id"], status="SUPERSEDED", resolution="new_independent_request")
@@ -1895,6 +2027,7 @@ def _chat_impl(
             try:
                 from packages.llm_gateway.gateway import load_user_config
                 from packages.semantic_query import parse_semantic_route
+                from packages.semantic_query.task_draft import EXECUTABLE_INTENTS
 
                 semantic_profile_id = str(load_user_config().get("id") or "").strip() or None
                 routed, answer_spec, llm_parser_trace = parse_semantic_route(
@@ -1902,7 +2035,7 @@ def _chat_impl(
                     ctx,
                     mode="product_semantic_constrained",
                     expected_profile_id=semantic_profile_id,
-                    allowed_intents={"clarify", "region_eval", "school_eval", "school_fact", "region_longitudinal", "national_ranking"},
+                    allowed_intents=EXECUTABLE_INTENTS,
                 )
             except Exception as exc:
                 parser_error = _public_error_text(
@@ -1939,12 +2072,16 @@ def _chat_impl(
             ):
                 from packages.semantic_query import bind_rule_output_scope
 
+                # The explicit rule comparator still binds user-visible output
+                # requirements to the contract.  Otherwise an absent legacy
+                # field is interpreted as "charts by default", so a plain text
+                # request can be mislabeled as a failed chart delivery.
                 routed, answer_spec = bind_rule_output_scope(question, routed)
     if llm_experiment and routed.get("intent") == "national_ranking":
         routed = {
             "intent": "clarify",
             "reason": "legacy_boundary",
-            "missing": ["全国省域排名尚未纳入当前处理配置的契约能力。"],
+            "missing": ["全国省域排名尚未纳入本轮 G1/G2 共同实验的生产契约能力。"],
             "original": question,
         }
         from packages.semantic_query import build_answer_spec
@@ -1952,7 +2089,8 @@ def _chat_impl(
     if not (llm_experiment or semantic_product):
         from packages.semantic_query.public_tasks import route_public_task
         from packages.semantic_query import runtime as public_runtime
-        extended = route_public_task(question, {}, public_runtime)
+        from packages.semantic_query.regional_capabilities import route as route_capability
+        extended = route_capability(question, {}, ctx, public_runtime) or route_public_task(question, {}, public_runtime)
         if extended is not None:
             routed = extended
             answer_spec = public_runtime.build_answer_spec(question, routed)
@@ -1979,6 +2117,8 @@ def _chat_impl(
         from packages.experiment_protocol.trace import stage_event
         stage_event("canonical_tool_request", routed=copy.deepcopy(routed), answer_spec=copy.deepcopy(answer_spec))
 
+    if intent == 'unavailable':
+        return _unavailable_response(routed, sid, rid, base_revision, llm_parser_trace)
     if intent == "clarify":
         pending = None
         if (not g1_unconstrained or routed.get("selective_clarification")) and _clarification_allows_pending(routed):
@@ -2063,7 +2203,8 @@ def _chat_impl(
         return response
 
     if answer_spec is not None:
-
+        # Deterministic publication flags, after strict model-draft validation.
+        # Persist these in the existing requested_outputs list for RESTORE.
         routed["requested_scope_outputs"] = (
             (["dimension_scores"] if answer_spec.get("include_dimensions") else [])
             + (["catalogue_question_count"] if "catalogue_question_count" in (answer_spec.get("requested_result_statistics") or []) else [])
@@ -2370,10 +2511,10 @@ def _chat_impl(
                 province_only=bool(routed.get("province_only")),
             )
         else:
-
+            # 默认：教师综合评估
             teacher_id = routed.get("teacher_id")
             if not teacher_id:
-
+                # 兼容旧式 planner 解析兜底
                 q = parse_question(question)
                 if q.clarify_needed:
                     return {
@@ -2399,10 +2540,12 @@ def _chat_impl(
         )
     except ValueError as e:
         error_text = str(e)
-        public_error_text = _public_error_text(
+        from packages.semantic_query.regional_capabilities import data_error_message
+        unavailable_message = data_error_message(e)
+        public_error_text = unavailable_message or _public_error_text(
             error_text, fallback="contract_execution_clarify"
         )
-        is_no_data = any(token in error_text for token in (
+        is_no_data = bool(unavailable_message) or any(token in error_text for token in (
             "无监测数据", "无监测学校记录", "没有符合筛选条件", "尚未录入有效问卷作答",
             "无第",
         ))
@@ -2623,10 +2766,17 @@ def _chat_impl(
     if answer_spec is not None:
         from packages.semantic_query import project_result_scope
 
+        # Contract verification above used the full execution result.  From
+        # this point onward, expose only the AnswerSpec-bound public view to the
+        # report, chart builder, and page response. The G1 writer also receives
+        # an AnswerSpec-bound evidence projection while retaining its
+        # unconstrained verification and experiment identity.
         try:
             public_result = project_result_scope(execution_result, answer_spec, question)
         except ValueError as exc:
-
+            # Enforced computation prechecks the same pure projection before
+            # committing focus/Pending. Keep a structured receipt here too,
+            # including contract-free G1, instead of leaking a raw HTTP error.
             error_code = str(exc) if str(exc).startswith("public_projection_") else "public_projection_failed"
             a1_unverified = active_experiment_mode == "a1_no_execution_verification"
             if contract is not None and contract_service is not None:
@@ -2657,6 +2807,7 @@ def _chat_impl(
         if not g1_unconstrained:
             result = public_result
 
+    # 强制契约路径仅从可信契约投影会话焦点；兼容路径暂保留旧上下文适配。
     if contract is not None and contract_service is not None:
         ctx = contract_service.session_context(sid)
     elif intent == "public_task":
@@ -2666,7 +2817,7 @@ def _chat_impl(
     elif g1_unconstrained:
         _update_unconstrained_experiment_context(ctx, routed, execution_result)
     else:
-
+        # 区域宏观结果中的榜首学校不是用户焦点，不能写入 last_school。
         if result.get("object_type") in ("region", "region_longitudinal"):
             pass
         elif result.get("school_name_a"):
@@ -2706,7 +2857,9 @@ def _chat_impl(
         ),
         proposed_constraints=mechanisms.get("output_verification", not g1_unconstrained),
         verification_variant=active_experiment_mode,
-
+        # G1 remains contract-free and its writer still receives the full
+        # execution result, but the public page must not leak blocks outside
+        # the shared AnswerSpec (for example tiers/Top 5 on an item request).
         answer_spec=answer_spec,
     )
     out["business_status"] = (
@@ -2767,13 +2920,16 @@ def _chat_impl(
     if intent == "public_task" and ctx.get("public_context_source"):
         out["session_context"] = copy.deepcopy(ctx)
     if not llm_experiment:
-
+        # Expose the selected ordinary-entry mode on every completed response,
+        # including the explicit rule comparison path.  The UI and evidence
+        # collectors must not infer mode from a prose label or fallback flag.
         out["query_mode"] = product_query_mode
     if answer_spec is not None and (
         product_query_mode.get("rule_baseline_selected")
         or active_experiment_mode == "g0_rule"
     ):
-
+        # Make the deterministic scope inspectable in rule-comparator evidence;
+        # capability metadata alone is not proof that projection was applied.
         out["answer_spec"] = answer_spec
     if contract_service is not None and contract_service.pending_transition_result is not None:
         out["pending_clarification"] = _pending_public(
@@ -3017,6 +3173,7 @@ def _chat_impl(
                     "error": _public_error_text(e, fallback="llm_interpretation_failed")
                 }
 
+    # 专职质检审计 Agent 执行全链路核验与四大系统性能量化指标核算
     try:
         if not mechanisms.get("output_verification", not g1_unconstrained):
             raise LookupError("experiment_skips_proposed_final_audit")
@@ -3071,7 +3228,7 @@ def _chat_impl(
         )
         out["experiment_trace_file"] = trace_name
     if isinstance(out.get("experiment_trace", {}).get("writer"), dict):
-
+        # Failed drafts and feedback belong to the isolated evidence file.
         public_writer = dict(out["experiment_trace"]["writer"])
         for secret in ("first_answer", "repair_prompt", "repair_answer", "final_candidate"):
             public_writer.pop(secret, None)
@@ -3080,8 +3237,9 @@ def _chat_impl(
     out["query_mode"] = product_query_mode
     return out
 
+
 def batch_evaluate(teacher_ids: List[str], years: List[str]) -> dict:
-    pass
+    """批量评估（同步）。返回 {results: [{teacher_id, result_id, total_score, error?}]}。"""
     out = []
     for tid in teacher_ids:
         try:
@@ -3092,21 +3250,24 @@ def batch_evaluate(teacher_ids: List[str], years: List[str]) -> dict:
             out.append({"teacher_id": tid, "error": str(e)})
     return {"results": out}
 
+
 def get_result(result_id: str) -> dict:
     if result_id not in _MEMORY:
         raise KeyError(f"result_id {result_id} 不存在")
     return _MEMORY[result_id]
 
+
 def teacher_reports(teacher_id: str) -> dict:
-    pass
+    """该教师历次结果（原型：内存中该教师的结果按时间逆序）。"""
     rows = [v for v in _MEMORY.values() if v.get("teacher_id") == teacher_id]
     rows.sort(key=lambda v: v.get("school_years", []), reverse=True)
     return {"teacher_id": teacher_id, "reports": rows}
 
-def teacher_trends(teacher_id: str, years: List[str]) -> dict:
-    pass
-    rows = [v for v in _MEMORY.values() if v.get("teacher_id") == teacher_id]
 
+def teacher_trends(teacher_id: str, years: List[str]) -> dict:
+    """多周期趋势（雷达数据，供 M10 用）。原型：近年结果聚合。"""
+    rows = [v for v in _MEMORY.values() if v.get("teacher_id") == teacher_id]
+    # 按学年维度聚合平均得分（原型简化为取最近一条；多条时做平均）
     per_year = {}
     for v in rows:
         for y in v.get("school_years", []):
@@ -3114,6 +3275,7 @@ def teacher_trends(teacher_id: str, years: List[str]) -> dict:
     trend = {y: round(sum(s) / len(s), 2) for y, s in per_year.items() if s}
     return {"teacher_id": teacher_id, "trend": trend,
             "radar_last": _radar(rows[-1] if rows else None)}
+
 
 def _radar(result) -> dict:
     if not result:
@@ -3124,10 +3286,12 @@ def _radar(result) -> dict:
             dims[d["dimension"]] = d["score"]
     return dims
 
+
 def templates() -> dict:
     tpl = _load_tpl()
     return {"templates": [{"name": (tpl.get("template") or {}).get("name"),
                            "school_year": (tpl.get("template") or {}).get("school_year")}]}
+
 
 def _read_csv(name: str):
     p = os.path.join(ROOT, "data", "demo", name)
@@ -3136,11 +3300,12 @@ def _read_csv(name: str):
     with open(p, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
+
 TEACHER_NAME_MAP = {
-    "T001": "示例教师一",
-    "T002": "示例教师二",
-    "T003": "示例教师三",
-    "T004": "示例教师四",
+    "T001": "张老师",
+    "T002": "李老师",
+    "T003": "王老师",
+    "T004": "赵老师",
 }
 
 TEACHER_TITLE_MAP = {
@@ -3148,6 +3313,7 @@ TEACHER_TITLE_MAP = {
     "中级": "一级教师 (中级职称)",
     "初级": "二级/初级教师",
 }
+
 
 def list_teachers() -> dict:
     teachers = []
@@ -3159,8 +3325,9 @@ def list_teachers() -> dict:
         teachers.append(t)
     return {"teachers": teachers}
 
+
 def teacher_profile(teacher_id: str) -> dict:
-    pass
+    """演示库教师简介：档案 + 各源数据条数（便于查询，不含评分）。"""
     row = next((r for r in _read_csv("teacher.csv") if r.get("teacher_id") == teacher_id), None)
     if not row:
         raise KeyError(f"教师 {teacher_id} 不存在")
@@ -3195,12 +3362,14 @@ def teacher_profile(teacher_id: str) -> dict:
         "note": "演示数据为脱敏虚构档案；真实学校数字化数据请走学校简介。",
     }
 
+
 def _llm_public() -> dict:
     try:
         from packages.llm_gateway.gateway import public_status
         return public_status()
     except Exception as e:
         return {"configured": False, "error": str(e)}
+
 
 def school_profile(school_id: int) -> dict:
     from scripts.school_engine import connect, get_school
@@ -3225,9 +3394,11 @@ def school_profile(school_id: int) -> dict:
         "note": "真实数字化问卷档案；评分请走学校评估报告。",
     }
 
+
+# ---------------------------------------------------------------- FastAPI 层
 try:
-    from fastapi import FastAPI, HTTPException, Query
-    from pydantic import BaseModel, Field, StrictBool
+    from fastapi import FastAPI, HTTPException, Query  # noqa: F401
+    from pydantic import BaseModel, Field, StrictBool  # noqa: F401
 
     class ChatIn(BaseModel):
         question: str = Field(..., min_length=2, description="宽泛评估问题")
@@ -3269,7 +3440,7 @@ try:
         save: bool = False
         provider: str = "custom"
 
-    app = FastAPI(title="EduTA API", version="1.0.1",
+    app = FastAPI(title="教师评估 AI 平台 API", version="0.14.0-constraint-v6-20261011",
                   description="只读评估服务；结果缓存驻留内存，契约修订独立持久化")
     from packages.core.local_browser_security import LocalBrowserSecurityMiddleware
     app.add_middleware(LocalBrowserSecurityMiddleware)
@@ -3279,7 +3450,7 @@ try:
 
     @app.exception_handler(RequestValidationError)
     async def _safe_input_error(request, exc):
-
+        # Pydantic's ordinary response can echo a submitted credential value.
         return JSONResponse({"error": "REQUEST_INPUT_INVALID"}, status_code=422)
 
     from packages.core.secure_credentials import SecureCredentialError
@@ -3289,9 +3460,11 @@ try:
         return JSONResponse({"error": "SECURE_STORAGE_UNAVAILABLE", "needs_personal_resave": True},
                             status_code=400)
 
+    # 权限：接 M11 authz（原型鉴权仍宽松——默认 admin；真实鉴权由部署方对接 SSO 后在
+    # get_current_user 中注入用户对象，并用 can_view/can_view_redline 做数据范围闸门）。
     def get_current_user():
         user = {"user_id": "prototype", "role": "admin", "scope": None,
-                "note": "本机运行用户；部署时按需接入用户身份"}
+                "note": "M11 后请由部署方注入真实用户对象"}
         return user
 
     def _require_view(user, teacher_id):
@@ -3380,8 +3553,8 @@ try:
 
         return {
             "status": "ok",
-            "service_version": "1.0.0",
-            "native_fh": {"enabled": True, "arms": ["F", "H"], "version": "structured-task-1.0", "parser_calls_per_task": 1, "repair_calls": 0, "writer_calls": 0},
+            "service_version": "0.14.0-constraint-v6-20261011",
+            "native_fh": {"enabled": True, "arms": ["F", "H"], "version": "native-fh-task-query-v1.0-20261006", "parser_calls_per_task": 1, "repair_calls": 0, "writer_calls": 0},
             "teachers": _load_teachers(),
             "real_db": os.path.isfile(real_db),
             "data_source": _public_data_source_status(data_source),
@@ -3563,6 +3736,50 @@ try:
         from packages.llm_gateway.gateway import save_user_config
         return save_user_config(body.model_dump())
 
+    # Independent bridge: daily parser/UI version and frozen experiment payloads
+    # remain separate. Enable only after independent security acceptance.
+    from pydantic import StrictBool, StrictInt
+    from packages.core import secure_credentials as _secure_credentials
+    from packages.core.paired_experiment_bridge import PairedExperimentBridge, BridgeError
+
+    _paired_bridge = PairedExperimentBridge(
+        enabled=os.environ.get("TEACHER_EVAL_SECURE_PAIRED_ENABLED") == "1",
+        public_profile=_secure_credentials.public_profile,
+        load_profile=_secure_credentials.load_profile,
+    )
+
+    class PairedPrepareIn(BaseModel):
+        batch: StrictInt = Field(ge=1, le=3)
+        profile_id: str = Field(min_length=1, max_length=128)
+
+    class PairedStartIn(BaseModel):
+        confirmation_token: str = Field(min_length=32, max_length=128)
+        confirmed: StrictBool = False
+
+    class PairedReviewIn(BaseModel):
+        batch: StrictInt = Field(ge=1, le=3)
+        confirmed: StrictBool = False
+
+    @app.exception_handler(BridgeError)
+    async def _safe_paired_error(request, exc):
+        return JSONResponse({"error": exc.code}, status_code=409)
+
+    @app.get("/api/v1/paired-experiment/status")
+    def api_paired_status():
+        return _paired_bridge.status()
+
+    @app.post("/api/v1/paired-experiment/prepare")
+    def api_paired_prepare(body: PairedPrepareIn):
+        return _paired_bridge.prepare(body.batch, body.profile_id)
+
+    @app.post("/api/v1/paired-experiment/start")
+    def api_paired_start(body: PairedStartIn):
+        return _paired_bridge.start(body.confirmation_token, confirmed=body.confirmed)
+
+    @app.post("/api/v1/paired-experiment/reviewack")
+    def api_paired_review(body: PairedReviewIn):
+        return _paired_bridge.reviewack(body.batch, confirmed=body.confirmed)
+
     @app.post("/api/v1/llm/ping")
     def api_llm_ping(body: Optional[LlmPingIn] = None):
         from packages.llm_gateway.gateway import ping
@@ -3677,14 +3894,15 @@ try:
 
         return experiment_mode_status()
 
+
     FASTAPI_AVAILABLE = True
 
 except ImportError:
-
+    # fastapi 未安装：降级。BaseApp.serve() 提示安装；核心逻辑（chat/batch/...）仍可直接调用。
     FASTAPI_AVAILABLE = False
 
     class BaseApp:
-        pass
+        """fastapi 未安装时的降级壳。"""
 
         def serve(self):
             print("[M09] fastapi 未安装，无法启动 HTTP 服务。")
@@ -3698,8 +3916,9 @@ except ImportError:
 
     app = BaseApp()
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
+    # 命令行冒烟：走核心逻辑（不需要 fastapi）
     for _s in (sys.stdout, sys.stderr):
         try:
             _s.reconfigure(encoding="utf-8", errors="replace")

@@ -74,11 +74,19 @@ def generate(output: Path, with_overlay: bool = False) -> dict:
             CREATE TABLE format_extension_v5 (source_school_year_id INTEGER, year TEXT, new_value TEXT, rule_id TEXT, PRIMARY KEY(source_school_year_id,year));
             CREATE TABLE research_review_v5 (source_school_year_id INTEGER, year TEXT, status TEXT, PRIMARY KEY(source_school_year_id,year));
             """)
-        registry = {"version": "synthetic-geography", "application_years": list(YEARS), "parent_by_city": {"示例市": "示例省", "演示市": "示例省"}, "city_aliases": {}, "province_aliases": {}, "districts": {}}
+        names={'示例省':[dict(level='province',province='示例省',city=None,district=None)]}
+        for city in ('示例市','演示市'):
+            names[city]=[dict(level='city',province='示例省',city=city,district=None)]
+            names[city[:-1]]=names[city]
+        names['示例区']=[dict(level='district',province='示例省',city=c,district='示例区') for c in ('示例市','演示市')]
+        registry = {"version": "geo-select-v5-full-synthetic", "application_years": list(YEARS),
+            "parent_by_city": {"示例市": "示例省", "演示市": "示例省"}, "city_aliases": {'示例':'示例市','演示':'演示市'},
+            "province_aliases": {'示例省':'示例省'}, "districts": {}, "city_parent_ties":{},"name_candidates":names,
+            "district_parents":{'示例区':[dict(province='示例省',city=c,years=list(YEARS)) for c in ('示例市','演示市')]}}
         (output / "geography_registry.json").write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
-        cfg = {"version": "synthetic-overlay", "estimand": "synthetic-school-year", "data": {}, "registry": "geography_registry.json", "application_years": list(YEARS)}
+        cfg = {"version": "synthetic-overlay", "estimand": "synthetic-school-year", "data": {}, "registry": str(output/'geography_registry.json'), "application_years": list(YEARS)}
         for label, path in (("source", source), ("base_v1", base), ("mapping_v5", mapping)):
-            cfg["data"][label] = {"path": path.name, "SHA256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
+            cfg["data"][label] = {"path": str(path), "SHA256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
         (output / "research_dataset.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         result["overlay_config"] = str(output / "research_dataset.json")
     (output / "SYNTHETIC_DATA.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+"""Agent 模块化工具体系包。"""
+
 from packages.agent.tools.base import BaseTool, ToolResult
 from packages.agent.tools.python_runner import PythonInterpreterTool
 from packages.agent.tools.chart_builder import EducationalChartBuilder

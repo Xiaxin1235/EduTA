@@ -1,3 +1,13 @@
+"""区域数字化宏观评估引擎 (Region Engine)。
+
+支持按区县、地级市、省份汇总区域内全量学校的数字化作答大盘：
+- 区域综合均分与多维指标表现
+- 六大维度均分（数字资源、教育教学、数字素养、基础设施、教育治理、保障机制）
+- 区域学校数字化发展分层与比例分布
+- 标杆示范学校排行榜 (Top 5) 与薄弱帮扶名单 (Bottom 5)
+- 区域数字化主要优势与瓶颈短板诊断
+"""
+
 import os
 import math
 import re
@@ -22,6 +32,7 @@ STANDARD_DIMENSIONS = [
     "保障机制",
 ]
 
+
 PROVINCES = [
     "北京", "天津", "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
     "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南",
@@ -29,8 +40,9 @@ PROVINCES = [
     "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆"
 ]
 
+
 def format_school_type(st: Optional[str]) -> str:
-    pass
+    """美化学校学段显示名称。"""
     if not st:
         return "中小学"
     st = str(st).strip()
@@ -49,8 +61,13 @@ def format_school_type(st: Optional[str]) -> str:
     }
     return mapping.get(st, st)
 
+
 def _province_scope_literal(clean: str, conn) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
-    pass
+    """Resolve a complete province literal before lower-level dirty registrations.
+
+    Names come from the existing province vocabulary and source metadata. Bare
+    aliases conflicting with a real city/county require an explicit level.
+    """
     provinces = {}
     for row in conn.execute("SELECT DISTINCT province FROM schools WHERE province IS NOT NULL"):
         name = str(row["province"] or "").strip()
@@ -96,6 +113,7 @@ def _province_scope_literal(clean: str, conn) -> Tuple[bool, Optional[Dict[str, 
         return True, None, None
     return False, None, ancestors[0] if ancestors else None
 
+
 def _qualified_region(row, level: str, name: Optional[str] = None, *, include_city: bool = True,
                       city_keyword: Optional[str] = None, district_keyword: Optional[str] = None) -> Dict[str, Any]:
     province, city = row["province"], row["city"]
@@ -114,6 +132,7 @@ def _qualified_region(row, level: str, name: Optional[str] = None, *, include_ci
         "full_name": " ".join(dict.fromkeys(str(v) for v in (province, city, district) if v)),
     }
 
+
 def _formal_city(row) -> bool:
     city, province = row["city"], row["province"]
     return bool(city and re.fullmatch(r"[\u4e00-\u9fff]{2,10}(?:市|州|盟|地区)", city)
@@ -121,23 +140,25 @@ def _formal_city(row) -> bool:
                 and (not city.startswith(province or "\0")
                      or (city == province and province.endswith("市"))))
 
+
 def detect_region(
     keyword: str,
     connection: Optional[sqlite3.Connection] = None,
-    *, _metadata_only: bool = False,
+    *, _metadata_only: bool = False, question: str = '', active_year=None,
 ) -> Optional[Dict[str, Any]]:
-    pass
+    """从关键词中识别行政区划（区县 > 地级市 > 省份），支持组合与自然语言提取。"""
     import re
-    from packages.core.research_data import enabled, resolve_region, SelectionError
-    if enabled() and not _metadata_only:
+    from packages.core.research_data import enabled, resolve_region, geographic_request, REQUEST, SelectionError, registry
+    if enabled() and (not _metadata_only or registry()['version'].startswith('geo-select-v5-full-')):
         try:
-            return resolve_region(keyword)
+            return geographic_request(keyword, question or REQUEST.get(), active_year) if question or active_year is not None else resolve_region(keyword)
         except SelectionError:
             return None
 
     clean = re.sub(r"20\d{2}\s*年?", " ", keyword)
     clean = re.sub(r"[，,]?\s*(?:用图展示|以图展示|以图表展示|通过图表展示|通过图展示|用图表展示|画图展示|画图对比|画图|生成图表|用图)[^，。？！]*", " ", clean)
 
+    # 递归清洗前导前缀与标点符号
     while True:
         prev = clean
         clean = re.sub(r"^[，,、\s]+", "", clean)
@@ -154,6 +175,7 @@ def detect_region(
         if clean == prev:
             break
 
+    # 清除学段与办学性质过滤词
     clean = re.sub(
         r"(?:只纳入|纳入|仅包含|包含|只含|筛选|仅限|按|只看|只算|只统计|仅统计|统计)?\s*"
         r"(?:公办|民办|公立|私立|乡村|农村|镇区|城镇|城市)?\s*"
@@ -164,8 +186,9 @@ def detect_region(
     )
     clean = re.sub(r"(?:只纳入|纳入|仅包含|包含|只含|筛选|仅限|按|只看|只算|只统计|仅统计|统计)\s*(?:公办|民办|公立|私立|乡村|农村|城镇)(?:学校)?", " ", clean)
 
+    # 清除对比与纵向词汇及连接词
     clean = re.sub(r"(?:对比|比较|相对|变化|变动|上升多少|上升|下降|提升|增幅|趋势|走向|相比|比一比|比一下)+", " ", clean)
-
+    # Do not erase internal name characters, e.g. 呼和浩特市 or 新和县.
     clean = re.sub(r"(?<=[省市县区旗州盟])(?:和|与|及|到|至)(?=[\u4e00-\u9fff])", " ", clean)
 
     clean = re.sub(r"^[\s\"'“”‘’【】《》（）()\[\]]+|[\s\"'“”‘’【】《》（）()\[\]]+$", "", clean)
@@ -212,10 +235,12 @@ def detect_region(
     parent_sql = " AND province=?" if province_parent else ""
     parent_params = (province_parent,) if province_parent else ()
 
+    # 分解连续的行政区划层级 (如 七台河市新兴区 -> 七台河市 新兴区)
     m_compound = re.search(r"([\u4e00-\u9fff]{2,5}(?:省|市))([\u4e00-\u9fff]{2,5}(?:市|区|县|旗))", clean)
     if m_compound:
         clean = clean.replace(m_compound.group(0), f" {m_compound.group(1)} {m_compound.group(2)} ")
 
+    # 提取行政区划单元 (如 七台河市、新兴区、长沙县、武汉市)
     raw_tokens = re.findall(r"[\u4e00-\u9fff]{2,6}(?:省|市|县|区|旗|州|盟)", clean)
     tokens = []
     for t in raw_tokens:
@@ -223,6 +248,7 @@ def detect_region(
         if len(t_c) >= 2:
             tokens.append(t_c)
 
+    # 分词候选补全（支持纯地名如 武汉、长沙、七台河）
     for part in clean.split():
         p_c = part.strip()
         if len(p_c) >= 2 and p_c not in tokens:
@@ -239,6 +265,7 @@ def detect_region(
         elif t.endswith("省") and not prov_cand:
             prov_cand = t
 
+    # 1. 组合情况：City + District (如：七台河市新兴区、武汉市蔡甸区)
     if city_cand and dist_cand:
         rows = conn.execute(
             "SELECT province, city, district, COUNT(*) as cnt FROM schools "
@@ -257,10 +284,11 @@ def detect_region(
                 conn.close()
             return _qualified_region(row, "区县", row["city"] + row["district"],
                                      city_keyword=city_cand, district_keyword=dist_cand)
-
+        # An explicit child pair must not fall through to its city or province.
         if owns_connection: conn.close()
         return None
 
+    # 2. 地市匹配优先（若包含市级特征，如 武汉市、七台河市、长沙市）
     cand_cities = ([city_cand] if city_cand else []) + [t for t in tokens if t.endswith("市") or not t.endswith(("区", "县", "旗", "省"))]
     for cand in cand_cities:
         if not cand or cand.endswith("省"):
@@ -300,6 +328,7 @@ def detect_region(
                 conn.close()
             return _qualified_region(row, "地级市", city_keyword=cand)
 
+    # 3. 单独区县匹配 (如 新兴区、长沙县、蔡甸区)
     _GENERIC_REGION_STOPWORDS = {
         "地区", "该地区", "本地区", "这个地区", "所在地区", "片区", "校区", "城区", "辖区", "同地区", "刚才的地区", "上一地区", "全区"
     }
@@ -320,7 +349,7 @@ def detect_region(
         ).fetchall()
         exact = [r for r in rows if r["district"] == cand]
         rows = exact or rows
-
+        # Lower-field garbage must not create a second administrative identity.
         formal = [r for r in rows if _formal_city(r)]
         rows = formal or rows
         if len(rows) > 1:
@@ -335,13 +364,16 @@ def detect_region(
             return _qualified_region(row, "区县", include_city=False)
 
     if province_parent or city_cand or dist_cand:
-
+        # A mismatching explicit ancestor/child is unresolved, never a broader province.
         if owns_connection: conn.close()
         return None
 
+    # Complete province literals were resolved above. An unresolved compound
+    # must not widen to a province merely because it contains a province alias.
     if owns_connection:
         conn.close()
     return None
+
 
 def evaluate_region(
     region_keyword: str,
@@ -359,13 +391,29 @@ def evaluate_region(
     value_view: Optional[str] = "normalized_score",
     connection: Optional[sqlite3.Connection] = None,
     region_identity: Optional[Dict[str, Any]] = None,
+    topic: Optional[str] = None,
 ) -> Dict[str, Any]:
-    pass
+    """对指定区域开展宏观数字化水平评估，支持维度、统计量、精准名次与前N名提取。"""
+    if topic is not None:
+        from packages.semantic_query.catalogue import topic_definition
+        from packages.semantic_query.topic_tasks import NOTE,label
+        from packages.core.item_collection import collected_ids
+        if value_view!='normalized_score' or target_stat not in (None,'mean') or aggregation!='school_equal_mean':
+            raise ValueError('topic_normalized_mean_only')
+        ids=topic_definition(topic)['indicator_ids']
+        result=evaluate_region(region_keyword,year=year,target_rank=target_rank,target_top_n=target_top_n,
+            target_stat='mean',school_filter=school_filter,original_query=original_query,aggregation='school_equal_mean',
+            operation=operation,indicator_ids=ids,value_view='normalized_score',connection=connection,region_identity=region_identity)
+        result.update(topic=topic,measurement_note=NOTE,indicator_ids=ids)
+        if not collected_ids(year,ids):
+            result.update(status='empty_filter',school_count=0,all_items_uncollected=True,message='该二级维度所含题项当年全部未采集。')
+        result['direct_answer']=label(topic)+'：'+('无数据。'+result.get('message','') if result.get('error') else str(result.get('total_score'))+'分。')+NOTE
+        return result
     if region_identity is not None:
         from packages.semantic_query.typed_plan import region_sql
         reg = region_sql(region_identity)
     else:
-        reg = detect_region(region_keyword, connection=connection)
+        reg = detect_region(region_keyword, connection=connection, question=original_query or '', active_year=year)
     if not reg:
         return {"error": f"未能识别地区「{region_keyword}」（支持如：长沙县、七台河市、湖南省等区县、地级市与省份名称）"}
 
@@ -375,6 +423,7 @@ def evaluate_region(
     conn = connection or connect()
     owns_connection = connection is None
 
+    # 1. 探查该地区所有有记录的学年与学校数量
     year_rows = conn.execute(
         f"SELECT year, COUNT(*) as cnt FROM schools WHERE {where_sql} GROUP BY year ORDER BY cnt DESC",
         where_params,
@@ -382,7 +431,7 @@ def evaluate_region(
     if not year_rows:
         if owns_connection:
             conn.close()
-        return {"error": f"未检索到地区「{reg['name']}」的学校建档数据"}
+        return {"error": f"未检索到地区「{reg['name']}」的学校建档数据", "status": "empty_filter"}
 
     all_years = sorted(list({str(r["year"]) for r in year_rows}))
     if year is not None and str(year).strip():
@@ -403,10 +452,11 @@ def evaluate_region(
             active_year = req_year
             default_year_applied = False
     else:
-
+        # 用户未指定年份时，采用有说明的默认策略：采用建档学校样本最全的年份
         active_year = str(year_rows[0]["year"])
         default_year_applied = True
 
+    # 2. 统计当前学年未筛选前的基准学校总数
     full_where_sql = f"({where_sql}) AND year=?"
     full_where_params = where_params + (active_year,)
 
@@ -425,9 +475,10 @@ def evaluate_region(
             "status": "unavailable_year",
         }
 
+    # 3. 构建群体筛选过滤子句 (办学性质、学段、城乡)
     filter_clause = ""
     if school_filter:
-
+        # 办学性质缺少可靠结构化字段，禁止通过校名关键词推断。
         if any(k in school_filter for k in ("公办", "公立", "民办", "私立")):
             if owns_connection:
                 conn.close()
@@ -436,26 +487,10 @@ def evaluate_region(
                 "status": "unsupported_filter_metadata",
             }
 
-        if "九年一贯制" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%九年一贯%' OR s.school_type = '1-9' OR s.school_type LIKE 'D.%')"
-        elif "十二年一贯制" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%十二年一贯%' OR s.school_type = '1-12')"
-        elif "中职" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%中职%' OR s.school_type LIKE '%中等职业%' OR s.school_type LIKE '%职业学校%')"
-        elif "幼儿园" in school_filter:
-            filter_clause += " AND s.school_type LIKE '%幼儿园%'"
-        elif "初中" in school_filter or "初级中学" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%初中%' OR s.school_type LIKE '%初级中学%' OR s.school_type LIKE '7-9%' OR s.school_type = '1-9' OR s.school_type LIKE 'B.%')"
-        elif "小学" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%小学%' OR s.school_type LIKE '1-6%' OR s.school_type LIKE '1-5%' OR s.school_type LIKE 'A.%')"
-        elif "高中" in school_filter or "高级中学" in school_filter:
-            filter_clause += " AND (s.school_type LIKE '%高中%' OR s.school_type LIKE '%高级中学%' OR s.school_type LIKE '10-12%' OR s.school_type LIKE 'C.%')"
+        from packages.core.school_filters import filter_sql
+        filter_clause, _ = filter_sql(school_filter)
 
-        if any(k in school_filter for k in ("乡村", "农村")):
-            filter_clause += " AND (s.school_area_type LIKE '%乡村%' OR s.school_area_type LIKE '%农村%')"
-        elif any(k in school_filter for k in ("镇区", "城镇", "城区", "城市")):
-            filter_clause += " AND (s.school_area_type LIKE '%镇区%' OR s.school_area_type LIKE '%城镇%' OR s.school_area_type LIKE '%城区%' OR s.school_area_type LIKE '%城市%')"
-
+    # 4. 统计各校平均得分并排序
     s_where = f"({where_sql.replace('city', 's.city').replace('district', 's.district').replace('province', 's.province')}) AND s.year=?{filter_clause}"
     ranking_indicator_ids = tuple(int(value) for value in (indicator_ids or ()))
     if target_dimension and not ranking_indicator_ids:
@@ -525,6 +560,7 @@ def evaluate_region(
     mean_median_difference = round(raw_avg_score - raw_median_score, 2)
     mean_median_relation = "两者相同" if mean_median_difference == 0 else "两者不同"
 
+    # 若指定作答池化平均 (answer_pooled_mean)，对所有学校、全部题目的原始作答合并池化计算
     n_answers = sum(int(r["answered_cnt"] or 0) for r in school_scores_rows)
     if aggregation == "answer_pooled_mean":
         pooled_dim_where = f"{s_where} AND q.level1_name=?" if target_dimension else s_where
@@ -545,6 +581,7 @@ def evaluate_region(
         n_answers = int(pooled_row["n_answers"]) if pooled_row and pooled_row["n_answers"] else 0
         avg_score = pooled_score
 
+    # 5. 六大维度均分汇总
     if aggregation == "answer_pooled_mean":
         dim_sql = f"""
             SELECT q.level1_name, ROUND(AVG(a.normalized_value)*100, 2) AS dim_score,
@@ -586,6 +623,7 @@ def evaluate_region(
         })
         dim_radar[d_name] = sc
 
+    # 6. 分层结构统计
     tiers = [
         {"tier": "优秀梯队 (≥20分)", "min": 20.0, "max": 999.0, "count": 0},
         {"tier": "良好梯队 (15~20分)", "min": 15.0, "max": 20.0, "count": 0},
@@ -601,6 +639,7 @@ def evaluate_region(
     for t in tiers:
         t["pct"] = f"{(t['count'] / len(scores) * 100):.1f}%"
 
+    # 7. Top 榜单与目标名次/极值提取
     target_school = None
     direct_answer = None
     target_dimensions_detail = None
@@ -640,6 +679,7 @@ def evaluate_region(
         for idx, r in enumerate(reversed(school_scores_rows[-5:]))
     ]
 
+    # 若指定了具体名次 (如第 2 名、第 1 名、榜首、倒数第 1)
     if target_rank is not None:
         rank_idx = len(school_scores_rows) - 1 if target_rank == -1 else target_rank - 1
         if 0 <= rank_idx < len(school_scores_rows):
@@ -677,6 +717,7 @@ def evaluate_region(
                     f"（在全区 {len(school_scores_rows)} 所监测学校中位列前 **{top_pct}%**，超越全区 **{beat_pct}%** 的学校，{lead_str}）。"
                 )
 
+    # 若指定了前 N 名榜单提问
     elif target_top_n:
         n_items = min(target_top_n, len(school_scores_rows))
         top_items = [
@@ -685,6 +726,7 @@ def evaluate_region(
         ]
         direct_answer = f"{reg['full_name']}在 {active_year} 年数字化发展排名前 {n_items} 的学校依次为：{'；'.join(top_items)}。"
 
+    # 若指定了多维度并列提问 (如：数字资源、教育教学两个维度分别多少 / 哪个更高)
     elif target_dimensions and len(target_dimensions) >= 2:
         dim_info_list = []
         for d in target_dimensions:
@@ -708,6 +750,7 @@ def evaluate_region(
                 f"前者减后者差值为{diff:+.2f}分（分差{diff:.2f}分）。"
             )
 
+    # 学段筛选与统计量直答（仅在未被上位目标排位/榜单/多维对比命中的情况下生成）
     target_dimension_score = dim_map.get(target_dimension) if target_dimension else None
     if direct_answer is None:
         if school_filter:
@@ -757,6 +800,7 @@ def evaluate_region(
                     f"最低分 {min_score} 分，共监测 {len(scores)} 所学校，全区在册样本共 {total_region_schools} 所）。"
                 )
 
+        # 若指定了特定单宏观维度提问
         elif target_dimension and target_dimension in dim_map and target_stat in ("median", "mean_and_median"):
             target_dimension_score = dim_map[target_dimension]
             if target_stat == "mean_and_median":
@@ -781,6 +825,7 @@ def evaluate_region(
                 f"（在六大监测维度中位列第 {d_rank} 名，区域综合总均分为 {avg_score} 分，共监测 {len(scores)} 所学校）。"
             )
 
+        # 若指定了平均值和中位数并列统计量提问
         elif target_stat == "mean_and_median":
             direct_answer = (
                 f"{reg['full_name']} 在 {active_year} 年各学校数字化综合均分（平均值）为 **{avg_score} 分**，"
@@ -788,24 +833,28 @@ def evaluate_region(
                 f"（最高分 {max_score} 分，最低分 {min_score} 分，共监测 {len(scores)} 所学校）。"
             )
 
+        # 若指定了中位数统计量提问
         elif target_stat == "median":
             direct_answer = (
                 f"{reg['full_name']} 在 {active_year} 年各学校数字化综合分的中位数为 **{median_score} 分**"
                 f"（区域综合均分为 {avg_score} 分，最高分 {max_score} 分，最低分 {min_score} 分，共监测 {len(scores)} 所学校）。"
             )
 
+        # 若指定了学校总数统计量提问
         elif target_stat == "count":
             direct_answer = (
                 f"{reg['full_name']} 在 {active_year} 年共有 **{len(scores)} 所中小学校**纳入数字化监测评估"
                 f"（区域数字化综合总均分为 {avg_score} 分）。"
             )
 
+        # 若指定了均分统计量提问 (均分 / 平均分)
         elif target_stat == "mean":
             direct_answer = (
                 f"{reg['full_name']} 在 {active_year} 年数字化综合均分为 **{avg_score} 分**"
                 f"（最高分 {max_score} 分，最低分 {min_score} 分，中位数 {median_score} 分，共监测 {len(scores)} 所学校）。"
             )
 
+        # 若指定了极值统计量提问 (最高分 / 最低分)
         elif target_stat == "max":
             t_top = top_schools[0] if top_schools else {}
             t_name = t_top.get("school_name", "")
@@ -849,6 +898,7 @@ def evaluate_region(
                 f"两端相隔 {diff:.2f} 分（共监测 {len(scores)} 所学校）。"
             )
 
+    # 兜底直接结论（雷达图或大盘常态提问）
     if direct_answer is None:
         if aggregation == "answer_pooled_mean":
             dim_clause = f"【{target_dimension}】维度" if target_dimension else "全部83项指标"
@@ -868,6 +918,7 @@ def evaluate_region(
                 f"（最高分 {max_score} 分，最低分 {min_score} 分，中位数 {median_score} 分，共监测 {len(scores)} 所学校）。"
             )
 
+    # 8. 寻找优势与短板维度
     sorted_dims = sorted(dim_map.items(), key=lambda x: x[1], reverse=True)
     strongest_dim = sorted_dims[0] if sorted_dims else ("-", 0)
     weakest_dim = sorted_dims[-1] if sorted_dims else ("-", 0)
@@ -935,7 +986,7 @@ def evaluate_region(
         "total_unfiltered_count": total_region_schools,
         "total_score": avg_score,
         "raw_total_score": raw_avg_score,
-        "raw_dimension_scores": raw_dim_map,
+        "raw_dimension_scores": raw_dim_map,  # internal execution precision; never a display recomputation
         "max_score": max_score,
         "min_score": min_score,
         "median_score": median_score,
@@ -999,6 +1050,7 @@ def evaluate_region(
     }
     return result
 
+
 def evaluate_region_longitudinal(
     region_keyword: str,
     year_a: str,
@@ -1011,7 +1063,7 @@ def evaluate_region_longitudinal(
     original_query: Optional[str] = None,
     connection: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
-    pass
+    """Compare two annual regional cross-sections under one shared scope."""
     y_start, y_end = str(year_a).strip(), str(year_b).strip()
     if any(len(value) != 4 or not value.isdigit() or not value.startswith("20") for value in (y_start, y_end)):
         return {"error": "两期截面变化首批仅接受两个明确日历年份"}
@@ -1220,12 +1272,13 @@ def evaluate_region_longitudinal(
                 conn.rollback()
             conn.close()
 
+
 def query_school_ranking(
     school_keyword_or_id: Any,
     region_keyword: Optional[str] = None,
     year: Optional[str] = None,
 ) -> Dict[str, Any]:
-    pass
+    """查询某所学校在所属区县或指定区域内的数字化综合排位、百分位及与区域均值对比。"""
     from scripts.school_engine import find_schools, get_school
 
     school = None
@@ -1248,6 +1301,7 @@ def query_school_ranking(
     school_name = school["school_name"]
     active_year = str(school.get("year") or year or "2023")
 
+    # 确定对比区域
     reg = None
     if region_keyword:
         reg = detect_region(region_keyword)
@@ -1267,6 +1321,7 @@ def query_school_ranking(
 
     conn = connect()
 
+    # 1. 区域内所有学校得分排行榜
     school_scores_rows = conn.execute(
         f"""
         SELECT s.id, s.school_name, s.school_type,
@@ -1306,6 +1361,7 @@ def query_school_ranking(
     beat_pct = round((total_schools - target_rank) / total_schools * 100, 1)
     diff_from_avg = round(target_score - region_avg, 2)
 
+    # 2. 该校六维得分 vs 区域六维均分
     school_dim_rows = conn.execute(
         """
         SELECT q.level1_name, ROUND(AVG(a.normalized_value)*100, 2) as dim_score
@@ -1348,6 +1404,7 @@ def query_school_ranking(
             "is_lead": d_diff >= 0,
         })
 
+    # 3. 取目标校前后各 2 所临近学校展示梯度
     start_idx = max(0, target_rank - 3)
     end_idx = min(total_schools, target_rank + 2)
     peer_schools = [
@@ -1394,8 +1451,9 @@ def query_school_ranking(
         "peer_schools": peer_schools,
         "data_coverage": 1.0,
         "overall_confidence": 1.0,
-        "disclaimer": "本排名基于区域全量中小学在国家/省数字化问卷接入问卷作答折算均分，供教育视导与学校定位参考。",
+        "disclaimer": "本排名基于区域全量中小学在国家/省数字化问卷官方填报作答折算均分，供教育视导与学校定位参考。",
     }
+
 
 def compare_regions(
     region_a_kw: str,
@@ -1409,7 +1467,11 @@ def compare_regions(
     original_query: Optional[str] = None,
     connection: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
-    pass
+    """双区域数字化宏观比对核心引擎。
+
+    输入两个行政区划名称（如 武汉市 vs 上海市，或 长沙县 vs 蔡甸区），
+    可指定年份，返回区域级、指标级、领跑校与均分总分的全面对比结果。
+    """
     evaluation_args = {
         "year": year,
         "target_dimension": target_dimension,
@@ -1428,6 +1490,7 @@ def compare_regions(
     if "error" in res_b:
         return {"error": f"未检索到对比区域 B「{region_b_kw}」: {res_b['error']}"}
 
+    # 年份对齐：未指定年份时，优先选取两区域共同存在的最新年份
     actual_year = year
     if not actual_year:
         years_a = set(res_a.get("all_years", []))
@@ -1464,6 +1527,7 @@ def compare_regions(
         winner = "tie"
         winner_name = "持平"
 
+    # 六大维度对比
     dims_a = {d["dimension"]: float(d.get("score") or 0.0) for d in res_a.get("dimensions", [])}
     dims_b = {d["dimension"]: float(d.get("score") or 0.0) for d in res_b.get("dimensions", [])}
     raw_dims_a = res_a.get("raw_dimension_scores") or {}
@@ -1478,7 +1542,8 @@ def compare_regions(
         sa = dims_a.get(d)
         sb = dims_b.get(d)
         if sa is not None and sb is not None:
-
+            # Use the same executed precision as the primary delta. Displayed
+            # means are presentation values and cannot be subtracted again.
             ra, rb = raw_dims_a.get(d), raw_dims_b.get(d)
             d_diff = diff if d == target_dimension else (
                 round(float(ra) - float(rb), 2) if ra is not None and rb is not None else None)
@@ -1511,6 +1576,7 @@ def compare_regions(
             "lead_tag": d_win,
         })
 
+    # 标杆学校对比
     top_a = res_a.get("top_schools", [{}])[0] if res_a.get("top_schools") else {}
     top_b = res_b.get("top_schools", [{}])[0] if res_b.get("top_schools") else {}
 
@@ -1527,6 +1593,7 @@ def compare_regions(
         res_b.get("requested_answer_count") if target_dimension else res_b.get("answer_count")
     ) or 0
 
+    # 生成客观严谨的结论句
     scope_label = f"纳入【{school_filter}】后，" if school_filter else ""
     aggregation_label = (
         "全部作答池化平均" if aggregation == "answer_pooled_mean" else "学校等权平均"
@@ -1574,7 +1641,7 @@ def compare_regions(
             f"【{name_b}】在 {wins_b} 个维度占优" + (f"，{ties} 个维度持平。" if ties else "。")
             + f"【{name_a}】共监测 {res_a.get('school_count', '-')} 所学校，【{name_b}】共监测 {res_b.get('school_count', '-')} 所学校。"
         )
-
+    # 样本覆盖度与代表性核验（针对如 599 校 vs 3 校严重不均衡案例）
     sample_representation_note = None
     if min(cnt_a, cnt_b) < 10 or (min(cnt_a, cnt_b) > 0 and max(cnt_a, cnt_b) / min(cnt_a, cnt_b) >= 5):
         ratio_str = f"{max(cnt_a, cnt_b) / max(1, min(cnt_a, cnt_b)):.1f}:1"
@@ -1653,11 +1720,34 @@ def compare_regions(
         "conclusion": conclusion,
         "data_coverage": 1.0,
         "overall_confidence": 1.0,
-        "disclaimer": "本报告基于两地全量中小学在国家/省数字化监测评估中的接入问卷作答折算均分，供宏观教育统筹与区域视导参考。",
+        "disclaimer": "本报告基于两地全量中小学在国家/省数字化监测评估中的官方填报作答折算均分，供宏观教育统筹与区域视导参考。",
     }
 
-def load_national_province_summary() -> Dict[str, Any]:
-    pass
+
+def load_national_province_summary(year=None) -> Dict[str, Any]:
+    """加载全国各省份预计算宏观大盘底座（支持 frozen PyInstaller 环境与源码模式）。"""
+    from packages.core.item_collection import enabled as r11_enabled
+    if r11_enabled():
+        # The historical disk cache has no R11 item policy. Reuse the same
+        # region tool over the current connection instead of reading its scores.
+        from packages.core.research_data import config
+        from packages.semantic_query.typed_plan import region_identity
+        available = config()['application_years']
+        selected = str(year) if str(year) in available else available[-1]
+        provinces = {}
+        with connect() as connection:
+            names = [r[0] for r in connection.execute('SELECT DISTINCT province FROM schools WHERE year=? AND province IS NOT NULL', (selected,))]
+            for name in names:
+                identity = region_identity(dict(region_type='province', province=name))
+                result = evaluate_region(name, year=selected, connection=connection, region_identity=identity)
+                if result.get('total_score') is None:
+                    continue
+                count = result['school_count']
+                provinces[name] = dict(province=name, year=selected, school_count=count,
+                    avg_score=result['total_score'], min_score=result.get('min_score'), max_score=result.get('max_score'),
+                    sample_tier='规模化样本' if count >= 1000 else '常态化样本' if count >= 100 else '小微样本',
+                    tier_desc='', dimensions={d['dimension']:d['score'] for d in result.get('dimensions', [])})
+        return dict(metadata=dict(available_years=available), by_year={selected:dict(provinces=provinces)})
     import json
     candidates = []
     try:
@@ -1676,8 +1766,9 @@ def load_national_province_summary() -> Dict[str, Any]:
                 continue
     return {}
 
+
 def evaluate_national_overall_top(year: str, *, province_only: bool = False) -> Dict[str, Any]:
-    pass
+    """Recompute one year's provincial-level leader from the read-only source DB."""
     from scripts.school_engine import connect
 
     year_text = str(year or "").strip()
@@ -1741,6 +1832,7 @@ def evaluate_national_overall_top(year: str, *, province_only: bool = False) -> 
         "disclaimer": "仅比较数据库内该年有有效问卷得分的学校，不代表未登记学校或真实行政区全量。",
     }
 
+
 def evaluate_national_ranking(
     year: Optional[str] = None,
     target_dimension: Optional[str] = None,
@@ -1748,8 +1840,15 @@ def evaluate_national_ranking(
     school_filter: Optional[str] = None,
     original_query: Optional[str] = None,
 ) -> Dict[str, Any]:
-    pass
-    summary_data = load_national_province_summary()
+    """全国各省份教育数字化水平综合与细分维度横向排名测算。
+
+    支持：
+    1. 指定学年全国大排名（默认自动选取最新可用年份）；
+    2. 支持全维度综合均分或六大细分维度定向排名（如 数字素养最高省份）；
+    3. 样本规模分层标定（规模化样本 >= 1000 所、常态化样本 100~999 所、小微样本 < 100 所）；
+    4. 自动生成用于可视化柱状图与质检 AUDIT 的结构化证据链。
+    """
+    summary_data = load_national_province_summary(year)
     by_year = summary_data.get("by_year", {})
     available_years = summary_data.get("metadata", {}).get("available_years", ["2020", "2021", "2022", "2023"])
 
@@ -1767,12 +1866,15 @@ def evaluate_national_ranking(
             "requested_year": year,
         }
 
+    # 确定排序依据得分
     rank_items = []
     for p_name, p_info in provinces_dict.items():
-        if target_dimension and target_dimension in p_info.get("dimensions", {}):
-            score = p_info["dimensions"][target_dimension]
+        if target_dimension:
+            score = p_info.get('dimensions', {}).get(target_dimension)
         else:
             score = p_info.get("avg_score", 0.0)
+        if score is None:
+            continue
 
         rank_items.append({
             "province": p_name,
@@ -1787,10 +1889,14 @@ def evaluate_national_ranking(
             "dimensions": p_info.get("dimensions", {}),
         })
 
+    if not rank_items:
+        return dict(error='该年度所问维度没有有效的已采集题项得分。', year=actual_year, status='unavailable_data')
+    # 降序排序
     rank_items.sort(key=lambda x: x["score"], reverse=True)
     for idx, item in enumerate(rank_items, 1):
         item["rank"] = idx
 
+    # 分组统计
     large_scale = [it for it in rank_items if it["school_count"] >= 1000]
     for idx, it in enumerate(large_scale, 1):
         it["rank_tier"] = idx
@@ -1828,6 +1934,7 @@ def evaluate_national_ranking(
             f"在全国规模化省份中展现出显著的发展引领优势。"
         )
 
+    # 准备图表数据（展示 Top 15 省份）
     chart_top = rank_items[:15]
     charts_data = {
         "title": f"{actual_year} 年全国各省教育数字化水平排行榜 Top 15" if not target_dimension else f"{actual_year} 年全国各省【{target_dimension}】得分排行榜 Top 15",
@@ -1857,7 +1964,7 @@ def evaluate_national_ranking(
         "direct_answer": direct_answer,
         "conclusion": direct_answer,
         "charts_data": charts_data,
-        "disclaimer": "本榜单基于各省在册中小学在全国教育数字化监测平台的接入问卷作答折算均分，分层展示不同样本规模下的实际表现，供宏观政策研判参考。",
+        "disclaimer": "本榜单基于各省在册中小学在全国教育数字化监测平台的官方填报作答折算均分，分层展示不同样本规模下的实际表现，供宏观政策研判参考。",
         "overall_confidence": 1.0,
         "data_coverage": 1.0,
     }

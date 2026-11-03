@@ -1,12 +1,15 @@
+"""Lazy single-attempt targeted parser repair; no work at construction time."""
 from __future__ import annotations
 import json
 import copy
 from time import perf_counter
 
+
 class RepairCallFailure(RuntimeError):
     def __init__(self, receipt, kind):
         super().__init__(kind)
         self.receipt=copy.deepcopy(receipt)
+
 
 def make_repair_callback(*, expected_profile_id):
     if not expected_profile_id:

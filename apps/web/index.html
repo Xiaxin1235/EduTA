@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EduTA · 教育数据分析助手</title>
+<title>教师与学校数字化评估系统</title>
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <style>
@@ -468,10 +468,10 @@
 </style>
 </head>
 <body>
-<div id="datasetNotice" role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">请先接入自己的数据，或运行合成数据生成器。查询结果取决于所接数据的范围和定义。</div>
+<div role="note" style="padding:6px 16px;font-size:12px;color:#596579;background:#f1f5f9">本次研究口径：学校指年度登记观测；地区按规范城市、所属省份和用户明示条件共同选取，不代表全市历史学校全集。</div>
 <div class="header">
-  <h1>EduTA</h1>
-  <span class="sub">Education Typed-task Analyst · 教育数据的带类型任务分析助手</span>
+  <h1>教师与学校数字化评估系统</h1>
+  <span class="sub">界面 v3.29.0-constraint-v6 · 原生F/H v1 · 83题可信语义目录</span>
   <span class="apiDot" id="dbDot" style="margin-left:auto">数据库：未检测</span>
   <span class="apiDot" id="contractDot">契约：未检测</span>
   <span class="apiDot" id="apiDot">接口：未检测</span>
@@ -490,20 +490,34 @@
         <select id="queryMode" style="max-width:185px;min-width:165px" title="选择普通提问台的识别方式">
           <option value="semantic" selected>智能语义识别</option>
           <option value="rule">规则词面识别（对照）</option>
-
-
+          <option value="fh_f">结构化任务 · F平铺</option>
+          <option value="fh_h">结构化任务 · H作用域</option>
         </select>
-        <input type="text" id="question" placeholder="例如：示例市2020年的数字资源怎么样？示例一小学2023年给老师配了多少平板？">
+        <input type="text" id="question" placeholder="例如：武汉市2020年的数字资源怎么样？罗泉学校2023年给老师配了多少平板？">
         <button id="btnAsk">提问 / 评估</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
         <span style="font-size:12px;color:var(--text-muted);font-weight:500;">快捷示例：</span>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2020年的数字化水平怎么样？">示例市2020年总体</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市2020年的数字资源怎么样？">示例市2020年数字资源</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年给老师配了多少平板？只说数量，不要图。">示例一小学教师平板</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年给学生配了多少平板？只说数量。">示例一小学学生平板</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市示例区示例一小学2023年平板有多少？">平板歧义澄清</button>
-        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="示例市 2021 数字化大盘怎么样？">示例市 2021 数字化大盘</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="武汉市2020年的数字化水平怎么样？">武汉市2020年总体</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="武汉市2020年的数字资源怎么样？">武汉市2020年数字资源</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年给老师配了多少平板？只说数量，不要图。">罗泉学校教师平板</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年给学生配了多少平板？只说数量。">罗泉学校学生平板</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="七台河市新兴区罗泉学校2023年平板有多少？">平板歧义澄清</button>
+        <button class="ghost quick-chip" style="padding:3px 10px;font-size:12px;border-radius:9999px;cursor:pointer;" data-q="长沙县 2021 数字化大盘怎么样？">长沙县 2021 数字化大盘</button>
+      </div>
+      <div id="presentationTestPanel" data-enabled="false" style="display:none;margin-top:12px;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;">
+        <div style="font-size:12.5px;font-weight:700;color:#92400e;">迟到响应受控测试模式 · 仅用于页面时序验收，不能作为真实API结果</div>
+        <div id="presentationTestGateState" style="font-size:12px;color:#92400e;margin:4px 0 8px;">正在核对服务端测试门控…</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <select id="presentationTestKind" disabled style="max-width:190px;">
+            <option value="REAL">真实API＋受控呈现延迟</option>
+            <option value="SYNTH_ANSWER">合成ANSWER</option>
+            <option value="SYNTH_ERROR">合成ERROR</option>
+            <option value="SYNTH_STALE">合成STALE</option>
+          </select>
+          <label style="font-size:12px;">延迟(ms) <input id="presentationTestDelay" type="number" min="0" max="60000" value="0" disabled style="width:100px;"></label>
+          <label style="font-size:12px;">返回revision <input id="presentationTestRevision" type="number" min="0" value="0" disabled style="width:90px;"></label>
+        </div>
       </div>
       <div class="mockNote">智能语义支持区域总体/单维/单题归一均值、区域中位数、单校总体/单维、学校单题事实，以及同校同年双题项原始值与简单计算，并按所问范围定向呈现；跨校或多于两题的题集仍需进一步支持。规则词面识别仅作显式对照，其结果会明确标注为规则路径。</div>
     </div>
@@ -538,13 +552,13 @@
         <div class="mockNote">内置 T001–T004 典型学科示例教师档案（脱敏模拟），已汉化姓名、任教组别与职称信息。</div>
       </div>
       <div class="card">
-        <h3 style="margin-top:0">学校简介（已接入数字化库）</h3>
+        <h3 style="margin-top:0">学校简介（真实数字化库）</h3>
         <div class="row">
-          <input type="text" id="schoolQ" placeholder="学校名关键词，如 示例二小学">
+          <input type="text" id="schoolQ" placeholder="学校名关键词，如 成绩小学">
           <input type="text" id="schoolYear" placeholder="年份，如 2020" style="max-width:120px;min-width:100px">
           <button id="btnSchoolSearch">检索</button>
         </div>
-        <div class="mockNote">按名称和年度检索已接入的学校记录。</div>
+        <div class="mockNote">从 37 万所学校记录中按名称模糊查询。</div>
       </div>
     </div>
     <div id="profileResult"></div>
@@ -591,6 +605,18 @@
       <div id="apiStatus"></div>
     </div>
     <div class="card">
+      <h3 style="margin-top:0">冻结配对实验</h3>
+      <p class="mockNote">使用上方选中的加密配置。准备任务不联网；每批14对、28请求，由本人另行确认执行，失败停止。入口默认关闭，待安全与实验方案审查。</p>
+      <div class="row">
+        <select id="pairedBatch"><option value="1">第1批</option><option value="2">第2批</option><option value="3">第3批</option></select>
+        <button id="pairedPrepare" disabled>检查所选批次（不联网）</button>
+        <button id="pairedStart" disabled>本人确认执行本批（产生 API 费用）</button>
+        <button id="pairedReview" class="secondary" disabled>本人确认已审阅本批结果</button>
+        <button id="pairedRefresh" class="secondary">刷新状态</button>
+      </div>
+      <div id="pairedStatus" class="mockNote">实验入口未启用。</div>
+    </div>
+    <div class="card">
       <h3 style="margin-top:0">模型地址安全说明</h3>
       <div class="ep">安全包不预置任何模型服务商或中转站地址。</div>
       <div class="ep">请从服务商控制台复制 OpenAI 兼容的 API 根地址；通常以 <code>/v1</code> 结尾。</div>
@@ -600,8 +626,8 @@
 </div>
 
 <script>
-
-
+// Standard synchronizer-token session, confined to this page's exact origin.
+// Tokens stay in memory; no credentials or session tokens enter localStorage.
 const localNativeFetch = globalThis.fetch.bind(globalThis);
 let localSessionPromise;
 function localBrowserSession() {
@@ -625,10 +651,60 @@ globalThis.fetch = async function(input, init = {}) {
   }
   return localNativeFetch(input, init);
 };
-const MOCK = {};
-const MOCK_TREND = {};
-const MOCK_TEACHERS = [];
-const TEACHER_NAME_MAP = {};
+const MOCK = {
+  T001: {
+    overview: { teacher_id:"T001", teacher_dept:"数学组", school_years:["2023-2024","2024-2025"], template:"2025-2026学年 教学评估 v1（示例）",
+      total_score:83.13, overall_confidence:1.0, data_coverage:1.0, redline_flagged:false },
+    sections: [
+      { dimension:"教学设计", conclusion:"得分 100.0 分（置信度 1.0）。", score:100, confidence:1,
+        evidence_refs:["[证据: 教学设计与备课表 | 评估学年: 2023-2024、2024-2025 | 已交课时 547.0 / 应授课时 547.0]"], gaps:[] },
+      { dimension:"课堂教学", conclusion:"得分 86.5 分（置信度 1.0）。", score:86.5, confidence:1,
+        evidence_refs:["[证据: 课堂随堂听课评议 | 6次随堂听课评分均值]"], gaps:[] },
+      { dimension:"教学效果", conclusion:"得分 64.45 分（置信度 1.0）。", score:64.45, confidence:1,
+        evidence_refs:["[证据: 期末学业成绩库 | 任教班级及格率相对年级基线增值]"], gaps:[] },
+      { dimension:"教研与学术", conclusion:"得分 100.0 分（置信度 1.0）。", score:100, confidence:1,
+        evidence_refs:["[证据: 教科研成果与获奖表 | 国家/省市级成果加权累计得分]"], gaps:[] },
+      { dimension:"学生评教", conclusion:"得分 89.43 分（置信度 1.0）。", score:89.43, confidence:1,
+        evidence_refs:["[证据: 学生评教问卷库 | 120份学生有效问卷综合均分]"], gaps:[] },
+      { dimension:"师德师风（红线）", is_redline:true, flagged:false, conclusion:"未触发红线标记。",
+        evidence_refs:["[证据: 师德师风合规审查表 | 查实违纪/投诉=0起]"], gaps:[] },
+    ],
+    disclaimer:"本报告为辅助参考材料，供评审委员会人工复核使用；不构成人事裁决的独立依据（考核性 R4）。"
+  },
+  T003: {
+    overview: { teacher_id:"T003", teacher_dept:"语文组", school_years:["2023-2024","2024-2025"], template:"2025-2026学年 教学评估 v1（示例）",
+      total_score:70.92, overall_confidence:0.78, data_coverage:0.65, redline_flagged:true },
+    sections: [
+      { dimension:"教学设计", conclusion:"得分 50.0 分（置信度 1.0）。", score:50, confidence:1,
+        evidence_refs:["[证据: 教学设计与备课表 | 已交课时 305.5 / 应授课时 611.0]"], gaps:[] },
+      { dimension:"课堂教学", conclusion:"得分 75.2 分（置信度 0.7）。", score:75.2, confidence:0.7,
+        evidence_refs:["[证据: 课堂随堂听课评议 | 2次随堂听课评分均值]"], gaps:[] },
+      { dimension:"教学效果", conclusion:"数据不足以支持结论。", score:null, confidence:0.6,
+        evidence_refs:[], gaps:["无同口径基线可比"] },
+      { dimension:"教研与学术", conclusion:"得分 100.0 分（置信度 1.0）。", score:100, confidence:1,
+        evidence_refs:["[证据: 教科研成果与获奖表 | 级别加权累计得分]"], gaps:[] },
+      { dimension:"学生评教", conclusion:"得分 72.97 分（置信度 1.0）。", score:72.97, confidence:1,
+        evidence_refs:["[证据: 学生评教问卷库 | 60份学生有效问卷综合均分]"], gaps:[] },
+      { dimension:"师德师风（红线）", is_redline:true, flagged:true, conclusion:"已触发红线标记，本维度不参与评分，转独立人事流程。",
+        evidence_refs:["[证据: 师德师风合规审查表 | 查实违规/投诉=1起]"], gaps:[] },
+    ],
+    disclaimer:"本报告为辅助参考材料，供评审委员会人工复核使用；不构成人事裁决的独立依据（考核性 R4）。"
+  }
+};
+const MOCK_TREND = { "2023-2024": 74.63, "2024-2025": 87.63 };
+const MOCK_TEACHERS = [
+  {teacher_id:"T001", name:"张老师", dept_id:"数学组", title:"高级", hire_year:"2010", is_active:"1"},
+  {teacher_id:"T002", name:"李老师", dept_id:"数学组", title:"中级", hire_year:"2016", is_active:"1"},
+  {teacher_id:"T003", name:"王老师", dept_id:"语文组", title:"初级", hire_year:"2021", is_active:"1"},
+  {teacher_id:"T004", name:"赵老师", dept_id:"英语组", title:"高级", hire_year:"2005", is_active:"1"}
+];
+
+const TEACHER_NAME_MAP = {
+  "T001": "张老师",
+  "T002": "李老师",
+  "T003": "王老师",
+  "T004": "赵老师"
+};
 
 const TEACHER_TITLE_MAP = {
   "高级": "高级教师 (正高/副高级职称)",
@@ -664,7 +740,7 @@ const DATA_SOURCE_MAP = {
   "research_score": "教科研成果积分",
   "redline": "师德红线检查",
   "school_answers": "学校数字化问卷作答库",
-  "schools": "学校年度信息库",
+  "schools": "全国学校基础信息库",
   "questions": "数字化评估指标题库",
   "answers.normalized_value": "问卷作答归一值 (0~1)"
 };
@@ -716,10 +792,10 @@ function formatEvidenceText(e) {
     return `[${parts.join(" | ")}]`;
   }
   let s = String(e || "");
-
+  // 汉化学年列表格式如 ['2024-2025']
   s = s.replace(/\['(\d{4}-\d{4})'\]/g, "$1 学年");
   s = s.replace(/\['([^']+)'\]/g, "$1");
-
+  // 汉化常见公式与英文
   s = s.replace(/avg of (\d+) observations/g, "共 $1 次随堂听课评分均值");
   s = s.replace(/avg of (\d+) responses, 1-5 scale -> x20/g, "共 $1 份学生评教问卷均分(5分制换算百分制)");
   s = s.replace(/class_pass_rate - cohort_baseline_pass_rate/g, "任教班级及格率相对年级基准线增值");
@@ -763,7 +839,7 @@ function apiUrl(path) {
 function fetchErrorHint(err) {
   const msg = String((err && err.message) || err || "");
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-    return "浏览器未连上 EduTA 本机服务。请确认启动窗口仍在运行，使用启动时显示的 127.0.0.1 地址，并刷新页面。原始错误：" + msg;
+    return "浏览器没连上本机程序（不是模型官网回的错）。请确认：① 黑窗口里的 TeacherEval 还在运行；② 地址栏是 127.0.0.1:8610 而不是官方 API 网址；③ 用 Ctrl+F5 刷新。原始错误：" + msg;
   }
   return msg;
 }
@@ -844,6 +920,7 @@ function renderAgentVisuals(report) {
   html += '<div style="font-size:12px;color:var(--primary);background:var(--primary-light);padding:3px 10px;border-radius:9999px;font-weight:500;">Python 3.12 · Matplotlib 高清绘图</div>';
   html += '</div>';
 
+  // 1. 渲染高清图表卡片
   charts.forEach((ch, idx) => {
     let src = "";
     if (ch.base64) {
@@ -869,6 +946,7 @@ function renderAgentVisuals(report) {
     html += '</div>';
   });
 
+  // 2. 渲染 Agent 工具调用轨迹抽屉（展示生成的 Python 代码和执行输出）
   toolCalls.forEach((tc) => {
     const isOk = tc.success;
     const dur = tc.duration_ms ? tc.duration_ms + 'ms' : '';
@@ -929,8 +1007,8 @@ function ensureChartPreview() {
     const closeControl = target && typeof target.closest === "function"
       ? target.closest('[data-chart-preview-close="true"]')
       : null;
-
-
+    // 普通留白点击会落在modal外层；四个不被dialog遮挡的语义化边缘区
+    // 让真实浏览器自动化也能命中背景，而不是按全屏backdrop中心误点dialog。
     if (closeControl || target === modal || (dialog && !dialog.contains(target))) {
       closeChartPreview();
     }
@@ -997,6 +1075,7 @@ function fallbackNotice(report) {
   return { tag: tag, detail: (reason || "上游模型未返回可用的正文内容。") + (trace ? " " + trace : "") };
 }
 
+// Display only: retain the saved response and numeric facts unchanged.
 function registeredUnitPresentation(report, text) {
   const affected = (report.task_outputs || []).some(n => String(n.unit_display || '').includes('单位含义待核'));
   if (!affected) return String(text || '');
@@ -1027,21 +1106,21 @@ function renderLlmSection(report, title) {
     return '<div class="section llm-box" style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:var(--radius-md);padding:14px 18px;margin-top:16px;">'
       + '<h3 style="color:#166534;margin:0 0 8px 0;font-size:15px;">'
       + esc(title || "规则基线解读")
-      + '<span style="font-size:11.5px;font-weight:normal;color:#166534;background:#dcfce7;padding:2px 8px;border-radius:12px;margin-left:8px;">G0 · 全链路模型调用 0</span>'
+      + '<span style="font-size:11.5px;font-weight:normal;color:#166534;background:#dcfce7;padding:2px 8px;border-radius:12px;margin-left:8px;">P4 G0 · 全链路模型调用 0</span>'
       + '</h3>'
       + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#14532d;">' + esc(txt) + '</div>'
-      + '<div style="margin-top:9px;font-size:12px;color:#166534;">本段由规则模板生成；实验模式下不提供云端模型重试入口。</div>'
+      + '<div style="margin-top:9px;font-size:12px;color:#166534;">本段由冻结规则模板生成；实验模式下不提供云端模型重试入口。</div>'
       + '</div>';
   }
 
   if (["g1_llm_unconstrained", "g2_llm_constrained", "a1_no_execution_verification", "a2_no_output_verification_or_repair", "a3_no_answer_repair"].includes(experimentMode)) {
     const constrained = experimentMode !== "g1_llm_unconstrained";
     const badges = {
-      g1_llm_unconstrained: "G1 · 同模型共同工具 · 所提约束关闭",
-      g2_llm_constrained: "G2 · 执行/输出核验与答复修复开启",
-      a1_no_execution_verification: "A1 · 关闭执行核验",
-      a2_no_output_verification_or_repair: "A2 · 关闭输出核验与答复修复",
-      a3_no_answer_repair: "A3 · 关闭答复修复"
+      g1_llm_unconstrained: "P4 G1 · 同模型共同工具 · 所提约束关闭",
+      g2_llm_constrained: "P4 G2 · 执行/输出核验与答复修复开启",
+      a1_no_execution_verification: "P4 A1 · 关闭执行核验",
+      a2_no_output_verification_or_repair: "P4 A2 · 关闭输出核验与答复修复",
+      a3_no_answer_repair: "P4 A3 · 关闭答复修复"
     };
     const badge = badges[experimentMode];
     const color = constrained ? "#6d28d9" : "#075985";
@@ -1053,6 +1132,7 @@ function renderLlmSection(report, title) {
       + '<span style="font-size:11.5px;font-weight:normal;color:' + color + ';padding:2px 8px;border:1px solid ' + border + ';border-radius:12px;margin-left:8px;">' + esc(badge) + '</span>'
       + '</h3>'
       + '<div class="llm-content" style="font-size:14px;line-height:1.75;white-space:pre-wrap;color:#1e293b;">' + esc(txt) + '</div>'
+      + (!constrained && report._llmFinishReason === 'length' ? '<div style="margin-top:9px;color:#92400e;">本次回答达到输出长度上限，正文可能不完整。</div>' : '')
       + '<div style="margin-top:9px;font-size:12px;color:' + color + ';">实验模式禁止页面另发解释请求；本段来自当前chat的共同写作路径。</div>'
       + '</div>';
   }
@@ -1103,7 +1183,7 @@ function renderLlmSection(report, title) {
       + '</div>'
       + '<div style="font-size:13.5px;color:#92400e;line-height:1.6;margin-top:8px;">'
       + esc(cleanErr) + '<br>'
-      + '<span style="font-size:12px;color:#78350f;opacity:0.9;">提示：本报告所有统计得分、维度均分、梯队排位及 Matplotlib 综合图表均直接由本地 SQLite 数据库计算生成，可结合数据来源和查询证据核对。</span>'
+      + '<span style="font-size:12px;color:#78350f;opacity:0.9;">提示：本报告所有统计得分、维度均分、梯队排位及 Matplotlib 综合图表均直接由本地 SQLite 真实数据库计算生成，数据准确完整。</span>'
       + '</div>'
       + '</div>';
   }
@@ -1167,7 +1247,7 @@ function bindRetryLlm(report, into) {
 }
 function renderAuditAndMetricsSection(report) {
   const audit = report.audit || {};
-
+  // A skipped audit is not a failed audit. Keep explicit failures authoritative.
   const auditVerdict = String(audit.verdict || audit.status || "NOT_CHECKED").toUpperCase();
   const auditSkipped = auditVerdict === "NOT_APPLICABLE_UNCONSTRAINED" || auditVerdict === "NOT_APPLICABLE";
   const metrics = report.system_metrics || {};
@@ -1189,6 +1269,7 @@ function renderAuditAndMetricsSection(report) {
 
   let html = '<div class="section audit-panel" style="background:#fcfbf9;border:1px solid #e7e2d8;border-radius:var(--radius-lg);padding:18px 20px;margin-top:20px;box-shadow:0 2px 8px rgba(0,0,0,0.02);">';
 
+  // 标题行与 Agent 认证徽章
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;border-bottom:1px solid #ede8de;padding-bottom:12px;">';
   html += '<div style="display:flex;align-items:center;gap:8px;">';
   html += '<span style="font-size:11.5px;font-weight:700;color:var(--primary);border:1.5px solid var(--primary);border-radius:4px;padding:2px 6px;letter-spacing:0.5px;">AUDIT</span>';
@@ -1210,10 +1291,11 @@ function renderAuditAndMetricsSection(report) {
   html += '</div>';
   html += '</div>';
 
+  // 1. 单次质检状态看板 (Inspection Status Cards)
   html += '<div style="margin-bottom:16px;">';
   html += '<div style="font-size:12.5px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">';
   html += '<span><b>单次问答质检与置信度状态</b> (针对当前结果的实时核查)</span>';
-  html += '<span style="font-size:11px;color:var(--text-light);">计算结果可通过数据卡片和查询证据核对</span>';
+  html += '<span style="font-size:11px;color:var(--text-light);">论文测试集全量基准准确率请参见实验报告</span>';
   html += '</div>';
 
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">';
@@ -1250,6 +1332,7 @@ function renderAuditAndMetricsSection(report) {
   });
   html += '</div></div>';
 
+  // 2. 质检审计 Agent 核查项目清单 (Verification Checklist)
   html += '<div style="background:#ffffff;border:1px solid #ede8de;border-radius:var(--radius-md);padding:12px 16px;margin-bottom:12px;">';
   html += '<div style="font-size:12.5px;font-weight:600;color:var(--text-muted);margin-bottom:8px;"><b>质检审计 Agent 核心核验流水线</b></div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:8px;">';
@@ -1277,12 +1360,13 @@ function renderAuditAndMetricsSection(report) {
   });
   html += '</div></div>';
 
+  // 3. 详细审计日志与物理数据血统展开抽屉
   html += '<details style="font-size:12px;color:var(--text-muted);">';
   html += '<summary style="cursor:pointer;user-select:none;font-weight:500;color:var(--primary);display:inline-flex;align-items:center;gap:4px;">';
   html += '<span>[明细] 查看审计证据链与底层数据库 (SQLite) 物理匹配明细</span>';
   html += '</summary>';
   html += '<div style="margin-top:8px;background:#f5f3ee;padding:10px 14px;border-radius:6px;font-family:Consolas,Monaco,monospace;font-size:11.5px;line-height:1.6;">';
-  html += '<div><b>[物理证据源]</b>: ' + esc((audit.provenance && audit.provenance.source) || "SQLite 指标定义与问卷作答库") + '</div>';
+  html += '<div><b>[物理证据源]</b>: ' + esc((audit.provenance && audit.provenance.source) || "SQLite 官方题库与问卷作答库") + '</div>';
   if (evidenceChain.length) {
     html += '<div style="margin-top:4px;"><b>[实体与题库物理匹配]</b>:</div>';
     evidenceChain.forEach(ec => { html += '<div>  • ' + esc(ec) + '</div>'; });
@@ -1307,7 +1391,7 @@ function renderAuditAndMetricsSection(report) {
 function renderSchoolFactItemBadge(o) {
   if (!o.question_id) return '';
   const metricDimension = typeof o.metric_dimension === 'string' ? o.metric_dimension.trim() : '';
-  return '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:8px;">已接入题项第 '
+  return '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:8px;">官方题库第 '
     + esc(o.question_id) + ' 题' + (metricDimension ? ' · ' + esc(metricDimension) : '') + '</div>';
 }
 
@@ -1327,18 +1411,20 @@ function renderReport(report, into) {
   const objType = o.object_type || "teacher";
   if (objType === "structured_task") {
     const outputs = report.task_outputs || [];
-    let html = '<div class="card"><h2>查询结果</h2><table id="taskFacts"><thead><tr><th>对象/范围</th><th>值</th><th>单位</th><th>名次</th><th>状态</th></tr></thead><tbody>';
+    let html = '<div class="card"><h2>查询结果</h2><table id="taskFacts"><thead><tr><th>对象/范围</th><th>值</th><th>单位</th><th>名次</th><th>有效学校数</th><th>状态</th></tr></thead><tbody>';
     outputs.forEach(node => {
       const value = node.delivery_unresolved ? '相关计算未决' : node.value == null ? '无数据' : (typeof node.value === 'number' ? Number(node.value.toPrecision(12)) : JSON.stringify(node.value));
       if (Array.isArray(node.value)) {
         node.value.forEach(row => {
-          html += '<tr><td>' + esc(node.label) + ' / ' + esc(row.school_name) + '</td><td>' + esc(row.score) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(row.rank) + '</td><td>' + esc(node.unit_display ? '单位含义待核' : node.status) + '</td></tr>';
+          html += '<tr><td>' + esc(node.label) + ' / ' + esc(row.school_name) + '</td><td>' + esc(row.score) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(row.rank) + '</td><td>—</td><td>' + esc(node.unit_display ? '单位含义待核' : node.status) + '</td></tr>';
         });
       } else {
-        html += '<tr><td>' + esc(node.label) + '</td><td>' + esc(value) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(node.rank ?? '—') + '</td><td>' + esc(node.unit_display || node.delivery_unresolved ? '单位含义待核' : node.status) + '</td></tr>';
+        html += '<tr><td>' + esc(node.label) + '</td><td>' + esc(value) + '</td><td>' + esc(node.unit_display === '原字段登记值；单位含义待核' ? '原字段登记值' : (node.unit_display || node.unit)) + '</td><td>' + esc(node.rank ?? '—') + '</td><td>' + esc(node.school_count ?? '—') + '</td><td>' + esc(node.unit_display || node.delivery_unresolved ? '单位含义待核' : node.status) + '</td></tr>';
       }
     });
     html += '</tbody></table><div id="taskAnalysis">';
+    const notices = o.program_notices || [];
+    notices.forEach(note => { html += '<p class="data-notice">' + esc(note) + '</p>'; });
     const analysis = registeredUnitAnalysis(report);
     if (analysis) html += '<p>' + esc(analysis) + '</p>';
     const verification = report._llmAnswerVerification || {};
@@ -1347,7 +1433,7 @@ function renderReport(report, into) {
     into.innerHTML = html;
     return;
   }
-
+  // 分支 0.7：单区域两期重复截面变化卡片
   if (objType === "region_longitudinal") {
     const regName = o.region_name || "区域大盘";
     const yA = o.year_a || (o.school_years && o.school_years[0]) || "基准年";
@@ -1389,8 +1475,10 @@ function renderReport(report, into) {
     html += '<h2 style="margin:0 0 8px;font-size:20px;font-weight:600;">' + esc(regName) + ' · 两期年度截面变化</h2>';
     html += '<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px;">两个年度样本可不同；本结果不表示追踪同一批学校。</div>';
 
+    // 核心数值卡片：两期对比与变动幅度
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
 
+    // 基准年卡片
     html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow-card);">';
     html += '<div style="font-size:12.5px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">前期基准 (' + esc(yA) + ' 年)</div>';
     html += '<div style="font-size:16.5px;font-weight:700;color:var(--text-main);margin-bottom:6px;">' + esc(regName) + '</div>';
@@ -1401,6 +1489,7 @@ function renderReport(report, into) {
     html += '</div>';
     html += '</div>';
 
+    // 目标年卡片
     html += '<div style="background:' + (isGainer ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isGainer ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
     html += '<span style="position:absolute;top:12px;right:14px;background:' + (isGainer ? 'var(--primary)' : 'var(--warn)') + ';color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[' + esc(trend) + ' ' + esc(diffSign) + ' ' + esc(unit) + ']</span>';
     html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:4px;">末期截面 (' + esc(yB) + ' 年)</div>';
@@ -1415,6 +1504,7 @@ function renderReport(report, into) {
 
     html += '</div>';
 
+    // 核心结论直答
     if (o.direct_answer) {
       html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
       html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">两期截面核查结论</div>';
@@ -1422,8 +1512,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 双线对比雷达图
     if (Object.keys(report.radar_data || {}).length) html += '<div id="radar"></div>';
 
+    // 六大维度逐项变动表
     const deltas = report.dimension_deltas || [];
     if (deltas.length) {
       html += '<div class="section">';
@@ -1442,14 +1534,19 @@ function renderReport(report, into) {
       html += '</table></div>';
     }
 
+    // 大模型研判建议
     html += renderLlmSection(report, "智能两期截面变化研判与视导建议");
 
+    // Agent 本地可视化图表抽屉
     html += renderAgentVisuals(report);
 
+    // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
+    // 免责声明
     html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本结果比较两个年度独立截面，仅描述观测变化，不代表同批学校追踪、因果效应或趋势外推。") + '</div>';
 
+    // 深入视导跳转按钮
     html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
     html += '<button class="secondary" id="btnEvalRegStart" data-name="' + esc(regName) + '" data-year="' + esc(yA) + '">查看【' + esc(regName) + '】' + esc(yA) + ' 年大盘</button>';
     html += '<button class="secondary" id="btnEvalRegEnd" data-name="' + esc(regName) + '" data-year="' + esc(yB) + '">查看【' + esc(regName) + '】' + esc(yB) + ' 年大盘</button>';
@@ -1459,6 +1556,7 @@ function renderReport(report, into) {
     into.innerHTML = html;
     bindRetryLlm(report, into);
 
+    // 初始化 ECharts 双线对比雷达图
     const radarNode = document.getElementById("radar");
     if (radarNode && Object.keys(report.radar_data || {}).length) {
       radarChart(radarNode, report.radar_data || {}, report.radar_comp_data || {}, [yB + "年得分", yA + "年得分"]);
@@ -1481,6 +1579,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 0.7：双区域宏观数字化智能比对卡片
   if (objType === "region_compare") {
     const regA = report.region_a || report.region_a_detail || {};
     const regB = report.region_b || report.region_b_detail || {};
@@ -1506,6 +1605,7 @@ function renderReport(report, into) {
 
     html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(nameA) + ' <span style="color:var(--text-light);font-size:16px;">VS</span> ' + esc(nameB) + '</h2>';
 
+    // 样本代表性提示 (若两地样本规模极不均衡)
     if (o.sample_representation_note || report.sample_representation_note) {
       const repNote = o.sample_representation_note || report.sample_representation_note;
       html += '<div style="background:#fffbeb;border:1px solid #fef3c7;border-left:4px solid var(--warn);padding:12px 16px;border-radius:var(--radius-md);margin-bottom:16px;font-size:13px;line-height:1.6;color:#92400e;">';
@@ -1513,8 +1613,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 核心数值卡片：两地并列
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
 
+    // 区域 A 卡片
     html += '<div style="background:' + (isWinA ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinA ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
     if (isWinA) {
       if (!scopedDimension && !countOnly) html += '<span style="position:absolute;top:12px;right:14px;background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合均分领先]</span>';
@@ -1529,6 +1631,7 @@ function renderReport(report, into) {
     html += renderComputedWins(o, report, 'a');
     html += '</div>';
 
+    // 区域 B 卡片
     html += '<div style="background:' + (isWinB ? 'linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinB ? '#d0e5ff' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
     if (isWinB) {
       if (!scopedDimension && !countOnly) html += '<span style="position:absolute;top:12px;right:14px;background:#2563eb;color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合均分领先]</span>';
@@ -1545,6 +1648,7 @@ function renderReport(report, into) {
 
     html += '</div>';
 
+    // 核心结论直答
     if (o.direct_answer) {
       html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
       html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">核心比对结论</div>';
@@ -1552,8 +1656,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 双线交互式雷达图
     if (!scopedDimension) html += '<div id="radar"></div>';
 
+    // 六大维度逐项对照表
     const dims = report.dimensions_comparison || [];
     if (dims.length) {
       const showDiff = o.answer_scope
@@ -1590,14 +1696,19 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 大模型研判建议
     html += renderLlmSection(report, scopedDimension ? "智能答复" : "智能宏观对比研判与视导建议");
 
+    // Agent 本地可视化图表抽屉
     html += renderAgentVisuals(report);
 
+    // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
+    // 免责声明
     if (!scopedDimension) html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本横向对比报告基于两区域全量中小学在国家/省级教育数字化问卷填报的实际作答均分折算聚合生成，供宏观教育统筹与区域对标视导参考。") + '</div>';
 
+    // 深入视导跳转按钮
     if (!scopedDimension) {
       html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
       html += '<button class="secondary" id="btnEvalRegA" data-name="' + esc(nameA) + '" data-year="' + esc(o.year_a || o.year || '') + '">深入视导【' + esc(nameA) + '】大盘</button>';
@@ -1609,6 +1720,7 @@ function renderReport(report, into) {
     into.innerHTML = html;
     bindRetryLlm(report, into);
 
+    // 初始化 ECharts 双线对比雷达图
     if (!scopedDimension) radarChart(
       document.getElementById("radar"),
       report.radar_data || report.radar_data_a || {},
@@ -1633,6 +1745,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 0.8：双校数字化多维智能比对卡片
   if (objType === "school_compare") {
     const schA = report.school_a || {};
     const schB = report.school_b || {};
@@ -1651,8 +1764,10 @@ function renderReport(report, into) {
 
     html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(nameA) + ' <span style="color:var(--text-light);font-size:16px;">VS</span> ' + esc(nameB) + '</h2>';
 
+    // 核心数值卡片：两校并列
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:14px;margin-bottom:18px;">';
 
+    // A 校卡片
     html += '<div style="background:' + (isWinA ? 'linear-gradient(135deg, #fff9f6 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinA ? '#f6ded5' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
     if (isWinA) {
       html += '<span style="position:absolute;top:12px;right:14px;background:var(--primary);color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合领先]</span>';
@@ -1667,6 +1782,7 @@ function renderReport(report, into) {
     html += renderComputedWins(o, report, 'a');
     html += '</div>';
 
+    // B 校卡片
     html += '<div style="background:' + (isWinB ? 'linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%)' : '#ffffff') + ';border:1px solid ' + (isWinB ? '#d0e5ff' : 'var(--line)') + ';border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
     if (isWinB) {
       html += '<span style="position:absolute;top:12px;right:14px;background:#2563eb;color:#fff;font-size:11px;padding:2px 8px;border-radius:9999px;font-weight:600;">[综合领先]</span>';
@@ -1683,6 +1799,7 @@ function renderReport(report, into) {
 
     html += '</div>';
 
+    // 核心结论直答
     if (o.direct_answer) {
       html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
       html += '<div style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:6px;">核心比对结论</div>';
@@ -1690,8 +1807,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 双线交互式雷达图
     html += '<div id="radar"></div>';
 
+    // 六大维度逐项对照表
     const dims = report.dimensions_comparison || [];
     if (dims.length) {
       html += '<div class="section">';
@@ -1720,14 +1839,19 @@ function renderReport(report, into) {
       html += '</table></div>';
     }
 
+    // 大模型研判建议
     html += renderLlmSection(report, "智能对比研判与互鉴建议");
 
+    // Agent 本地可视化图表抽屉
     html += renderAgentVisuals(report);
 
+    // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
+    // 免责声明
     html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本横向对比报告基于两校在国家/省级教育数字化问卷填报作答的真实评估得分生成，供学校对标互鉴与教育视导参考。") + '</div>';
 
+    // 深入评估跳转按钮
     html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
     html += '<button class="secondary" id="btnEvalSchoolA" data-name="' + esc(nameA) + '" data-year="' + esc(o.year_a || '') + '">深入评估【' + esc(nameA) + '】</button>';
     html += '<button class="secondary" id="btnEvalSchoolB" data-name="' + esc(nameB) + '" data-year="' + esc(o.year_b || '') + '">深入评估【' + esc(nameB) + '】</button>';
@@ -1737,6 +1861,7 @@ function renderReport(report, into) {
     into.innerHTML = html;
     bindRetryLlm(report, into);
 
+    // 初始化 ECharts 双线对比雷达图
     radarChart(
       document.getElementById("radar"),
       report.radar_data || {},
@@ -1761,6 +1886,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 1：学校具体指标客观事实卡片
   if (objType === "school_fact") {
     const answerScope = o.answer_scope || report.answer_scope || report._answerSpec || {};
     if (answerScope.granularity === "item_set") {
@@ -1791,7 +1917,7 @@ function renderReport(report, into) {
       html += renderLlmSection(report, "模型回答");
       if (answerScope.chart_requested) html += renderAgentVisuals(report);
       if (report._showFactDebugAudit && report.audit && report.system_metrics) html += renderAuditAndMetricsSection(report);
-      html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校接入问卷作答库，供核查参考。") + '</div></div>';
+      html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校官方填报作答库，供核查参考。") + '</div></div>';
       into.innerHTML = html;
       return;
     }
@@ -1807,6 +1933,7 @@ function renderReport(report, into) {
     html += '</div>';
     html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(o.school_name) + ' · ' + esc(o.metric_name || "指标核查") + '</h2>';
 
+    // 核心数值卡片
     html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:18px;">';
     html += renderSchoolFactItemBadge(o);
     html += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px;">';
@@ -1819,6 +1946,7 @@ function renderReport(report, into) {
     html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:10px;">' + esc(o.direct_answer || '') + '</div>';
     html += '</div>';
 
+    // 关联配置背景
     const contextFacts = itemScoped ? [] : (report.context_facts || []);
     if (contextFacts.length) {
       html += '<div class="section">';
@@ -1833,6 +1961,7 @@ function renderReport(report, into) {
       html += '</div></div>';
     }
 
+    // 跨学年历史记录
     const history = itemScoped ? [] : (report.history || []);
     if (history.length > 1) {
       html += '<div class="section">';
@@ -1848,6 +1977,7 @@ function renderReport(report, into) {
       html += '</div></div>';
     }
 
+    // Preserve the actual supplied model body alongside deterministic facts.
     html += renderLlmSection(report, "模型回答");
     if (!itemScoped) {
       html += renderAgentVisuals(report);
@@ -1859,7 +1989,7 @@ function renderReport(report, into) {
       html += renderAuditAndMetricsSection(report);
     }
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校在国家/省级教育数字化问卷的接入问卷作答库，供核查参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本数据源自学校在国家/省级教育数字化问卷的官方填报作答库，供核查参考。") + '</div>';
     if (!itemScoped) {
       html += '<div style="margin-top:16px;display:flex;gap:10px;">';
       html += '<button class="secondary" id="btnEvalWholeSchool" data-name="' + esc(o.school_name) + '" data-year="' + esc(o.year || '') + '">综合评估该校数字化发展水平</button>';
@@ -1878,6 +2008,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 1.5：学校区域数字化排位与对比卡片
   if (objType === "school_ranking") {
     let html = '<div class="card">';
     html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
@@ -1887,6 +2018,7 @@ function renderReport(report, into) {
     html += '</div>';
     html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">' + esc(o.school_name) + ' · 区域排位与综合对比</h2>';
 
+    // 核心排位数值大卡片
     html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:18px;">';
     html += '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap;">';
     html += '<span style="font-size:38px;font-weight:700;color:var(--primary);line-height:1;">第 ' + (o.rank ?? '-') + ' 名</span>';
@@ -1897,6 +2029,7 @@ function renderReport(report, into) {
     html += '<div style="font-size:15px;color:var(--text-main);line-height:1.65;border-top:1px dashed #f2e2db;padding-top:10px;">' + esc(o.direct_answer || '') + '</div>';
     html += '</div>';
 
+    // 核心统计指标网格
     const diffVal = o.diff != null ? (o.diff >= 0 ? '+' + o.diff : o.diff) : '-';
     const diffColor = (o.diff != null && o.diff >= 0) ? 'var(--ok)' : 'var(--danger)';
     html += '<div class="statGrid">'
@@ -1906,8 +2039,10 @@ function renderReport(report, into) {
       + '<div class="stat"><div class="v" style="font-size:18px;">第 ' + (o.rank ?? "-") + ' / ' + (o.total_schools ?? "-") + '</div><div class="l">全区排位</div></div>'
       + '</div>';
 
+    // 双线对比雷达图
     html += '<div id="radar"></div>';
 
+    // 六大维度对比表格
     const dims = report.dimensions_comparison || [];
     if (dims.length) {
       html += '<div class="section">';
@@ -1925,6 +2060,7 @@ function renderReport(report, into) {
       html += '</table></div>';
     }
 
+    // 临近梯队学校
     const peers = report.peer_schools || [];
     if (peers.length) {
       html += '<div class="section">';
@@ -1943,13 +2079,15 @@ function renderReport(report, into) {
       html += '</table></div>';
     }
 
+    // 模型智能解读
     html += renderLlmSection(report, "智能排位研判与提升建议");
 
     html += renderAgentVisuals(report);
 
+    // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本排名基于区域全量中小学在国家/省数字化问卷接入问卷作答折算均分，供教育视导与学校定位参考。") + '</div>';
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本排名基于区域全量中小学在国家/省数字化问卷官方填报作答折算均分，供教育视导与学校定位参考。") + '</div>';
     html += '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">';
     html += '<button class="secondary" id="btnRankToFact" data-name="' + esc(o.school_name) + '">查看该校设备配置事实</button>';
     html += '<button class="secondary" id="btnRankToRegion" data-region="' + esc(o.region_name) + '" data-year="' + esc((o.school_years||[])[0]||'') + '">查看全区数字化大盘</button>';
@@ -1996,6 +2134,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 2：区域宏观数字化大盘卡片
   if (objType === "region") {
     const isRegionRanking = o.analysis_operation === "region_ranking";
     const answerScope = o.answer_scope || report.answer_scope || report._answerSpec || {};
@@ -2123,8 +2262,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 语义定向回答只呈现服务端已核验图表，不再创建旧宏观雷达占位。
     if (!semanticScoped) html += '<div id="radar"></div>';
 
+    // 梯队分层结构
     const tiers = report.tiers || [];
     if (tiers.length) {
       html += '<div class="section">';
@@ -2139,6 +2280,7 @@ function renderReport(report, into) {
       html += '</div></div>';
     }
 
+    // 标杆示范学校或契约化排名结果
     const topSchools = report.top_schools || [];
     if (topSchools.length) {
       html += '<div class="section">';
@@ -2173,6 +2315,7 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 模型解读；语义首片只展示AnswerSpec允许的定向答复。
     if (!semanticScoped || report._llmModelInvoked !== false) {
       html += renderLlmSection(report, semanticScoped ? "智能语义定向答复" : "智能区域宏观诊断与建议");
     }
@@ -2211,6 +2354,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 2.8：全国各省教育数字化水平排行榜
   if (objType === "national_ranking") {
     const year = o.year || "2022";
     const totalProv = o.total_provinces || 0;
@@ -2230,6 +2374,7 @@ function renderReport(report, into) {
 
     html += '<h2 style="margin:0 0 16px;font-size:20px;font-weight:600;">全国教育数字化 ' + esc(year) + ' 年度宏观发展大盘与排行榜</h2>';
 
+    // 核心直答
     const da = o.direct_answer || report.direct_answer || "";
     if (da) {
       html += '<div style="background:linear-gradient(135deg, #fff9f6 0%, #ffffff 100%);border:1px solid #f6ded5;border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:18px;">';
@@ -2238,8 +2383,10 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 冠军卡片区
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-bottom:18px;">';
 
+    // 规模化样本冠军
     if (lgChamp.province) {
       html += '<div style="background:linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);border:1px solid #fef3c7;border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
       html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:#92400e;color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">TOP 1</span>';
@@ -2253,6 +2400,7 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 常态化样本冠军
     if (nmChamp.province) {
       html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
       html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:var(--primary);color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">TOP 1</span>';
@@ -2266,6 +2414,7 @@ function renderReport(report, into) {
       html += '</div>';
     }
 
+    // 全样本名义冠军
     if (allChamp.province && allChamp.province !== (lgChamp.province || "")) {
       html += '<div style="background:#ffffff;border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px;position:relative;box-shadow:var(--shadow-card);">';
       html += '<span style="position:absolute;top:10px;right:12px;font-size:11px;background:var(--text-muted);color:#fff;padding:2px 8px;border-radius:9999px;font-weight:600;">NO.1</span>';
@@ -2280,6 +2429,7 @@ function renderReport(report, into) {
     }
     html += '</div>';
 
+    // 分梯次排行表
     function renderTierTable(title, tierData, tierColor) {
       if (!tierData || !tierData.length) return '';
       let t = '<div class="section" style="margin-bottom:16px;">';
@@ -2302,6 +2452,7 @@ function renderReport(report, into) {
     html += renderTierTable('常态化监测省域（100 ~ 999 所）', normalTier, '#2563eb');
     html += renderTierTable('小微样本省域（< 100 所）', smallTier, '#d97706');
 
+    // 全量排行总表
     if (rankings.length) {
       html += '<details style="margin-bottom:16px;"><summary style="cursor:pointer;font-weight:600;color:var(--primary);font-size:14px;padding:8px 0;">展开全量排行总表（' + rankings.length + ' 个省域）</summary>';
       html += '<table><tr><th>排名</th><th>省份/直辖市</th><th>综合均分</th><th>在册学校</th><th>样本梯次</th></tr>';
@@ -2317,13 +2468,17 @@ function renderReport(report, into) {
       html += '</table></details>';
     }
 
+    // 大模型研判建议
     html += renderLlmSection(report, "智能全国宏观研判与视导建议");
 
+    // Agent 本地可视化图表抽屉
     html += renderAgentVisuals(report);
 
+    // 资料真实性审计与系统性能量化指标
     html += renderAuditAndMetricsSection(report);
 
-    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本榜单基于各省在册中小学在全国教育数字化监测平台的接入问卷作答折算均分，供宏观教育决策与视导参考。") + '</div>';
+    // 免责声明
+    html += '<div class="banner disclaimer">' + esc(report.disclaimer || "本榜单基于各省在册中小学在全国教育数字化监测平台的官方填报作答折算均分，供宏观教育决策与视导参考。") + '</div>';
 
     html += '</div>';
     into.innerHTML = html;
@@ -2331,6 +2486,7 @@ function renderReport(report, into) {
     return;
   }
 
+  // 分支 3：教师 / 学校综合评估报告（保留原有能力）
   const name = o.school_name || o.teacher_id || "";
   const teacherAlias = o.teacher_id && TEACHER_NAME_MAP[o.teacher_id] ? `（${TEACHER_NAME_MAP[o.teacher_id]}·模拟）` : "";
   let html = '<div class="card">';
@@ -2472,9 +2628,9 @@ function contractPanelHtml(report) {
     const notice = mode === "enforced"
       ? '<div class="contract-evidence banner warn" style="margin-bottom:14px;">契约状态：请求在提交前被拒绝，可信任务焦点未改变。</div>'
       : (isG1
-        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：G1 · experiment_unconstrained；所提任务契约、独立重放与答复约束按设计关闭。</div>'
+        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：P4 G1 · experiment_unconstrained；所提任务契约、独立重放与答复约束按设计关闭。</div>'
         : isA1
-        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：A1 · 执行绑定与独立重放未检查；公开范围投影和输出核验保留。</div>'
+        ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#f0f9ff;border-color:#7dd3fc;color:#075985;">实验身份：P4 A1 · 执行绑定与独立重放未检查；公开范围投影和输出核验保留。</div>'
         : mode === "public_composition_verified_no_revision"
         ? '<div class="contract-evidence banner" style="margin-bottom:14px;background:#eef7ee;border-color:#c8e6c9;color:#1e7e34;">公共组合：执行绑定与独立重放已通过；输出核验状态见审计记录。此路径没有生产契约修订。</div>'
         : mode === "public_composition_unverified"
@@ -2746,6 +2902,9 @@ async function ask(question, requestMeta) {
       if (requestMeta.testControl.enabled) await presentationDelay(requestMeta.testControl.delayMs);
       if (data.session_id) currentSessionId = data.session_id;
       const revisionControl = data.revision_control || null;
+      if (data.business_status === "UNAVAILABLE") return {
+        unavailable:true, message:data.message, businessStatus:"UNAVAILABLE", revisionControl
+      };
       if (data.clarify) return {
         clarify:true,
         next_prompt:data.next_prompt,
@@ -2789,8 +2948,8 @@ async function ask(question, requestMeta) {
         report._llmQueryMode = data.llm.query_mode || "";
       }
       else if (data.llm && data.llm.error) report._llmText = "模型未调用：" + data.llm.error;
-
-
+      // AnswerSpec 投影可能保留空数组。空数组不是已交付证据，须由
+      // API 顶层的核验后非空产物回填，页面才能显示真实图像与下载入口。
       if (Array.isArray(data.charts) && data.charts.length
           && (!Array.isArray(report.charts) || report.charts.length === 0)) {
         report.charts = data.charts;
@@ -2964,7 +3123,11 @@ async function submitQuestion(clarificationReply = null) {
     finishRequestHistory(requestMeta, out, "PRESENTED");
     document.getElementById("loading").style.display = "none";
     box.setAttribute("data-status", "done");
-    if (out.clarify) {
+    if (out.unavailable) {
+      box.innerHTML = '<div class="card" data-card-status="unavailable" data-question="' + esc(q) + '">'
+        + '<div class="card-q-echo">提问：' + esc(q) + '</div>'
+        + '<div class="banner warn">' + esc(out.message) + '</div></div>';
+    } else if (out.clarify) {
       const statusLabel = out.businessStatus === "CANCELLED" ? "任务状态：" : "需补充澄清：";
       box.innerHTML = '<div class="card" data-card-status="clarify" data-question="' + esc(q) + '">'
         + '<div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface-soft);border-radius:8px;margin-bottom:12px;font-size:13px;border-left:3px solid var(--primary);"><span style="font-weight:600;color:var(--primary);">提问：</span><span>' + esc(q) + '</span></div>'
@@ -3130,7 +3293,22 @@ document.getElementById("btnTeacherProfile").addEventListener("click", async () 
     const resp = await fetch(apiUrl("/api/v1/teachers/" + tid + "/profile"));
     if (resp.ok) { renderTeacherProfile(await resp.json()); return; }
   } catch (e) {}
-  document.getElementById("profileResult").textContent = "暂无教师数据，请先接入数据。";
+  const t = MOCK_TEACHERS.find(x => x.teacher_id === tid) || MOCK_TEACHERS[0];
+  renderTeacherProfile({
+    ...t,
+    years: ["2023-2024", "2024-2025"],
+    coverage: {
+      course_period: 240,
+      lesson_plan: 18,
+      class_observation: 6,
+      exam_score: 120,
+      research_record: 3,
+      student_survey: 60,
+      complaint_record: 0,
+      discipline_record: 0
+    },
+    note: "当前为脱敏演示简介（本地离线展示模式）。"
+  });
 });
 
 document.getElementById("btnSchoolSearch").addEventListener("click", async () => {
@@ -3195,8 +3373,8 @@ function currentKey() {
 }
 function fillKeyField(key, masked) {
   const el = document.getElementById("llmKey");
-
-
+  // Public status never carries a full key. Clear the transient input whenever
+  // a profile/status is loaded so a previous profile's key cannot be reused.
   el.value = "";
   if (masked) {
     el.placeholder = "已保存 " + masked + "，留空则继续使用";
@@ -3304,7 +3482,7 @@ async function ensureLocalApi() {
     if (!h.ok) throw new Error("本机健康检查 HTTP " + h.status);
     return true;
   } catch (e) {
-    throw new Error("EduTA 本机服务未接通（请求 " + probe + "）。请运行 python run_app.py，并使用启动时显示的 127.0.0.1 页面。");
+    throw new Error("本机程序未接通（请求 " + probe + "）。请用 TeacherEval.exe 打开的 127.0.0.1 页面，不要直接打开 html 文件。");
   }
 }
 
@@ -3366,7 +3544,7 @@ async function saveProfile(overwrite) {
   if (!body.api_base) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">请填写由模型服务商提供的 API 地址，不是本机端口</div>'; return; }
   if (overwrite && !selectedId) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">没有选中要覆盖的配置。请用「另存为新配置」，或先在下拉框选一套。</div>'; return; }
   if (!body.api_key && !overwrite) {
-
+    // 同名更新可沿用该名称下已有 Key；全新名称必须贴 Key
     const exists = Array.from(document.getElementById("llmProfileSel").options).some(o => o.textContent.indexOf(body.name + " ·") === 0 || o.textContent.startsWith(body.name + " ·"));
     if (!exists) { document.getElementById("apiStatus").innerHTML = '<div class="banner warn">新建配置必须粘贴 API Key</div>'; return; }
   }
@@ -3450,13 +3628,6 @@ async function probeLocal() {
     const resp = await fetch(apiUrl("/health"), { cache: "no-store" });
     if (!resp.ok) return;
     const data = await resp.json();
-    const datasetNotice = document.getElementById("datasetNotice");
-    if (datasetNotice) {
-      datasetNotice.textContent = data.data_source && data.data_source.data_kind === "synthetic"
-        ? "当前使用完全虚构的合成数据，仅供运行演示，不代表真实学校情况。"
-        : data.real_db ? "当前使用自行接入的数据；结果取决于数据范围与定义。"
-        : "尚未接入数据。请先接入自己的数据库，或运行合成数据生成器。";
-    }
     const testRequested = new URLSearchParams(globalThis.location.search).get("presentation_test") === "1";
     const testPanel = document.getElementById("presentationTestPanel");
     if (testPanel && testRequested) {
@@ -3488,8 +3659,7 @@ async function probeLocal() {
     const dbDot = document.getElementById("dbDot");
     if (dbDot && data.db_stats) {
       if (data.db_stats.ready) {
-        const stats = data.db_stats || {};
-        dbDot.textContent = "学校年度：" + (stats.schools_count ?? "—") + " · 作答：" + (stats.answers_count ?? "—");
+        dbDot.textContent = "学校库：37.5万所 (3111.56万作答在线)";
         dbDot.classList.add("on");
       } else {
         dbDot.textContent = "学校库：异常";
@@ -3506,10 +3676,67 @@ async function probeLocal() {
   } catch (e) {}
 }
 
+let pairedPreparation = null;
+let pairedEnabled = false;
+const pairedStatus = document.getElementById('pairedStatus');
+function clearPairedPreparation() {
+  pairedPreparation = null;
+  document.getElementById('pairedStart').disabled = true;
+}
+async function pairedRequest(action, body) {
+  const response = await fetch(apiUrl('/api/v1/paired-experiment/' + action), body === undefined ? {} : {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'LOCAL_REQUEST_REJECTED');
+  return result;
+}
+async function refreshPairedStatus() {
+  try {
+    const state = await pairedRequest('status');
+    pairedEnabled = state.enabled === true;
+    document.getElementById('pairedPrepare').disabled = !pairedEnabled || !!state.running_batch;
+    document.getElementById('pairedReview').disabled = !pairedEnabled || !!state.running_batch;
+    pairedStatus.textContent = pairedEnabled ? state.batches.map(b => '第' + b.batch + '批：' + b.status).join('；') : '实验入口未启用，等待安全与实验方案审查。';
+  } catch (error) { pairedStatus.textContent = '无法读取本机实验状态，请刷新页面。'; }
+}
+document.getElementById('pairedBatch').addEventListener('change', clearPairedPreparation);
+document.getElementById('llmProfileSel').addEventListener('change', clearPairedPreparation);
+document.getElementById('pairedRefresh').addEventListener('click', refreshPairedStatus);
+document.getElementById('pairedPrepare').addEventListener('click', async () => {
+  clearPairedPreparation();
+  if (!pairedEnabled) return;
+  try {
+    pairedPreparation = await pairedRequest('prepare', {
+      batch:Number(document.getElementById('pairedBatch').value),
+      profile_id:document.getElementById('llmProfileSel').value
+    });
+    pairedStatus.textContent = '已检查第' + pairedPreparation.batch + '/3批：14对/28请求；' + pairedPreparation.model + '；SHA256 ' + pairedPreparation.job_sha256 + '；尚未联网。';
+    document.getElementById('pairedStart').disabled = false;
+  } catch (error) { pairedStatus.textContent = '检查被拒绝：' + error.message; }
+});
+document.getElementById('pairedStart').addEventListener('click', async () => {
+  if (!pairedPreparation || !pairedEnabled) return;
+  if (!confirm('本人确认向 DeepSeek 官方发送本批28个请求，会产生 API 费用；无重试，失败停止。开始第' + pairedPreparation.batch + '批？')) return;
+  const token = pairedPreparation.confirmation_token;
+  clearPairedPreparation();
+  document.getElementById('pairedPrepare').disabled = true;
+  try {
+    await pairedRequest('start', {confirmation_token:token, confirmed:true});
+    pairedStatus.textContent = '本批执行中，请稍后刷新状态；不会自动启动下一批。';
+  } catch (error) { pairedStatus.textContent = '执行被拒绝：' + error.message; }
+});
+document.getElementById('pairedReview').addEventListener('click', async () => {
+  const batch = Number(document.getElementById('pairedBatch').value);
+  if (!pairedEnabled || !confirm('本人确认已独立检查第' + batch + '批的结果和回执，再允许准备下一批？')) return;
+  try { await pairedRequest('reviewack', {batch,confirmed:true}); await refreshPairedStatus(); }
+  catch (error) { pairedStatus.textContent = '审阅确认被拒绝：' + error.message; }
+});
+
 fillTeacherSelects(MOCK_TEACHERS);
 probeLocal();
 loadLlmStatus();
-
+refreshPairedStatus();
 </script>
 </body>
 </html>

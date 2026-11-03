@@ -1,9 +1,18 @@
+"""Shared semantic parser, resolver, AnswerSpec, and writer runtime.
+
+The ordinary product and the controlled G1/G2 experiment use this one module
+for catalogue construction, prompt/schema versions, deterministic resolution,
+evidence projection, and answer verification.  Experiment-only isolation and
+profile locking stay in :mod:`packages.experiment_protocol`.
+"""
+
 from __future__ import annotations
 
 import hashlib
 import copy
 import json
 import re
+import sys
 from difflib import SequenceMatcher
 from fnmatch import fnmatchcase
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -13,9 +22,10 @@ from packages.experiment_protocol.mode import (
     mechanism_flags, requirement_preservation_enabled, requirement_preservation_scope,
 )
 
-COMMON_PATH_VERSION = "semantic-query-1.0"
-PARSER_PROMPT_VERSION = "semantic-intent-c9-v5-public-scope-v1"
-WRITER_PROMPT_VERSION = "semantic-answer-catalogue-coverage-v1.10"
+COMMON_PATH_VERSION = "semantic-query-heldout-fix1-20261019-v1"
+PARSER_PROMPT_VERSION = "semantic-intent-heldout-fix1-20261019-v1"
+WRITER_PROMPT_VERSION = "semantic-answer-heldout-notices-v1.11"
+WRITER_MAX_TOKENS = 8192
 SEMANTIC_CATALOGUE_VERSION = "school-digitization-semantics-v1"
 
 DELIVERY_NOTICE_CATEGORIES = {
@@ -36,18 +46,9 @@ _LLM_MODES = {
     "a2_no_output_verification_or_repair",
     "a3_no_answer_repair",
 }
-_INTENTS = {
-    "clarify",
-    "public_task",
-    "region_eval",
-    "school_eval",
-    "school_fact",
-    "region_compare",
-    "school_compare",
-    "region_longitudinal",
-    "region_ranking",
-    "national_ranking",
-}
+from packages.semantic_query.task_draft import MODEL_INTENTS, EXECUTABLE_INTENTS, TASK_FIELDS, CHOICE_FIELDS
+_INTENTS = MODEL_INTENTS | EXECUTABLE_INTENTS
+from packages.semantic_query.regional_capabilities import INTENTS as _REGIONAL_INTENTS, PROMPT as _REGIONAL_PROMPT
 _DIMENSIONS = {
     "数字资源",
     "教育教学",
@@ -111,27 +112,7 @@ _SCHOOL_FACT_EXPLICIT_COUNT_RE = re.compile(
 )
 _AGGREGATIONS = {"school_equal_mean", "answer_pooled_mean"}
 _OUTPUTS = {"direct_answer", "analysis", "table", "charts"}
-_TASKDRAFT_FIELDS = {
-    "intent",
-    "regions",
-    "schools",
-    "periods",
-    "dimension",
-    "statistic",
-    "aggregation",
-    "school_filter",
-    "question_ids",
-    "value_view",
-    "compound_key",
-    "school_field",
-    "target_rank",
-    "target_top_n",
-    "requested_outputs",
-    "clarify_reason",
-    "missing",
-    "evidence",
-    "confidence",
-}
+_TASKDRAFT_FIELDS = TASK_FIELDS
 _EVIDENCE_FIELDS = {
     "region",
     "region_a",
@@ -279,6 +260,8 @@ _REGION_NON_MEAN_STATISTIC_RE = re.compile(
     re.I,
 )
 
+# Negated alternatives are evidence about what to exclude, not additional
+# targets. Keep offsets stable so retained evidence is still a literal span.
 _EXCLUDED_SCOPE_RE = re.compile(
     r"(?:不要|不需要|不必|不用|无需|不再|不查|不报|不列|不展开|不给|不画|不做|不比较|"
     r"不换算|不默认|不把|不能|不是|不补充|不补写|不补|(?<!分)别(?:用|列|把)|禁止|"
@@ -306,13 +289,16 @@ _DESCRIPTIVE_DIMENSIONS = {
     ),
 }
 
+
 def _scope_assertion_text(question: str, *, mask_explanations: bool = True) -> str:
-    pass
+    """Return only affirmative scope clauses; never alter the submitted text."""
     text = re.sub(
         r"(?:^|(?<=[，,。；;]))[^，,。；;！？!?\n]*(?:都不在本次范围|不在本次范围|先不看)[^，,。；;！？!?\n]*",
         lambda match: " " * len(match.group(0)), str(question or ""),
     )
-
+    # Mask explanatory clauses before their internal negations. Otherwise
+    # '是不是同一种计算口径' loses its final cue first and leaves '求均值'
+    # looking like an additional requested statistic.
     if mask_explanations:
         text = re.sub(
             r"(?:请)?(?:同时)?(?:说明|解释)[^，,。；;！？!?\n]*(?:口径|缺失|金额)[^，,。；;！？!?\n]*",
@@ -320,13 +306,20 @@ def _scope_assertion_text(question: str, *, mask_explanations: bool = True) -> s
         )
     return _EXCLUDED_SCOPE_RE.sub(lambda match: " " * len(match.group(0)), text)
 
+
 def _scope_question_ids(question: str) -> List[int]:
     from packages.semantic_query.catalogue import extract_explicit_question_ids
 
     return extract_explicit_question_ids(_scope_assertion_text(question))
 
+
 def _catalogue_alias_items(question: str) -> List[Tuple[int, str]]:
-    pass
+    """Find questionnaire items from distinctive, literal catalogue aliases.
+
+    An alias collision or an explicit dimension-score request leaves the model
+    draft to the normal supported-scope checks.  This never infers an item from
+    its broad parent dimension or from answer data.
+    """
     text = _scope_assertion_text(question)
     if _scope_question_ids(text) or re.search(r"维度(?:得分|分数|均分)|六维", text):
         return []
@@ -339,7 +332,33 @@ def _catalogue_alias_items(question: str) -> List[Tuple[int, str]]:
         if len(alias) >= 4 and alias in text
         and (not ratio_requested or item.get("value_type") == "ratio")
     ]
-
+    # The legacy item matcher already registers these literal spellings. Use
+    # the same vocabulary here; do not run its fuzzy-search fallback.
+    from packages.agent.indicator_catalog import PRESET_RULES
+    by_id = {item['id']: item for item in catalogue}
+    metric_text = text
+    for school in _lexical_school_name_spans(text):
+        metric_text = metric_text.replace(school, ' ' * len(school))
+    matches.extend((rule['qid'], key) for rule in PRESET_RULES
+        if rule['qid'] in by_id and (not ratio_requested or by_id[rule['qid']].get('value_type') == 'ratio')
+        for key in rule['keys'] if len(key) >= 4 and key in metric_text)
+    # Registered full item names are leaf evidence too, even when aliases omit
+    # them. A count question may replace only the trailing 数/数量 with 有几台 etc.
+    # Never derive a leaf from the embedded topic word itself.
+    if not re.search(r'得分|平均分|均分|分数|评分|多少分',metric_text):
+        names=[(item['id'],name) for item in catalogue
+               if item.get('value_type') in {'count','bandwidth'}
+               for name in (item.get('question'),item.get('summary')) if name]
+        names.extend((rule['qid'],rule['name']) for rule in PRESET_RULES
+                     if rule['qid'] in by_id and by_id[rule['qid']].get('value_type') in {'count','bandwidth'})
+        quantity=bool(re.search(r'(?:几|多少)(?:间|台|人|个|种|所|次)',metric_text))
+        for qid,name in names:
+            literal=re.sub(r'(?:数量|数)$','',name) if quantity else name
+            if len(literal)>=4 and literal in metric_text:
+                matches.append((qid,literal))
+    # Coordinated subjects often share one trailing item noun phrase, e.g.
+    # "学生类、教师类数字化管理工作内容".  Expand only the catalogue's
+    # paired subject aliases, so the missing half is grounded in that source.
     if re.search(r"学生类[、和与]教师类|教师类[、和与]学生类", text):
         for item in catalogue:
             for alias in item.get("aliases") or []:
@@ -347,7 +366,9 @@ def _catalogue_alias_items(question: str) -> List[Tuple[int, str]]:
                     suffix = alias[3:]
                     if suffix in text and ("学生类" in text and "教师类" in text):
                         matches.append((int(item["id"]), alias))
-
+    # A shared device noun can follow coordinated owners: "教师用与学生用平板电脑".
+    # Require a literal device category and two matching catalogue aliases;
+    # do not infer a second item from a generic teacher/student comparison.
     paired_device = re.search(
         r"(?:教师|老师)(?:用)?[、和与](?:学生)(?:用)?(平板(?:电脑)?|台式机)"
         r"|学生(?:用)?[、和与](?:教师|老师)(?:用)?(平板(?:电脑)?|台式机)",
@@ -372,8 +393,16 @@ def _catalogue_alias_items(question: str) -> List[Tuple[int, str]]:
                         actor_match = re.search(r"学生" if actor == "学生" else r"教师|老师", paired_device.group(0))
                         if actor_match:
                             synthetic_positions[qid] = paired_device.start() + actor_match.start()
+    # Parent labels are scope evidence, never item evidence on their own.
+    # Apply this to every literal source, including legacy PRESET_RULES keys.
+    from packages.semantic_query.catalogue import topic_catalogue
+    parent_labels = {alias for aliases in _DIMENSION_ALIASES.values() for alias in aliases}
+    parent_labels.update(item['dimension'] for item in catalogue)
+    parent_labels.update(alias for topic in topic_catalogue() for alias in [topic['name'], *topic['aliases']])
     best = {}
     for qid, alias in matches:
+        if alias in parent_labels:
+            continue
         if qid not in best or len(alias) > len(best[qid]):
             best[qid] = alias
     return sorted(
@@ -383,12 +412,15 @@ def _catalogue_alias_items(question: str) -> List[Tuple[int, str]]:
         ),
     )
 
+
 def _unique_catalogue_alias_item(question: str) -> Optional[Tuple[int, str]]:
     matches = _catalogue_alias_items(question)
     return matches[0] if len(matches) == 1 else None
 
+
 def _scope_years(question: str) -> List[str]:
     return list(dict.fromkeys(re.findall(r"(?<!\d)(20\d{2})(?!\d)", _scope_assertion_text(question))))
+
 
 def _explicit_value_view(question: str) -> Optional[str]:
     text = _scope_assertion_text(question)
@@ -399,35 +431,51 @@ def _explicit_value_view(question: str) -> Optional[str]:
     )
     if changed_view:
         return "raw_value" if changed_view.group(1).startswith("原始") else "normalized_score"
-    raw = bool(re.search(r"原始(?:登记)?(?:值|作答|编码|数量|台数|种数)|raw\s*(?:value)?", text, re.I))
+    raw = bool(re.search(r"平均有几种|有多少种|多少种|几种|种类数|原始(?:登记)?(?:值|作答|编码|数量|台数|种数)|raw\s*(?:value)?", text, re.I))
     normalized = bool(re.search(r"归一(?:化)?(?:得分|分数|值)?|标准化(?:得分|分数|均分|值)?|标准分", text))
     if raw and normalized:
         return "mixed_raw_and_normalized_score"
     return "raw_value" if raw else "normalized_score" if normalized else None
 
+
 def _literal_school_filter(question: str) -> Optional[str]:
-    text = _scope_assertion_text(question)
+    from packages.core.school_filters import area_assertion_text
+    text = area_assertion_text(_scope_assertion_text(question))
+    if requirement_preservation_enabled():
+        from packages.core.school_filters import generic_school_text
+        text = generic_school_text(text)
     for school in _literal_school_name_spans(text):
         text = text.replace(school, " " * len(school))
-
+    # A filter can be a noun modifier ("小学样本", "乡村学校中") as well as
+    # an explicit "只看" clause.  Do not choose one side of a two-cohort query.
     pattern = r"乡村|农村|城镇或城区|城镇|城区|城市|镇区|公办|民办|小学|初中|高中|幼儿园"
     matches = re.findall(
         rf"(?:登记(?:在|为)|只(?:取|保留|纳入|看)|仅限).{{0,12}}?({pattern})"
-        rf"|({pattern})(?=(?:学校|校|样本|学段|组)(?:中|里|的|数|各)?(?:[，,。；;\s]|$)?)",
+        rf"|({pattern})(?=(?:学校|校|样本|学段|组|整体|总体|数字|教育|基础|保障|均值|中位数|第|Q)(?:中|里|的|数|各)?(?:[，,。；;\s]|$)?)",
         text,
     )
     filters = list(dict.fromkeys(left or right for left, right in matches))
-    combined = re.search(r'(乡村|农村|城区|城镇|城市)\s*(小学|初中|高中|幼儿园)(?:学校|样本|学段|组|第|的|中|里|[，,。；;\s]|$)', text)
+    combined = re.search(r'(乡村|农村|城区|城镇|城市|镇区)\s*(小学|初中|高中|幼儿园)(?:学校|样本|学段|组|整体|总体|数字|教育|基础|保障|均值|中位数|第|Q|的|中|里|[，,。；;\s]|$)', text)
     if combined:
         return ' '.join(combined.groups())
     return filters[0] if len(filters) == 1 else None
 
+
 def _literal_region_spans(question: str) -> List[str]:
-    pass
+    """Find explicit administrative spans, keeping nested city/county as one.
+
+    These spans establish cardinality, not database identity. Resolution still
+    uses the existing region resolver. School-name substrings cannot supply a
+    region for a new regional task.
+    """
     text = _scope_assertion_text(question)
     for school_span in _literal_school_name_spans(text):
         text = text.replace(school_span, " " * len(school_span))
-
+    from packages.core.research_data import enabled
+    from packages.core.geography_registry import is_full, groups
+    if enabled() and is_full():
+        return list(dict.fromkeys(text[batch[0]['start']:batch[-1]['end']].strip() for batch in groups(text)))
+    # Spaces in a qualified parent/child identity do not create two objects.
     text = re.sub(r"(自治区|特别行政区|省)\s+(?=[\u4e00-\u9fff]{2,10}?(?:市|区|县|旗))", r"\1", text)
     text = re.sub(r"(市)\s+(?=[\u4e00-\u9fff]{2,10}?(?:区|县|旗))", r"\1", text)
     text = re.sub(
@@ -437,9 +485,12 @@ def _literal_region_spans(question: str) -> List[str]:
     spans: List[str] = []
     for clause in re.split(r"[，,、。；;！？!?：:\s\d]|(?<=[省市县区旗])(?:与|和|比|减)|以及|放左边|放右边", text):
         clause = re.sub(r"^年", "", clause)
-
+        # Arithmetic/output verbs are not part of an administrative identity.
+        # Strip only explicit leading instruction tokens, before the bounded
+        # name matcher, so a repeated operand stays the same scope target.
         clause = re.sub(r"^(?:(?:并|且|再|请)?(?:算出|计算|给出|列出))+", "", clause)
-
+        # Suffixes are deliberately limited to explicit administrative names;
+        # words such as '地区', '该市' and '城区' are contextual/filter tokens.
         match = re.match(r"(?:[\u4e00-\u9fff]{2,8}?(?:省(?!级)|市(?!级)|县(?!级)|区(?!域|县|级)|旗)){1,3}", clause)
         if not match:
             continue
@@ -450,7 +501,7 @@ def _literal_region_spans(question: str) -> List[str]:
             continue
         if span.endswith(("地区", "区域", "城区", "镇区", "全市", "该市", "本市", "两市")):
             continue
-
+        # Two adjacent city names are two targets, unlike city + county.
         units = re.findall(r"[\u4e00-\u9fff]{2,8}?(?:省|市|县|区|旗)", span)
         if len({unit[-1] for unit in units}) < len(units):
             spans.extend(unit for unit in units if unit not in spans)
@@ -458,8 +509,14 @@ def _literal_region_spans(question: str) -> List[str]:
             spans.append(span)
     return spans
 
+
 def _explicit_scoped_population_change(question: str) -> bool:
-    pass
+    """The frozen two-period evaluation-population task (including S19).
+
+    Bare multi-year school counts still require scope clarification. This only
+    accepts an explicit evaluation scope and the existing two-period change
+    operation; it does not expose an administrative roster or a cohort.
+    """
     text = _scope_assertion_text(question)
     return bool(
         _explicit_region_school_count_only(text)
@@ -470,15 +527,19 @@ def _explicit_scoped_population_change(question: str) -> bool:
         and re.search(r"变化|差值|分差|多或少|增加|减少|减", text)
     )
 
+
 def _explicit_chart_request(question: str) -> Optional[bool]:
     text = str(question or "")
     if _CHART_NEGATION_RE.search(text):
         return False
-
+    # An explanation can share a clause with an affirmative format request.
+    # Keep scope exclusions and negation, without treating that explanation
+    # as a new metric or erasing its requested chart.
     format_text = _scope_assertion_text(text, mask_explanations=False)
 
     def requested_quote(match):
-
+        # Explanation/historical quotations need a current format instruction.
+        # Other quoted formats keep their existing affirmative interpretation.
         prefix = format_text[:match.start()]
         if not re.search(r"(?:说明|解释|历史|原话|提到|提及)[^，,。；;！？!?\n]*$", prefix):
             return match.group(0)
@@ -498,7 +559,8 @@ def _explicit_chart_request(question: str) -> Optional[bool]:
     metric_text = _scope_assertion_text(text)
     if any(metric_text[match.start():match.end()].strip() for match in _CHART_REQUEST_RE.finditer(format_text)):
         return True
-
+    # Restore only a coordinated affirmative format action from an explanatory
+    # clause. Mentioning a chart's meaning or suitability is still explanation.
     for match in re.finditer(
         r"(?:并|且|还|再|同时|另外|以及)(?:请|需要|要)?(?:给我)?"
         r"(?:画|绘制|生成|制作|配|提供|输出|展示|用|以|按|按照)"
@@ -508,12 +570,21 @@ def _explicit_chart_request(question: str) -> Optional[bool]:
             return True
     return None
 
+
 def _explicit_summary_only_request(question: str) -> bool:
-    pass
+    """Whether the current turn explicitly forbids expanding an overall result."""
     return bool(_SUMMARY_ONLY_RE.search(str(question or "")))
 
+
 def _explicit_region_score_with_denominator(question: str) -> bool:
-    pass
+    """Treat requested coverage counts as denominators of a mean score.
+
+    N5 gold questions frequently ask for a regional overall/dimension score and
+    a contributing school/answer count in one sentence.  Those counts are
+    required result facts for that mean, not competing ``count`` operations.
+    Explicit median/extreme requests stay outside this repair and continue
+    through the existing fail-closed statistic guards.
+    """
     text = _scope_assertion_text(question)
     return bool(
         _REGION_SCORE_REQUEST_RE.search(text)
@@ -521,8 +592,16 @@ def _explicit_region_score_with_denominator(question: str) -> bool:
         and not _REGION_NON_MEAN_STATISTIC_RE.search(text)
     )
 
+
 def _explicit_region_school_count_only(question: str) -> bool:
-    pass
+    """Recognize the size of a scored regional population, not a roster count.
+
+    A request such as ``有有效问卷得分的学校共有多少所`` is the count of
+    schools contributing to the selected evaluation scope.  It is distinct
+    from both a regional mean with a requested denominator and an ambiguous
+    administrative question such as ``有多少所学校``.  The latter stays
+    fail-closed because the product does not expose a general school roster.
+    """
     text = _scope_assertion_text(question)
     return bool(
         (
@@ -534,16 +613,24 @@ def _explicit_region_school_count_only(question: str) -> bool:
         and not _REGION_NON_MEAN_STATISTIC_RE.search(text)
     )
 
+
 def _explicit_answer_pooled_mean(question: str) -> bool:
-    pass
+    """Recognize an explicit answer-weighted mean, including plain-language wording."""
     text = _scope_assertion_text(question)
     return bool(
         re.search(r"作答池化|池化平均|池化|(?<![A-Za-z])pool(?:ed|ing)?(?![A-Za-z])", text, re.I)
         or re.search(r"(?:所有|全部|每条)?有效题项作答.{0,8}(?:合并|汇总).{0,8}(?:平均|均值|均分)", text)
     )
 
+
 def is_region_population_confirmation(question: str) -> bool:
-    pass
+    """Recognize a bounded affirmative reply to the population-scope pending.
+
+    This helper is intentionally insufficient on its own to inherit a region
+    or year.  The API may use it only when the active durable pending has the
+    exact ``school_population_scope_required`` reason; the scope transition
+    then takes region/year exclusively from that pending context.
+    """
     text = _scope_assertion_text(question).strip()
     affirmative = bool(
         re.search(r"^(?:是|对|对的|确认|是的|就是|指|按)", text)
@@ -564,8 +651,16 @@ def is_region_population_confirmation(question: str) -> bool:
         and not re.search(r"新任务|另起|换个|改查|改看|比较|对比", text)
     )
 
+
 def _explicit_bare_region_school_population_count(question: str) -> bool:
-    pass
+    """Recognize an administrative school-population question that must clarify.
+
+    The decision is based on the current utterance rather than the model's
+    candidate intent or free-form clarification wording.  A plain ``how many
+    schools`` question does not identify the product's supported population of
+    schools with a valid evaluation score, so it must receive one stable reason
+    code in every semantic mode.
+    """
     text = _scope_assertion_text(question)
     return bool(
         _REGION_SCHOOL_COUNT_REQUEST_RE.search(text)
@@ -574,8 +669,19 @@ def _explicit_bare_region_school_population_count(question: str) -> bool:
         and not _REGION_NON_MEAN_STATISTIC_RE.search(text)
     )
 
+
 def _explicit_single_region_identity(question: str) -> Optional[Tuple[str, str]]:
-    pass
+    """Resolve one literal administrative region independently of the model.
+
+    Bare school-population clarification must preserve the region that the
+    user actually wrote even when a stochastic TaskDraft omits ``regions`` or
+    its evidence object.  The data-backed resolver is used only to validate a
+    literal span; contextual tokens and multi-scope wording remain fail-closed.
+
+    Returns ``(canonical_name, literal_span)``.  The second value is guaranteed
+    to be a substring of the current utterance and is therefore safe to retain
+    as evidence for a durable pending clarification.
+    """
     text = _scope_assertion_text(question)
     spans = _literal_region_spans(text)
     if not text or len(spans) != 1 or _N2_SCOPE_CONFLICT_RE.search(text):
@@ -600,12 +706,19 @@ def _explicit_single_region_identity(question: str) -> Optional[Tuple[str, str]]
     if not literal_candidates:
         return None
 
+    # Prefer the most specific/longest literal (for example “长沙市长沙县”)
+    # while keeping a province+city or city+district expression as one scope.
     literal_span = max(literal_candidates, key=len)
     return canonical or literal_span, literal_span
+
 
 def _explicit_dimension_aliases(question: str) -> List[Tuple[str, str]]:
     matches: List[Tuple[str, str]] = []
     text = _scope_assertion_text(question)
+    from packages.semantic_query.catalogue import topic_scope
+    secondary=topic_scope(text)
+    if secondary:
+        return [(secondary['dimension'],secondary['quotes'][0])] if secondary['dimension'] else []
     for dimension, aliases in _DIMENSION_ALIASES.items():
         spans = [alias for alias in aliases if alias in text]
         if spans:
@@ -621,13 +734,15 @@ def _explicit_dimension_aliases(question: str) -> List[Tuple[str, str]]:
     matches.sort(key=lambda m: text.find(m[1]) if m[1] in text else 9999)
     return matches
 
+
 def _explicit_dimension_pair(question: str) -> List[str]:
-    pass
+    """Bind only two affirmative, ordered dimensions in a comparison request."""
     from packages.semantic_query.semantic_preflight import dimension_pair_requirements
     bound = dimension_pair_requirements(question)
     if bound['uncertain']:
         return []
     return bound['operands'] if bound['difference'] else bound['dimensions']
+
 
 def _explicit_dimension_alias(question: str) -> Tuple[Optional[str], Optional[str]]:
     matches = _explicit_dimension_aliases(question)
@@ -635,10 +750,16 @@ def _explicit_dimension_alias(question: str) -> Tuple[Optional[str], Optional[st
         return None, None
     return matches[0]
 
+
 def _anchored_school_item_qid(
     question: str, candidate: Dict[str, Any], dimension_span: Optional[str]
 ) -> Optional[int]:
-    pass
+    """Keep a model QID when its distinct item phrase is literal in the question.
+
+    A parent dimension alias can occur inside an item name.  This fallback is
+    limited to one catalogue QID and a raw school fact; explicit score requests
+    continue through the dimension-evaluation route.
+    """
     qids = _string_list(candidate.get("question_ids"))
     if str(candidate.get("intent") or "") != "school_fact" or len(qids) != 1:
         return None
@@ -652,8 +773,14 @@ def _anchored_school_item_qid(
         return None
     return qid
 
+
 def _management_work_count_pair(question: str, candidate: Dict[str, Any]) -> List[int]:
-    pass
+    """Keep two named catalogue work-content counts at item level.
+
+    Shared parent-dimension words are not a dimension-score request. Require
+    both distinct catalogue categories, count semantics and exactly this pair;
+    never infer an extra item or trust the model's operand order.
+    """
     qids = [_integer_or_none(q) for q in _string_list(candidate.get("question_ids"))]
     if (candidate.get("intent") != "school_fact" or candidate.get("value_view") != "raw_value"
             or len(qids) != 2 or len(set(qids)) != 2
@@ -663,8 +790,9 @@ def _management_work_count_pair(question: str, candidate: Dict[str, Any]) -> Lis
     named = _management_work_count_items(question)
     return named if len(named) == 2 and set(named) == set(qids) else []
 
+
 def _management_work_count_items(question: str) -> List[int]:
-    pass
+    """Read explicit work-count categories without trusting a candidate subset."""
     if ("工作内容" not in question or not re.search(r"多少种|种类数|数量|计数", question)
             or re.search(r"维度|六维|得分|评分|分数|均分", question)):
         return []
@@ -683,10 +811,18 @@ def _management_work_count_items(question: str) -> List[int]:
         return []
     return sorted(positions, key=positions.__getitem__)
 
+
 def _is_contextual_entity_reference(value: Any) -> bool:
-    pass
+    """Return whether an entity-like span is only a reference to trusted focus.
+
+    Model candidates sometimes copy ``其中`` or ``该校`` into an entity/evidence
+    field.  Those tokens are not an explicit object change and must not suppress
+    a dimension/item/overall transition that already has a singular trusted
+    focus.  Real school and administrative-region spans remain explicit.
+    """
     token = str(value or "").strip(" \t\r\n，。！？、：:；;“”‘’()（）")
     return bool(token and _CONTEXTUAL_ENTITY_REFERENCE_RE.fullmatch(token))
+
 
 _RANK_NUMBER_MAP = {
     "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
@@ -695,8 +831,9 @@ _RANK_NUMBER_MAP = {
     "十六": 16, "十七": 17, "十八": 18, "十九": 19, "二十": 20,
 }
 
+
 def _explicit_ranking_target(question: str) -> Tuple[Optional[int], Optional[int]]:
-    pass
+    """Extract only a bounded, explicit rank target from the current utterance."""
     text = _scope_assertion_text(question)
     if re.search(r"最后一(?:名|所)|倒数第一(?:名)?|倒数第1名?|排名最后|排最后|末位|排名末位", text):
         return -1, None
@@ -749,10 +886,19 @@ def _explicit_ranking_target(question: str) -> Tuple[Optional[int], Optional[int
             return rank, None
     return None, None
 
+
 def _reconcile_n2_scope_candidate(
     question: str, candidate: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Reconcile explicit supported scopes without inventing entities.
+
+    The original N2 overall/dimension repair remains narrow.  N4W adds two
+    equally bounded cases where the model already extracted the singular region
+    and all other decisive fields are literal in the utterance: a two-endpoint
+    calendar-year range, and an explicit overall ranking target.  N4Y showed
+    that the range case must also recognize a literal overall scope even when
+    the wording omits an extra ``trend/change`` token.
+    """
     question = _scope_assertion_text(question)
     reconciled = dict(candidate)
     intent = str(reconciled.get("intent") or "clarify").strip()
@@ -840,8 +986,11 @@ def _reconcile_n2_scope_candidate(
         and not _SCOPE_TRANSITION_CONFLICT_RE.search(str(question or ""))
         and (explicit_overall != (alias_dimension is not None))
     ):
-
-        school_dimension = alias_dimension if alias_dimension is not None else None
+        # A literal school, one literal year, and exactly one explicit overall
+        # or dimension scope are sufficient to resolve a school evaluation.
+        # Do not let a stochastic model ``clarify`` or unrelated draft fields
+        # override that complete user-provided identity and granularity.
+        school_dimension = alias_dimension if alias_dimension is not None else (reconciled.get('dimension') if reconciled.get('dimension') in _DIMENSIONS and not re.search(r'整体|总体|综合|总分', question) else None)
         reconciliation_applied = any((
             intent != "school_eval",
             schools != [explicit_school[0]],
@@ -980,7 +1129,13 @@ def _reconcile_n2_scope_candidate(
         and not explicit_question_ids
         and not _SCOPE_TRANSITION_CONFLICT_RE.search(str(question or ""))
     ):
-
+        # ``region_eval/count`` means the number of schools contributing a
+        # valid score in the selected evaluation scope.  A bare administrative
+        # school-population question must not inherit either a model-generated
+        # natural-language clarification or a syntactically valid count route.
+        # Normalize every model intent and discard hallucinated scope fields.
+        # Region/year are rebuilt from the current utterance, not from the
+        # model candidate or its optional evidence object.
         reconciled["intent"] = "clarify"
         reconciled["regions"] = [explicit_region[0]]
         reconciled["periods"] = explicit_years
@@ -1055,7 +1210,8 @@ def _reconcile_n2_scope_candidate(
         reconciled["aggregation"] = "school_equal_mean"
         reconciled["value_view"] = "normalized_score"
     elif score_with_denominator and not explicit_raw and not re.search(r"池化|pool(?:ed|ing)?", question, re.I):
-
+        # The score remains the operation statistic; the requested number of
+        # schools is returned by the result projection as its denominator.
         reconciled["statistic"] = "mean"
         reconciled["aggregation"] = "school_equal_mean"
         reconciled["value_view"] = "normalized_score"
@@ -1095,8 +1251,9 @@ def _reconcile_n2_scope_candidate(
         "output_focus": "school_count" if count_only else None,
     }
 
+
 def _validate_explicit_statistic(question: str, statistic: Optional[str]) -> None:
-    pass
+    """Reject a model draft that silently changes an explicit median request."""
     text = _scope_assertion_text(question)
     if not (
         any(token in text for token in ("中位数", "中位值", "中间位置", "正中间"))
@@ -1111,18 +1268,18 @@ def _validate_explicit_statistic(question: str, statistic: Optional[str]) -> Non
     if statistic != expected:
         raise ValueError(f"experiment_explicit_statistic_mismatch:{expected}")
 
+
 def _school_dimension_extrema_request(question: str) -> bool:
-    pass
+    """A whole-school six-dimension profile with its highest and lowest dimensions."""
     text = _scope_assertion_text(question)
-    return bool(
-        re.search(r"六维|六大维度|雷达图", text)
-        and re.search(r"最高|最大", text)
-        and re.search(r"最低|最小", text)
-        and re.search(r"维度", text)
+    return bool(re.search(r'哪(?:一|个)?(?:个)?(?:块|方面|维度).{0,8}(?:最强|最弱|最突出|最好|最差)|(?:最强|最弱|最突出).{0,8}(?:块|方面|维度)',text)) or bool(
+        re.search(r"六维|六(?:个|大|项)?维度|6(?:个|项)?维度|雷达图", text)
+        and re.search(r"最强|最弱|最高|最低|最好|最差|最大|最小", text)
     )
 
+
 def _explicit_item_statistic(question: str) -> Optional[str]:
-    pass
+    """Return a canonical statistic explicitly requested for one catalogue item."""
     text = _scope_assertion_text(question)
     median_requested = bool(
         re.search(r"中位数|中位值|中间位置|正中间|(?<![A-Za-z])median(?![A-Za-z])", text, re.I)
@@ -1139,7 +1296,7 @@ def _explicit_item_statistic(question: str) -> Optional[str]:
     )
     if median_requested:
         return "mean_and_median" if mean_requested else "median"
-
+    # Extreme requests cannot be swallowed by a concurrent mean request.
     max_requested = bool(re.search(r"最高|最大|(?<![A-Za-z])max(?![A-Za-z])", text, re.I))
     min_requested = bool(re.search(r"最低|最小|(?<![A-Za-z])min(?![A-Za-z])", text, re.I))
     if max_requested or min_requested:
@@ -1149,6 +1306,7 @@ def _explicit_item_statistic(question: str) -> Optional[str]:
     if _SCHOOL_FACT_EXPLICIT_COUNT_RE.search(text):
         return "count"
     return None
+
 
 def _json_object(text: Any) -> Dict[str, Any]:
     if isinstance(text, dict):
@@ -1173,10 +1331,11 @@ def _json_object(text: Any) -> Dict[str, Any]:
         raise ValueError("experiment_parser_json_object_required")
     return parsed
 
+
 def _parser_attempt_summaries(
     detail: Dict[str, Any], *, message_variant: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    pass
+    """Return only bounded, non-content parser diagnostics for public evidence."""
     summaries: List[Dict[str, Any]] = []
     allowed_finish_reasons = {None, "stop", "length", "content_filter", "tool_calls"}
     allowed_sources = {"content", "reasoning_json_object"}
@@ -1210,14 +1369,16 @@ def _parser_attempt_summaries(
         })
     return summaries
 
+
 def _safe_parser_failure_code(value: Any) -> str:
-    pass
+    """Reduce candidate rejection details to a stable, content-free code."""
     text = str(value or "").strip()
     match = re.match(r"^(experiment_[a-z0-9_]+)", text)
     return match.group(1) if match else "experiment_parser_candidate_rejected"
 
+
 def _safe_gateway_failure_code(value: Any) -> str:
-    pass
+    """Classify a gateway failure without exposing its message, URL, or cause."""
     text = str(value or "").lower()
     error_type = type(value).__name__.lower()
     cause = getattr(value, "cause", None)
@@ -1253,8 +1414,9 @@ def _safe_gateway_failure_code(value: Any) -> str:
         return "experiment_parser_gateway_connection_interrupted"
     return "experiment_parser_gateway_failed"
 
+
 def _gateway_failure_attempt(*, max_tokens: int, message_variant: str) -> Dict[str, Any]:
-    pass
+    """Describe a failed parser stage with bounded counters only."""
     return {
         "max_tokens": max(1, int(max_tokens or 0)),
         "finish_reason": "other",
@@ -1263,6 +1425,7 @@ def _gateway_failure_attempt(*, max_tokens: int, message_variant: str) -> Dict[s
         "content_source": "content",
         "message_variant": message_variant,
     }
+
 
 _PARSER_REPAIRABLE_FAILURES = {
     "experiment_parser_candidate_rejected",
@@ -1294,18 +1457,31 @@ _PARSER_REPAIRABLE_FAILURES = {
     "experiment_region_scope_incomplete",
 }
 
+
 def _bind_literal_scope_candidate(
     question: str, candidate: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], List[str]]:
-    pass
+    """Bind affirmative literals before consulting model scope fields.
+
+    Missing literals are left for a compatible trusted-focus transition or a
+    clarification. Cardinality is retained in full; no model-selected first
+    item, year or entity may hide an explicit multi-scope request.
+    """
     bound = dict(candidate)
     actions: List[str] = []
     text = _scope_assertion_text(question)
     years = _scope_years(text)
     school_spans = _literal_school_name_spans(text)
     region_spans = _literal_region_spans(text)
+    # An unregistered typed school stays a school lookup; its place-name prefix
+    # is not permission to rewrite it into a regional task.
+    typed_school = str(bound.get('intent') or '').startswith('school_') and any(
+        isinstance(s,str) and s in text for s in bound.get('schools') or [])
+    if typed_school and not school_spans:
+        region_spans = []
     if str(bound.get("intent") or "") == "national_ranking" and re.search(r"全国|各省|省级地区", text):
-
+        # The nation is the population, not a named region; phrases such as
+        # “不含直辖市” must not become a second regional entity.
         region_spans = []
     question_ids = _scope_question_ids(text)
     implicit_item = None
@@ -1338,7 +1514,8 @@ def _bind_literal_scope_candidate(
             and re.search(r"(?:平均.{0,3}周|周.{0,3}平均)", text)
             and "课时" in text
         ):
-
+            # "weekly average lessons" names the recorded item value; it is
+            # not a new mean over this school's already averaged answer.
             statistic = None
     if not question_ids and not dimensions and not overall and "常态化应用" in text and re.search(r"教师|教学", text):
         catalogue, _ = _catalogue()
@@ -1393,6 +1570,7 @@ def _bind_literal_scope_candidate(
                 evidence["school_filter"] = school_filter
     if question_ids:
         bind("question_ids", question_ids)
+        bind("topics", [])
         bind("dimension", None)
         bind("compound_key", None)
         bind("school_field", None)
@@ -1400,7 +1578,9 @@ def _bind_literal_scope_candidate(
         if implicit_item is not None:
             evidence["metric"] = implicit_item[1]
     elif len(dimensions) == 1 or overall:
-        bind("dimension", dimensions[0][0] if len(dimensions) == 1 else None)
+        model_dimension = bound.get('dimension') if bound.get('dimension') in _DIMENSIONS else None
+        overall_only = bool(re.search(r'整体|总体|综合|总分', text))
+        bind("dimension", dimensions[0][0] if len(dimensions) == 1 else None if overall_only else model_dimension)
         bind("question_ids", [])
         bind("compound_key", None)
         bind("school_field", None)
@@ -1409,7 +1589,7 @@ def _bind_literal_scope_candidate(
         else:
             evidence.pop("dimension", None)
         evidence.pop("metric", None)
-
+    # Region-wide mean + requested coverage stays one mean operation.
     if region_spans and not school_spans and (question_ids or dimensions or overall):
         bind("statistic", "count" if _explicit_region_school_count_only(text) else statistic or "mean")
         bind("aggregation", "answer_pooled_mean" if _explicit_answer_pooled_mean(text) else "school_equal_mean")
@@ -1437,7 +1617,9 @@ def _bind_literal_scope_candidate(
         new_intent = "region_longitudinal"
     elif not school_spans and len(region_spans) == 1 and complete_period and target_scope:
         new_intent = "region_ranking" if ranking else "region_eval"
-    if new_intent and str(bound.get("intent") or "clarify") in _INTENTS:
+    from packages.semantic_query.task_draft import REGIONAL_INTENTS
+    preserve_capability_intent = bound.get('intent') in REGIONAL_INTENTS and not school_spans and new_intent != 'region_longitudinal'
+    if new_intent and str(bound.get("intent") or "clarify") in _INTENTS and not preserve_capability_intent:
         bind("intent", new_intent)
         bind("clarify_reason", None)
         bind("missing", [])
@@ -1482,7 +1664,8 @@ def _bind_literal_scope_candidate(
         "region", "region_a", "region_b", "school", "school_a", "school_b",
         "period", "secondary_period",
     }
-
+    # Optional scope evidence must be literal text, never a stringification of
+    # null, a number, or a structured value. Keep other keys for schema checks.
     bound["evidence"] = {
         key: value for key, value in evidence.items()
         if key not in scope_evidence_fields or (
@@ -1491,6 +1674,7 @@ def _bind_literal_scope_candidate(
         )
     }
     return bound, actions
+
 
 def _ambiguous_device_category(question: str) -> bool:
     text = _scope_assertion_text(question)
@@ -1502,10 +1686,11 @@ def _ambiguous_device_category(question: str) -> bool:
         and not re.search(r"台式机|台式电脑|笔记本|平板|移动终端|合计|总量|生机比|师机比", text)
     )
 
+
 def _pending_device_candidate(
     question: str, candidate: Dict[str, Any], context: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
-    pass
+    """Resolve the frozen device-category reply from its typed pending only."""
     text = _scope_assertion_text(question)
     if (
         context.get("pending_clarification_reason") != "device_category_required"
@@ -1540,6 +1725,7 @@ def _pending_device_candidate(
     })
     return patched
 
+
 def _comparison_difference_requested(question: str) -> bool:
     text = _scope_assertion_text(question)
     regions, schools = _literal_region_spans(text), _literal_school_name_spans(text)
@@ -1552,8 +1738,15 @@ def _comparison_difference_requested(question: str) -> bool:
              or len(_explicit_dimension_pair(text)) == 2)
     )
 
+
 def _normalize_requested_outputs(question: str, value: Any) -> Tuple[Any, List[str]]:
-    pass
+    """Decode bounded wire variants without widening AnswerSpec capabilities.
+
+    Output formats and requested result facts are different schema concepts.
+    A model may spell a format in singular form or list an explicitly requested
+    fact among formats. Only known, question-backed facts become direct_answer;
+    unknown names/structures are rejected, including disabled unknown flags.
+    """
     if value is None:
         return value, []
     actions: List[str] = []
@@ -1576,7 +1769,7 @@ def _normalize_requested_outputs(question: str, value: Any) -> Tuple[Any, List[s
         "score_difference": _comparison_difference_requested(text),
     }
     if not requirement_preservation_enabled():
-        facts = dict.fromkeys(facts, True)
+        facts = dict.fromkeys(facts, True)  # Decode the model's known output aliases.
     outputs: List[str] = []
     for item in items:
         if not isinstance(item, str):
@@ -1598,10 +1791,11 @@ def _normalize_requested_outputs(question: str, value: Any) -> Tuple[Any, List[s
             outputs.append(output)
     return outputs, actions
 
+
 def _normalize_model_candidate(
     question: str, candidate: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Normalize bounded schema aliases without adding a rule-route fallback."""
     original_question = question
     question = _scope_assertion_text(question)
     preserve = requirement_preservation_enabled()
@@ -1628,7 +1822,8 @@ def _normalize_model_candidate(
         outputs, output_actions = _normalize_requested_outputs(question, normalized["requested_outputs"])
         normalized["requested_outputs"] = outputs
         actions.extend(output_actions)
-
+    # A single typed filter is accepted only when the original question spells
+    # out that same filter. Composite/unknown filters are never flattened.
     school_filter = normalized.get("school_filter")
     if isinstance(school_filter, dict):
         filter_keys = {"登记类型", "城乡", "school_area_type", "area_type", "urban_rural"}
@@ -1684,6 +1879,62 @@ def _normalize_model_candidate(
         normalized["value_view"] = "normalized_score"
         actions.append("normalize:value_view")
 
+    if preserve:
+        from packages.core.school_filters import normalize_school_filter
+        canonical, recognized = normalize_school_filter(normalized.get('school_filter'))
+        if not recognized:
+            # Preserve the unresolved value for the one user-facing filter gate,
+            # before entity correction can erase it or reinterpret it as a school.
+            return normalized, {"applied": bool(actions), "actions": actions}
+        if canonical != normalized.get('school_filter'):
+            normalized['school_filter'] = canonical
+            actions.append('normalize:all_school_cohort')
+    # A direct school record is not a population mean; dimension extrema select
+    # among the existing six scores rather than aggregate schools.
+    if len(normalized.get('schools') or [])==1:
+        if normalized.get('question_ids') and _explicit_value_view(question)=='raw_value':
+            if normalized.get('intent')=='school_eval':
+                normalized['intent']='school_fact';actions.append('normalize:school_item_fact')
+            if normalized.get('intent') in {'school_fact','clarify'} and normalized.get('statistic') in {'mean','count'} and not _SCHOOL_FACT_EXPLICIT_STATISTIC_RE.search(question):
+                normalized['statistic']=None;actions.append('normalize:school_direct_value')
+        elif normalized.get('intent') in {'school_eval','clarify'} and not normalized.get('dimension') and _school_dimension_extrema_request(question):
+            normalized['statistic']=None;actions.append('normalize:school_dimension_extrema')
+    from packages.semantic_query.catalogue import topic_scope,topic_catalogue
+    # A leaf request may carry a stale model topic. Bind registered item
+    # wording before the topic shortcut, using the existing item vocabulary.
+    if preserve and normalized.get('intent') in {'school_fact','school_eval','clarify'} and normalized.get('topics') and topic_scope(question) is None:
+        ids = _scope_question_ids(question) or [qid for qid, _ in _catalogue_alias_items(question)]
+        if len(ids) == 1 and ids[0] in _catalogue()[1] and len(_literal_school_name_spans(question)) == 1:
+            normalized.update(intent='school_fact', question_ids=ids, topics=[], dimension=None,
+                              value_view=_explicit_value_view(question) or (
+                                  'normalized_score' if re.search(r'得分|分数|评分|多少分', question) else 'raw_value'))
+            normalized, leaf_actions = _bind_literal_scope_candidate(original_question, normalized)
+            actions.extend(['normalize:registered_item_before_topic', *leaf_actions])
+    if normalized.get('intent')=='region_profile' and any(normalized.get(k) for k in ('dimension','topics','question_ids','compound_key','school_field')):
+        normalized['intent']='region_eval'
+        actions.append('normalize:metric_profile->region_eval')
+    if _drop_redundant_topic_parent(normalized):
+        actions.append('normalize:redundant_topic_parent')
+    topics=normalized.get('topics')
+    if isinstance(topics,list) and topics and all(isinstance(t,str) for t in topics) and len(topics)==len(set(topics)):
+        definitions=topic_catalogue()
+        parents={t['dimension'] for t in definitions if t['name'] in topics}
+        if len(parents)==1:
+            parent=next(iter(parents))
+            if set(topics)=={t['name'] for t in definitions if t['dimension']==parent}:
+                normalized.update(topics=[],dimension=parent)
+                actions.append('normalize:all_topics_to_dimension')
+    secondary=topic_scope(question)
+    if secondary and secondary.get('topics') and not normalized.get('question_ids'):
+        normalized.update(dimension=None,topics=list(secondary['topics']))
+        actions.append('normalize:registered_topic_granularity')
+    if isinstance(normalized.get('topics'),list) and len(normalized['topics'])==1 and not normalized.get('question_ids'):
+        parent=next((t.get('collapse_to_dimension') for t in topic_catalogue() if t['name']==normalized['topics'][0]),None)
+        if parent:
+            normalized.update(topics=[],dimension=parent)
+            actions.append('normalize:single_child_dimension')
+    if normalized.get('topics') or preserve and secondary:
+        return normalized, {"applied":bool(actions),"actions":actions}
     if not preserve:
         from packages.semantic_query.semantic_preflight import constrain
         shared_catalogue, _ = _catalogue()
@@ -1731,7 +1982,10 @@ def _normalize_model_candidate(
             and intent in {"clarify", "region_eval", "school_eval", "school_fact"}
             and not _N2_SCOPE_CONFLICT_RE.search(str(question or ""))
         ):
-
+            # A literal school, catalogue item and year form a complete fact
+            # scope.  Bind the explicit year before the school-item decision so
+            # an LLM draft that omits or changes ``periods`` cannot fall through
+            # to a free-form object-ambiguity clarification.
             if periods != explicit_years:
                 normalized["periods"] = explicit_years
                 actions.append("bind:explicit_school_item_period")
@@ -1783,7 +2037,10 @@ def _normalize_model_candidate(
         str(normalized.get("intent") or "clarify").strip() == "school_eval"
         and normalized.get("value_view") != "normalized_score"
     ):
-
+        # School overall/dimension evaluation always exposes template scores;
+        # raw_value is meaningful only for school_fact.  Apply this after the
+        # explicit-item binder so a view-unspecified school item keeps its raw
+        # default while fresh and inherited school evaluations stay normalized.
         normalized["value_view"] = "normalized_score"
         actions.append("school_eval_value_view->normalized_score")
 
@@ -1792,7 +2049,10 @@ def _normalize_model_candidate(
         and normalized.get("value_view") != "normalized_score"
         and _explicit_value_view(question) != "raw_value"
     ):
-
+        # Region overall/dimension evaluation is computed from normalized
+        # questionnaire scores.  A model omission must not relabel that result
+        # as raw_value; explicit raw requests remain untouched so the existing
+        # unsupported-value-view guards can fail closed.
         normalized["value_view"] = "normalized_score"
         actions.append("region_eval_value_view->normalized_score")
 
@@ -1804,15 +2064,26 @@ def _normalize_model_candidate(
     actions.extend("shared_semantics:" + p['field'] for p in shared_semantics['patches'])
     return normalized, {"applied": bool(actions), "actions": actions, "shared_semantics": shared_semantics}
 
+
 def _apply_scope_transition(
     question: str,
     candidate: Dict[str, Any],
     context: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Apply one explicit granularity patch to a compatible trusted focus.
+
+    Inherit only a singular school/region and compatible scope. An explicit
+    keep-scope request may replace one region or one year; comparisons,
+    rankings, longitudinal focus, and multi-item requests cannot supply it.
+    """
     patched = dict(candidate)
     text = str(question or "")
 
+    # A positive answer to the durable population-scope clarification carries
+    # no literal region/year by design. Resolve only this exact pending reason
+    # from its stored range and discard every stochastic candidate field. A
+    # free-standing utterance with the same words remains incomplete because it
+    # has no matching pending reason or trusted range.
     if (
         context.get("pending_clarification_reason")
         == "school_population_scope_required"
@@ -1889,7 +2160,8 @@ def _apply_scope_transition(
         return patched, {"applied": False, "reason": "explicit_entity_present"}
     if years and not keep_scope:
         return patched, {"applied": False, "reason": "explicit_scope_conflict"}
-
+    # Only literal object evidence can block inheritance. Generic model spans
+    # such as '学校', '其中' or a copied dimension are not new entity names.
     evidence = _validated_evidence(patched, text)
     candidate_entities = _string_list(patched.get("schools")) + _string_list(patched.get("regions"))
     if not replacing_region and any(
@@ -2003,6 +2275,7 @@ def _apply_scope_transition(
         "changed_fields": sorted(set(changed_fields)),
     }
 
+
 def _catalogue() -> Tuple[List[Dict[str, Any]], Dict[int, Dict[str, Any]]]:
     from packages.semantic_query.catalogue import load_semantic_catalogue
 
@@ -2010,6 +2283,7 @@ def _catalogue() -> Tuple[List[Dict[str, Any]], Dict[int, Dict[str, Any]]]:
     public_rows = list(catalogue["items"])
     by_id = {int(item["id"]): item for item in public_rows}
     return public_rows, by_id
+
 
 def _public_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     allowed = {
@@ -2043,12 +2317,37 @@ def _public_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     source = context or {}
     return {key: source.get(key) for key in sorted(allowed) if source.get(key) is not None}
 
-def _parser_prompt(question: str, context: Dict[str, Any], catalogue: List[Dict[str, Any]]) -> str:
+
+_QUESTIONNAIRE_FIELDS = ("id", "question", "dimension", "dimension_key", "topic")
+
+
+def _parser_catalogue_view(catalogue: List[Dict[str, Any]], mode: str, question: str = ""):
+    if mode != "g1_llm_unconstrained" or mechanism_flags(mode)["catalogue_annotation"]:
+        from packages.semantic_query.catalogue_annotations import select
+        questionnaire = [{key: item[key] for key in _QUESTIONNAIRE_FIELDS if key in item} for item in catalogue]
+        return dict(questionnaire=questionnaire,annotations=select(question,catalogue))
+    return [{key: item[key] for key in _QUESTIONNAIRE_FIELDS} for item in catalogue]
+
+
+def _parser_prompt(
+    question: str, context: Dict[str, Any], catalogue: List[Dict[str, Any]],
+    *, mode: str = "product_semantic_constrained",
+) -> str:
+    catalogue_view = _parser_catalogue_view(catalogue, mode, question)
+    dimension_aliases = (
+        f"六维别名：{json.dumps(_DIMENSION_ALIASES, ensure_ascii=False)}\n"
+        if catalogue_view is catalogue else ""
+    )
+    from packages.semantic_query.catalogue import topic_catalogue,dimension_meanings_prompt
+    from packages.semantic_query.regional_capabilities import CATALOGUE_AVAILABILITY_PROMPT
     schema = {
-        "intent": "clarify|region_eval|school_eval|school_fact|region_compare|school_compare|region_longitudinal|region_ranking|national_ranking",
-        "regions": ["区域A", "区域B可选"],
+        "topics": [],
+        "intent": "|".join(sorted(MODEL_INTENTS)),
+        "ranking_order": "top|bottom|null",
+        "benchmark": "national|province|null",
+        "regions": ["区域A", "区域B可选", "其余省份或城市完整保留"],
         "schools": ["学校A", "学校B可选", "其余明确学校按原句顺序完整列出"],
-        "periods": ["YYYY", "第二年份可选"],
+        "periods": ["YYYY", "第二年份可选", "第三第四年份可选"],
         "dimension": "六维之一或null",
         "statistic": "mean|median|mean_and_median|count|max|min|null",
         "aggregation": "school_equal_mean|answer_pooled_mean",
@@ -2086,7 +2385,7 @@ def _parser_prompt(question: str, context: Dict[str, Any], catalogue: List[Dict[
         "优先确定所问粒度。用户用‘那项、这一题项、某种人员覆盖比例’指一个登记题项时，即使题项主题涉及课堂或教师，也必须从目录选择唯一question_ids；学校对象使用school_fact，dimension=null。只有用户询问整维分数才使用school_eval及dimension，禁止用主题归属替代单项答案。归一值转百分制仍是该题normalized_score，不能上卷成整维。\n"
         "目录语义例：‘已经将技术变成日常教学的习惯’衡量常态应用人员覆盖；‘会不会操作技术、是否熟练’衡量技术能力，两者不是同一项。先以目录的测量对象和属性找题项，再填目录题号；否定分句只排除混淆项，不能把肯定分句映射为整维。\n"
         "只允许输出结构示例中列出的字段；额外字段会被拒绝。\n"
-        "若对象、年份、比较双方、指标或用户指代无法唯一确定，intent必须为clarify并列出最小缺失信息。"
+        "若对象、比较双方、指标或用户指代无法唯一确定，或用户提到的年份有歧义，intent必须为clarify并列出最小缺失信息；完全未提年份时继承上下文，否则默认2023年。"
         "询问整块时，应合并原句全部肯定的测量线索核对共同目录：能力、培训、实践等多个属性若唯一归属同一维度，使用该维度，不因未写正式维度名而澄清；单项或多义描述不能上卷。\n"
         "evidence中的值必须是用户原问题里逐字出现的短片段，不得改写或补造。\n"
         "同校同年学校事实可选一题或两道不同问卷题；两题原始值或同口径标准分分别报告时按题意顺序填两个question_ids，不要拆成两次请求。复合指标或学校字段不要同时填question_ids；结合对象、值类型、时间窗口和混淆项区分近邻指标。\n"
@@ -2111,8 +2410,8 @@ def _parser_prompt(question: str, context: Dict[str, Any], catalogue: List[Dict[
         "人员、组织机制与经费/资金支持属于保障机制。单个线索或否定/排除分句不得扩展目标维度。\n"
         "若会话上下文存在单校或单区域可信焦点，当前句只明确切换到总体、某一维度或一个题号时，"
         "把它视为范围补丁：仅继承相容的对象和年份，并清除旧维度、旧题项及不相容统计字段；不得继承比较、排名或纵向焦点。\n"
-        f"六维别名：{json.dumps(_DIMENSION_ALIASES, ensure_ascii=False)}\n"
-        "教师级操作仍须澄清；区域题项排名和本校六维名次按公共已实现任务执行，其他未实现排名须澄清。\n"
+        f"{dimension_aliases}"
+        "教师个体数据按目录缺失分支说明无数据；区域题项排名和本校六维名次按公共已实现任务执行，其他未实现排名须澄清。\n"
         "显式统计词必须映射为对应statistic，不能把中位数静默改成mean。"
         "区域总体或单维的均分/得分可以同时要求有效学校数或有效作答数；这些是结果分母字段，"
         "不是与mean竞争的第二个statistic，不得因此clarify，statistic仍为mean。\n"
@@ -2128,16 +2427,25 @@ def _parser_prompt(question: str, context: Dict[str, Any], catalogue: List[Dict[
         f"输出结构示例：{json.dumps(schema, ensure_ascii=False)}\n"
         f"可用会话上下文：{json.dumps(context, ensure_ascii=False)}\n"
         f"六维目录：{json.dumps(sorted(_DIMENSIONS), ensure_ascii=False)}\n"
-        f"83题目录：{json.dumps(catalogue, ensure_ascii=False, separators=(',', ':'))}\n"
-        f"用户原问题：{question}"
+        + dimension_meanings_prompt()
+        + CATALOGUE_AVAILABILITY_PROMPT
+        + f"83题目录：{json.dumps(catalogue_view, ensure_ascii=False, separators=(',', ':'))}\n"
+        + _REGIONAL_PROMPT
+        + "二级维度扩展：任务的指标粒度只能选择总体、dimension、topics、question_ids之一。只说一个登记二级维度名或别名用topics；同一维度部分二级维度分别列出topics，不合成分数；全部列出仍为父级dimension。明确题项编号或具体数量/带宽/比例不能上卷。教师数字素养一律使用dimension=数字素养。经费保障问财力保障得分，花了多少钱仍无金额数据。二级维度只支持normalized_score、mean、school_equal_mean，多topics只允许同一年；地区画像和位置继续按原六维，不使用topics。上述原一级/题项规则保留，新粒度可用于地区评价/比较/多年/全国/省级和校内地区排名及学校评价比较。\n"
+        + "二级维度词表："+json.dumps(topic_catalogue(),ensure_ascii=False)+"\n"
+        + f"用户原问题：{question}"
     )
+
 
 def _parser_empty_retry_prompt(
     question: str,
     context: Dict[str, Any],
     catalogue: List[Dict[str, Any]],
+    *, mode: str = "product_semantic_constrained",
 ) -> str:
-    pass
+    """Build a shorter second prompt when an upstream returns no final content."""
+    from packages.semantic_query.catalogue import dimension_meanings_prompt
+    from packages.semantic_query.regional_capabilities import CATALOGUE_AVAILABILITY_PROMPT
     compact_catalogue = [
         {
             "id": item.get("id"),
@@ -2151,8 +2459,13 @@ def _parser_empty_retry_prompt(
         }
         for item in catalogue
     ]
+    catalogue_view = _parser_catalogue_view(catalogue, mode, question)
+    if catalogue_view is not catalogue:
+        compact_catalogue = catalogue_view
     skeleton = {
         "intent": "clarify",
+        "ranking_order": None,
+        "benchmark": None,
         "regions": [],
         "schools": [],
         "periods": [],
@@ -2174,8 +2487,7 @@ def _parser_empty_retry_prompt(
     return (
         "上一响应没有可用正文。不要解释、不要思考过程、不要Markdown；只输出一个JSON对象。\n"
         "字段必须与骨架完全一致，不得添加evidence或任何额外字段。对象/年份/指标不唯一则intent=clarify。\n"
-        "intent仅限clarify/region_eval/school_eval/school_fact/region_compare/"
-        "school_compare/region_longitudinal/region_ranking/national_ranking；dimension仅限六维或null。\n"
+        f"intent仅限{'/'.join(sorted(MODEL_INTENTS))}；dimension仅限六维或null。\n"
         "单校总体/单维用school_eval；学校单题用school_fact；区域单题只支持唯一题号的"
         "normalized_score+mean+school_equal_mean。会话短追问可使用给定上下文。\n"
         "requested_outputs必须是字符串数组，元素只允许direct_answer/analysis/table/charts；"
@@ -2186,38 +2498,47 @@ def _parser_empty_retry_prompt(
         f"JSON骨架：{json.dumps(skeleton, ensure_ascii=False, separators=(',', ':'))}\n"
         f"会话上下文：{json.dumps(context, ensure_ascii=False, separators=(',', ':'))}\n"
         f"精简83题目录：{json.dumps(compact_catalogue, ensure_ascii=False, separators=(',', ':'))}\n"
-        f"用户原问题：{question}"
+        + dimension_meanings_prompt()
+        + CATALOGUE_AVAILABILITY_PROMPT
+        + _REGIONAL_PROMPT
+        + f"用户原问题：{question}"
     )
+
 
 def _parser_repair_prompt(
     question: str,
     context: Dict[str, Any],
     catalogue: List[Dict[str, Any]],
     failure_code: str,
+    *, mode: str = "product_semantic_constrained",
 ) -> str:
-    pass
-    compact = _parser_empty_retry_prompt(question, context, catalogue)
+    """Request one fresh TaskDraft without echoing the rejected model text."""
+    compact = _parser_empty_retry_prompt(question, context, catalogue, mode=mode)
     return compact.replace(
         "上一响应没有可用正文。",
         f"上一响应未通过严格结构或范围校验（{failure_code}）。请重新映射。",
         1,
     )
 
+
 def _string_list(value: Any, *, limit: Optional[int] = None) -> List[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value[:limit] if str(item).strip()]
 
-def _pending_region_identity(token: str) -> Tuple[str, str]:
+
+def _pending_region_identity(token: str, question: str = '', year=None) -> Tuple[str, str]:
     try:
+        from packages.core.research_data import enabled, geographic_request
         from scripts.region_engine import detect_region
 
-        resolved = detect_region(token)
+        resolved = geographic_request(token, question, year) if enabled() else detect_region(token)
         if resolved:
             return str(resolved.get("name") or token), str(resolved.get("full_name") or token)
     except Exception:
         pass
     return token, token
+
 
 def _pending_school_identity(token: str) -> str:
     try:
@@ -2234,11 +2555,44 @@ def _pending_school_identity(token: str) -> str:
         pass
     return token
 
-def _literal_school_name_spans(question: str) -> List[str]:
-    pass
+
+def _school_population_phrase(span: str) -> bool:
+    """A registered place plus population grammar has no institution name."""
+    from packages.core.research_data import enabled
+    from packages.core.geography_registry import is_full,mentions
+    if not enabled() or not is_full():return False
+    text=span
+    for place in reversed(mentions(text)):
+        text=text[:place['start']]+' '* (place['end']-place['start'])+text[place['end']:]
+    text=re.sub(r'(?:这|近|过去|最近)?[一二两三四五六七八九十\d几]+(?:个)?(?:年|地|省|市)|这几年|近几年', '', text)
+    text=re.sub(r'全国|以及|哪个|哪一|哪些|各个|中小学校|中小学|学校|小学|初中|高中|中学|幼儿园|省份|地区|城市|和|与|及|在|的', '', text)
+    return not text.strip()
+
+
+from packages.core.school_names import SCHOOL_NAME_SUFFIX as _SCHOOL_NAME_SUFFIX
+
+
+def _registered_school_span(span: str, year=None) -> Optional[str]:
+    """Full name first; shorter lookup only removes generic population tails."""
+    from packages.core.school_registry import match_school_name
+    if match_school_name(span,year) is not None:return span
+    ends=[m.end() for m in re.finditer(_SCHOOL_NAME_SUFFIX,span) if m.end()<len(span)]
+    for end in reversed(ends):
+        if _school_population_phrase(span[end:]) and match_school_name(span[:end],year) is not None:
+            return span[:end]
+    return None
+
+
+def _lexical_school_name_spans(question: str) -> List[str]:
+    """Extract full literal names, excluding population units and references."""
     text = _scope_assertion_text(question)
+    # Consume the 年 even when a space separates it from the four digits.
+    text = re.sub(r'(?<!\d)(?:19|20)\d{2}\s*年?', ' ', text)
+    if requirement_preservation_enabled():
+        from packages.core.school_filters import generic_school_text
+        text = generic_school_text(text)
     spans: List[str] = []
-    for clause in re.split(r"20\d{2}年?|[、，,。；;！？!?：:\s]|(?<=[校学园])(?:和|与|跟|减(?:去)?)|以及", text):
+    for clause in re.split(r"20\d{2}年?|[、，,。；;！？!?：:\s]|(?<=[校学园院中小])(?:和|与|跟|及|减(?:去)?)|以及", text):
         clause = re.sub(
             r"^(?:(?:请问|请|麻烦|烦请|帮我|帮忙|给我|我想|想要|想|要|"
             r"只比较|比较|对比|用图比较|用图对比|只查看|只查|只看|查看|查询|看看|看一下|看下|看|"
@@ -2246,15 +2600,32 @@ def _literal_school_name_spans(question: str) -> List[str]:
             r"(?:并|且|再|请)?(?:计算|算出|给出|列出)))+", "", clause,
         ).strip()
         match = re.match(
-            r"[\u4e00-\u9fffA-Za-z·（）()]{2,}?(?:小学|中学|幼儿园|学校)"
-            r"(?:[\u4e00-\u9fff]{0,12}?分校|校)?", clause,
+            r"[\u4e00-\u9fffA-Za-z0-9·（）()]{2,}(?:"+_SCHOOL_NAME_SUFFIX+r")"
+            r"(?:[\u4e00-\u9fff]{0,12}?分校|校)?", clause.split('的',1)[0],
         )
         if not match:
             continue
         span = match.group(0)
+        if _school_population_phrase(span):
+            continue
+        # A registered location followed only by a cohort label is a population,
+        # whereas a name such as "某市实验小学" remains a school literal.
+        cohort = re.search(r'(?:中小学校|中小学|小学|初中|高中|幼儿园|学校)$', span)
+        if cohort:
+            from packages.core.research_data import enabled
+            from packages.core.geography_registry import is_full, mentions
+            prefix = span[:cohort.start()]
+            if enabled() and is_full():
+                locations = mentions(prefix, exact_alias=True)
+                administrative = prefix.endswith(('省','市','区','县','旗','自治区')) or any(
+                    c['level'] in {'province','city'} for m in locations for c in m['candidates'])
+                if administrative and locations and locations[0]['start'] == 0 and locations[-1]['end'] == len(prefix):
+                    continue
         if re.fullmatch(r'(?:乡村|农村|城区|城镇|城市|两地|各地|两组)(?:小学|中学|学校)', span) or re.search(r'整体|总体|最高|最低|等权|同数时|同分时', span):
             continue
-
+        # In score requests these are generic population/aggregation nouns,
+        # not an institution named '只给学校' or '整体数字化学校'. Preserve
+        # complete names followed by a year or a normal metric description.
         if span.endswith("学校") and re.match(
             r"(?:等权|分母|(?:总)?数(?=量|目|[，,。；;！？!?\s]|$|是|有|为|共|分|各|多|几|较|更|高|低|大|小|呢|吗|变|增|减|差))",
             clause[match.end():],
@@ -2272,11 +2643,58 @@ def _literal_school_name_spans(question: str) -> List[str]:
             spans.append(span)
     return spans
 
+
+def _literal_school_name_spans(question: str) -> List[str]:
+    spans = _lexical_school_name_spans(question)
+    if not requirement_preservation_enabled():
+        return spans
+    years = _scope_years(question)
+    year = years[0] if len(years) == 1 else None
+    return list(dict.fromkeys(name for span in spans if (name:=_registered_school_span(span,year)) is not None))
+
+
+def _missing_school_boundary(question: str, context=None) -> Optional[Dict[str, Any]]:
+    """A named institution must resolve before its location can be answered."""
+    from packages.core.school_registry import _name_key
+    from scripts.school_engine import find_schools
+    schools=_lexical_school_name_spans(question)
+    if not schools:return None
+    from packages.semantic_query.regional_capabilities import type_unavailable,years as request_years
+    if type_unavailable(question):return None
+    years=request_years(question,context or {})[0]
+    year=years[0] if len(years)==1 else None
+    for name in schools:
+        if _registered_school_span(name,year) is not None:
+            continue
+        candidates=find_schools(name,year=year,limit=101)
+        registered=any(_name_key(row['school_name'],row.get('city'))==_name_key(name,row.get('city')) for row in candidates)
+        message='「'+name+'」：'+('登记校名不能唯一对应这所学校，请补充省市或核对完整校名。' if registered else
+                 '库中没有找到这所学校'+('在'+year+'年的登记记录' if year else '')+'，请核对校名'+('与年份。' if year else '。'))
+        separate_region_request=any(
+            not _lexical_school_name_spans(clause) and _literal_region_spans(clause)
+            and _REGION_SCORE_REQUEST_RE.search(clause)
+            for clause in re.split(r'[，,。；;！？!?]',_scope_assertion_text(question)))
+        return dict(intent='clarify',reason='school_identity_ambiguous' if registered else 'school_not_found',
+                    original=question,missing=[message],school_name=name,
+                    separate_region_request=separate_region_request)
+    return None
+
+
 def _explicit_school_identity(question: str) -> Optional[Tuple[str, str]]:
-    pass
+    """Resolve every complete literal span; never select a resolvable subset.
+
+    Branch-campus suffixes belong to the school name. A second unknown school
+    cannot disappear merely because only the first name resolves in the data.
+    Target-year record identity remains the execution resolver's responsibility.
+    """
     spans = _literal_school_name_spans(question)
     if len(spans) != 1:
         return None
+    if requirement_preservation_enabled():
+        from packages.core.school_registry import match_school_name
+        years = _scope_years(question)
+        name = match_school_name(spans[0], years[0] if len(years) == 1 else None)
+        return (name, spans[0]) if name is not None else None
     try:
         from scripts.school_engine import find_schools
 
@@ -2291,15 +2709,25 @@ def _explicit_school_identity(question: str) -> Optional[Tuple[str, str]]:
         return None
     return next(iter(names)), spans[0]
 
+
 def _single_literal_school_span(question: str) -> Optional[str]:
-    pass
+    """Extract a single complete name without consulting business data."""
     spans = _literal_school_name_spans(question)
     return spans[0] if len(spans) == 1 else None
+
 
 def preflight_school_fact_statistic_boundary(
     question: str,
 ) -> Optional[Dict[str, Any]]:
-    pass
+    """Close an explicit unsupported school-item statistic before execution.
+
+    This is a treatment-invariant safety boundary, not a replacement parser.
+    It applies only when the current utterance itself supplies one literal
+    school-suffix span, one calendar year, one catalogue question id and an explicit
+    statistic.  The boundary runs before the model parser, contract creation,
+    pending-state mutation and deterministic fact tools, so a terminal
+    clarification cannot carry a hidden execution side effect.
+    """
     if not requirement_preservation_enabled():
         return None
     text = _scope_assertion_text(question)
@@ -2352,11 +2780,30 @@ def preflight_school_fact_statistic_boundary(
         "pre_execution_guard": guard,
     }
 
+
 def preflight_semantic_scope_boundary(
     question: str,
 ) -> Optional[Dict[str, Any]]:
-    pass
+    """Close explicit unsupported scope sets before parser or business tools.
+
+    The boundary covers only literals whose supported status does not depend on
+    model interpretation: a non-mean statistic on one regional questionnaire
+    item, more than one named evaluation dimension, and a valid-school count
+    spread across comparison or multiple years. It is shared by product
+    semantic mode and G1/G2, preventing ANSWER/CLARIFY/repair-ERROR drift.
+    """
+    from packages.semantic_query import regional_capabilities as capabilities
+    missing = capabilities.type_unavailable(question)
+    if missing:
+        return missing
     if not requirement_preservation_enabled():
+        return None
+    import sys
+    # This preflight has no conversation context; references bind after parsing.
+    guard = capabilities.boundary(question,check_reference=False)
+    if guard is not None:
+        return guard
+    if capabilities.route(question, {}, {}, sys.modules[__name__]) is not None:
         return None
     text = _scope_assertion_text(question)
     if re.search(r"恢复|回滚|撤销|取消|(?<![A-Za-z])revision(?![A-Za-z])", text, re.I):
@@ -2453,14 +2900,20 @@ def preflight_semantic_scope_boundary(
     is_pair_comp = bool(_explicit_dimension_pair(question)) and len(years) == 1 and (
         (len(school_spans) == 1 and not region_spans)
         or (len(region_spans) == 1 and not school_spans)
-
+        # A singular school reference has a supported operation shape. Its
+        # antecedent is resolved (or clarified) by draft_boundary using actual
+        # successful context, before this compiler can execute either score.
         or (not region_spans and not any(not _is_contextual_entity_reference(s) for s in school_spans)
             and re.search(r"该校|这所学校|那所学校|前者(?:学校)?|后者(?:学校)?", text))
     )
-    if len(dimensions) > 1 and not is_pair_comp:
+    from packages.semantic_query.task_draft import supported_scope
+    resolved_years = capabilities.years(question, {})[0]
+    multi_supported = supported_scope('region_eval' if region_spans else 'school_eval',
+                                      school_spans, region_spans, resolved_years, dimensions=len(dimensions))
+    if len(dimensions) > 1 and not is_pair_comp and not multi_supported:
         return boundary(
             "unsupported_dimension_set",
-            "当前一次评估只支持总体或一个六维范围；请一次指定一个维度。",
+            "多维查询支持同一对象、同一年度的六维得分；请明确这一范围。",
             details={"dimensions": [item[0] for item in dimensions]},
         )
     if dimensions and (_REGION_RANKING_SCOPE_RE.search(text) or _REGION_RANKING_TARGET_RE.search(text)) and not school_spans:
@@ -2516,6 +2969,7 @@ def preflight_semantic_scope_boundary(
 
     return None
 
+
 def _integer_or_none(value: Any) -> Optional[int]:
     if value in (None, ""):
         return None
@@ -2524,13 +2978,48 @@ def _integer_or_none(value: Any) -> Optional[int]:
     except (TypeError, ValueError):
         raise ValueError("experiment_parser_integer_field_invalid")
 
+
+def _drop_redundant_topic_parent(candidate: Dict[str, Any]) -> bool:
+    """Remove only catalogue-proven redundant format data, independent of RP."""
+    topics=candidate.get('topics')
+    dimension=candidate.get('dimension')
+    if not isinstance(topics,list) or not topics:
+        return False
+    if any(candidate.get(key) for key in ('question_ids','compound_key','school_field')):
+        raise ValueError('experiment_parser_mixed_metric_granularity')
+    if not dimension:
+        return False
+    from packages.semantic_query.catalogue import topic_catalogue
+    parents={t['name']:t['dimension'] for t in topic_catalogue()}
+    if all(isinstance(t,str) and t in parents for t in topics):
+        if any(parents[t]!=dimension for t in topics):
+            raise ValueError('experiment_parser_mixed_metric_granularity')
+        candidate['dimension']=None
+        return True
+    return False
+
+
 def _validate_candidate_schema(
     candidate: Dict[str, Any], *, allow_evidence: bool = True, validate_outputs: bool = True
 ) -> None:
-    pass
+    """Reject model-controlled fields that are outside the frozen TaskDraft schema."""
     allowed_fields = _TASKDRAFT_FIELDS if allow_evidence else (_TASKDRAFT_FIELDS - {"evidence"})
     if set(candidate) - allowed_fields:
         raise ValueError("experiment_parser_unknown_fields")
+    if candidate.get('intent', 'clarify') not in MODEL_INTENTS:
+        raise ValueError('experiment_parser_intent_not_supported')
+    for field, values in CHOICE_FIELDS.items():
+        if candidate.get(field) not in values:
+            raise ValueError('experiment_parser_invalid_'+field)
+    if 'topics' in candidate and not isinstance(candidate['topics'],list):
+        raise ValueError('experiment_parser_topics_invalid')
+    if candidate.get('topics'):
+        from packages.semantic_query.catalogue import topic_catalogue
+        topics=candidate['topics']
+        if not isinstance(topics,list) or any(not isinstance(t,str) for t in topics) or len(topics)!=len(set(topics)) or any(t not in {d['name'] for d in topic_catalogue()} for t in topics):
+            raise ValueError('experiment_parser_topics_invalid')
+        if candidate.get('dimension') or candidate.get('question_ids') or candidate.get('compound_key') or candidate.get('school_field'):
+            raise ValueError('experiment_parser_mixed_metric_granularity')
     evidence = candidate.get("evidence")
     if evidence is not None:
         if not isinstance(evidence, dict):
@@ -2544,8 +3033,9 @@ def _validate_candidate_schema(
         if any(str(item) not in _OUTPUTS for item in requested_outputs):
             raise ValueError("experiment_parser_requested_output_not_supported")
 
+
 def _unsupported_scope_clarification(question: str, intent: str) -> Optional[Dict[str, Any]]:
-    pass
+    """Keep unsupported inference requests out of deterministic tools and contracts."""
     text = _scope_assertion_text(question)
     if _TEACHER_OPERATION_SCOPE_RE.search(text) or _SCHOOL_RANKING_SCOPE_RE.search(text):
         return {
@@ -2564,7 +3054,8 @@ def _unsupported_scope_clarification(question: str, intent: str) -> Optional[Dic
                     "original": text,
                 }
     explicit_ranking = bool(_REGION_RANKING_SCOPE_RE.search(text) or _REGION_RANKING_TARGET_RE.search(text))
-    if explicit_ranking and intent not in {"region_ranking", "national_ranking"}:
+    from packages.semantic_query.task_draft import ranking_intent
+    if explicit_ranking and not ranking_intent(intent):
         return {
             "intent": "clarify",
             "reason": "experiment_intent_mismatch_region_ranking",
@@ -2595,6 +3086,7 @@ def _unsupported_scope_clarification(question: str, intent: str) -> Optional[Dic
                 }
     return None
 
+
 def _validated_evidence(candidate: Dict[str, Any], question: str) -> Dict[str, str]:
     raw = candidate.get("evidence")
     if not isinstance(raw, dict):
@@ -2606,6 +3098,7 @@ def _validated_evidence(candidate: Dict[str, Any], question: str) -> Dict[str, s
         if span and span in question and span in assertion:
             evidence[str(key)] = span
     return evidence
+
 
 def _metric_from_candidate(candidate: Dict[str, Any], by_id: Dict[int, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     question_ids = candidate.get("question_ids") or []
@@ -2650,10 +3143,11 @@ def _metric_from_candidate(candidate: Dict[str, Any], by_id: Dict[int, Dict[str,
         return {"type": "school_field", "field": school_field, "name": name, "unit": unit}
     return None
 
+
 def _question_pair_order_from_utterance(
     text: str, qids: List[int], by_id: Dict[int, Dict[str, Any]],
 ) -> Optional[List[int]]:
-    pass
+    """Bind two already selected catalogue items to their first named mentions."""
     work_pair = _management_work_count_pair(text, {
         "intent": "school_fact", "value_view": "raw_value", "question_ids": qids,
     })
@@ -2671,7 +3165,8 @@ def _question_pair_order_from_utterance(
         other = qids[1] if qid == qids[0] else qids[0]
         candidates = []
         for phrase in descriptions[qid]:
-
+            # A unique literal fragment is evidence of an entity mention;
+            # shared words such as 学校/措施 cannot establish operand order.
             for size in range(len(phrase), 2, -1):
                 for start in range(len(phrase) - size + 1):
                     fragment = phrase[start:start + size]
@@ -2687,7 +3182,10 @@ def _question_pair_order_from_utterance(
         else:
             positions[qid] = min(candidates)[1]
     if len(unresolved) == 1:
-
+        # One base item can be a literal substring of a more specific item.
+        # An explicit conjunction separates their mentions without trusting
+        # the model's QID order. Keep ambiguity closed if the other phrase is
+        # not independently recognizable from the catalogue.
         missing = unresolved[0]
         bound = next(qid for qid in qids if qid != missing)
         orders = []
@@ -2710,10 +3208,11 @@ def _question_pair_order_from_utterance(
         return None
     return sorted(qids, key=positions.__getitem__)
 
+
 def _ordered_question_set_subtraction(
     assertion: str, qids: List[int], by_id: Dict[int, Dict[str, Any]],
 ) -> Optional[List[int]]:
-    pass
+    """Return the two operands only when the utterance names an operation."""
     numbered = re.search(r"(?:第\s*(\d+)\s*题|Q\s*(\d+))\s*减\s*(?:第\s*(\d+)\s*题|Q\s*(\d+))", assertion, re.I)
     if numbered:
         ordered = [int(numbered.group(1) or numbered.group(2)), int(numbered.group(3) or numbered.group(4))]
@@ -2737,7 +3236,8 @@ def _ordered_question_set_subtraction(
         if ordered is None:
             raise ValueError("experiment_school_question_set_operand_order_unresolved")
         return ordered
-
+    # A named subtraction has to identify each of the two catalogue items
+    # uniquely. A word inside a policy title (e.g. “双减”) cannot do this.
     named = re.search(r"([^，,。；;？?]{1,30})减([^，,。；;？?]{1,30})", assertion)
     if not named:
         return None
@@ -2757,6 +3257,7 @@ def _ordered_question_set_subtraction(
     if scores[0][1] >= 3 and scores[1][0] >= 3 and scores[0][1] > scores[0][0] and scores[1][0] > scores[1][1]:
         return [qids[1], qids[0]]
     return None
+
 
 def _school_question_set(
     candidate: Dict[str, Any], by_id: Dict[int, Dict[str, Any]], question: str,
@@ -2800,10 +3301,11 @@ def _school_question_set(
         "derived": derived,
     }
 
+
 def _ordered_management_work_count_ratio(
     assertion: str, qids: List[int], by_id: Dict[int, Dict[str, Any]],
 ) -> List[int]:
-    pass
+    """Bind a quotient of two already verified work-content counts."""
     if re.search(r"前者.{0,8}除以.{0,8}后者", assertion):
         return qids
     if re.search(r"后者.{0,8}除以.{0,8}前者", assertion):
@@ -2819,10 +3321,11 @@ def _ordered_management_work_count_ratio(
         raise ValueError("experiment_school_question_set_operand_order_unresolved")
     return [left, right]
 
+
 def _ordered_percent_question_set(
     assertion: str, qids: List[int], by_id: Dict[int, Dict[str, Any]],
 ) -> List[int]:
-    pass
+    """Bind percent-division operands from the utterance, not candidate order."""
     numbered = re.search(
         r"(?:第\s*(\d+)\s*题|Q\s*(\d+))\s*除以\s*"
         r"(?:第\s*(\d+)\s*题|Q\s*(\d+))", assertion, re.I,
@@ -2841,10 +3344,11 @@ def _ordered_percent_question_set(
             return ordered
     raise ValueError("experiment_school_question_set_operand_order_unresolved")
 
+
 def _ordered_school_device_count_ratio(
     assertion: str, qids: List[int], by_id: Dict[int, Dict[str, Any]],
 ) -> List[int]:
-    pass
+    """Bind a named student/teacher device-count ratio, never a people ratio."""
     categories = {
         "desktop": r"台式机|台式电脑",
         "laptop": r"笔记本",
@@ -2888,6 +3392,20 @@ def _ordered_school_device_count_ratio(
         raise ValueError("experiment_school_device_ratio_order_unresolved")
     return [subjects[left], subjects[right]]
 
+
+def _school_filter_clarification(question, candidate):
+    if not requirement_preservation_enabled():
+        return None
+    from packages.core.school_filters import normalize_school_filter
+    _, recognized = normalize_school_filter(candidate.get('school_filter'))
+    if recognized:
+        return None
+    from packages.semantic_query.regional_capabilities import type_unavailable
+    return type_unavailable(question) or dict(
+        intent='clarify', reason='unknown_school_filter', original=question,
+        missing=['“'+str(candidate.get('school_filter'))+'”具体指哪类学校？请明确小学、初中、高中或城乡类别；全部学校可不加筛选。'])
+
+
 def _route_from_candidate(
     question: str,
     candidate: Dict[str, Any],
@@ -2895,14 +3413,47 @@ def _route_from_candidate(
     context: Dict[str, Any],
     *, coverage_binding: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    from packages.semantic_query.selective_clarification import draft_boundary
+    from packages.semantic_query.selective_clarification import draft_boundary,aspect_boundary
+    from packages.semantic_query import regional_capabilities as capabilities
+    from packages.core.item_collection import bind_availability
+    import sys
     _validate_candidate_schema(candidate)
-    effective_question, effective_candidate, boundary = draft_boundary(question, candidate, context, by_id)
+    missing = capabilities.type_unavailable(question)
+    if missing:
+        return missing
+    reference = capabilities.reference_boundary(question,context)
+    if reference:
+        return reference
+    filter_boundary = _school_filter_clarification(question, candidate)
+    if filter_boundary:
+        return filter_boundary
+    aspect=aspect_boundary(question,candidate)
+    if aspect:
+        return aspect
+    if candidate.get('topics'):
+        from packages.semantic_query.topic_tasks import compile_topic_task
+        return compile_topic_task(question,candidate,sys.modules[__name__])
+    if candidate.get('intent')=='region_ranking' and candidate.get('question_ids'):
+        from packages.semantic_query.public_tasks import route_public_task
+        ranked=route_public_task(question,candidate,sys.modules[__name__],literal_binding=requirement_preservation_enabled())
+        if ranked is not None:return bind_availability(question,ranked)
+    # Shared measurement decoding (#6) is independent of program correction.
+    if not requirement_preservation_enabled() and _explicit_value_view(question) == 'raw_value' and not candidate.get('schools'):
+        from packages.semantic_query.public_tasks import route_public_task
+        measured = route_public_task(question, candidate, sys.modules[__name__], literal_binding=False)
+        if measured is not None:
+            return bind_availability(question, measured)
+    extended = capabilities.route(question, candidate, context, sys.modules[__name__])
+    if extended is not None:
+        return bind_availability(question, extended)
+    prepared_question, prepared_candidate, notices = capabilities.prepare_legacy(question, candidate, context)
+    effective_question, effective_candidate, boundary = draft_boundary(prepared_question, prepared_candidate, context, by_id)
     if boundary is not None:
         return boundary
     routed = _route_from_candidate_impl(effective_question, effective_candidate, by_id, context, coverage_binding=coverage_binding)
     if effective_question != question and routed.get("intent") != "clarify":
-
+        # Context supplies binding evidence; the user's original requirements
+        # and their question hash remain the immutable publication boundary.
         from packages.semantic_query.semantic_preflight import constrain
         _, original_boundary = constrain(question, candidate, candidate, list(by_id.values()))
         routed["atomic_requirements"] = original_boundary["requirements"]["atomic_requirements"]
@@ -2912,7 +3463,10 @@ def _route_from_candidate(
     from packages.core.research_data import enabled as research_enabled
     if (observations() or research_enabled()) and candidate.get("intent") in {"region_eval", "region_longitudinal"}:
         routed["_selective_task_candidate"] = copy.deepcopy(candidate)
-    return routed
+    if routed.get('intent') != 'clarify':
+        routed['program_notices'] = notices
+    return bind_availability(question, routed)
+
 
 def _route_from_candidate_impl(
     question: str,
@@ -2941,7 +3495,8 @@ def _route_from_candidate_impl(
         return extended
     literal_boundary = preflight_semantic_scope_boundary(question)
     if literal_boundary is not None:
-
+        # This invocation is after parser resolution. Only the API's true
+        # preflight entry may claim the model was skipped.
         literal_boundary.pop("pre_execution_guard", None)
         return literal_boundary
     intent = str(candidate.get("intent") or "clarify").strip()
@@ -2964,15 +3519,18 @@ def _route_from_candidate_impl(
         unsupported_scope["original"] = question
         return unsupported_scope
     regions = [
-        _pending_region_identity(token)[1]
+        _pending_region_identity(token, question, (_string_list(candidate.get('periods')) or [None])[0])[1]
         for token in _string_list(candidate.get("regions"))
     ]
     schools = _string_list(candidate.get("schools"))
     periods = _string_list(candidate.get("periods"))
-    if len(schools) > 2 or len(regions) > 2 or len(periods) > 2 or (schools and regions):
+    from packages.semantic_query.task_draft import supported_scope
+    unsupported_shape = (not supported_scope(intent, schools, regions, periods) if preserve and intent != 'clarify'
+                         else len(schools) > 2 or len(regions) > 2 or len(periods) > 2 or bool(schools and regions))
+    if unsupported_shape:
         return {
             "intent": "clarify", "reason": "unsupported_scope_cardinality",
-            "missing": ["请限定为当前支持的单对象、双对象同年或单区域两期范围。"],
+            "missing": ["请选同年多对象比较，或同一对象最多四个年度；学校与地区不能混合。" if preserve else "请限定为当前支持的单对象、双对象同年或单区域两期范围。"],
             "original": question,
         }
     if preserve and intent != "clarify":
@@ -2981,7 +3539,10 @@ def _route_from_candidate_impl(
         literal_regions = _literal_region_spans(question)
         evidence = _validated_evidence(candidate, question)
         _, transition = _apply_scope_transition(question, candidate, context)
-
+        # A same-item pronoun can refer to the last successful school fact
+        # without requesting a new granularity. Keep this narrower than the
+        # explicit scope-transition path: the candidate must exactly match
+        # the successful item, school and year already in conversation state.
         same_item_reference = bool(
             intent == "school_fact"
             and context.get("last_scope_operation") == "school_fact"
@@ -3056,13 +3617,17 @@ def _route_from_candidate_impl(
         return {
             "intent": "clarify",
             "reason": "unsupported_school_longitudinal",
-            "missing": ["需补充澄清：当前两期变化首片仅支持行政区域重复截面，不支持单校跨年变化或时间比较。"],
+            "missing": ["单校年度比较支持同名学校最多四年整体或单维得分；请明确学校名称、年份和得分范围。" if preserve else "需补充澄清：当前两期变化首片仅支持行政区域重复截面，不支持单校跨年变化或时间比较。"],
             "original": question,
         }
     if intent == "clarify":
         missing = candidate.get("missing") or []
         if not isinstance(missing, list):
             missing = [str(missing)]
+        if candidate.get('clarify_reason') == 'scope_reference_not_unique':
+            labels = {'period':'请明确查询年份。', 'entity':'请明确地区或学校名称。',
+                      'region':'请明确地区名称。', 'scope':'请明确查询对象和年份范围。'}
+            missing = [labels.get(str(item), str(item)) for item in missing]
         pending_context: Dict[str, Any] = {}
         pending_values: Dict[str, Any] = {}
         if len(regions) == 1 and not schools:
@@ -3388,6 +3953,7 @@ def _route_from_candidate_impl(
         return {"intent": intent, "region": regions[0], "year": periods[0], **common}
     raise ValueError("experiment_parser_intent_not_supported")
 
+
 def _with_requirement_preservation(function):
     from functools import wraps
 
@@ -3398,6 +3964,7 @@ def _with_requirement_preservation(function):
         with requirement_preservation_scope(enabled):
             return function(*args, **kwargs)
     return scoped
+
 
 @_with_requirement_preservation
 def parse_semantic_route(
@@ -3423,8 +3990,24 @@ def parse_semantic_route(
         preflight_mode = 'code'
     if mode != 'g2_llm_constrained': preflight_mode = 'none'
     preflight_trace = {}
+    requirement_trace = {}
     public_context = _public_context(context)
-    prompt = _parser_prompt(question, public_context, catalogue)
+    school_boundary=_missing_school_boundary(question,public_context)
+    if school_boundary and not school_boundary['separate_region_request']:
+        return school_boundary,build_answer_spec(question,school_boundary),dict(
+            source='registered_school_boundary',model_calls=0,runtime_mode=mode)
+    prompt = _parser_prompt(question, public_context, catalogue, mode=mode)
+    catalogue_trace = {}
+    if mode != "g1_llm_unconstrained" or mechanism_flags(mode)["catalogue_annotation"]:
+        from packages.semantic_query.catalogue_annotations import select
+        selected_annotations = select(question,catalogue)
+        catalogue_trace = {"catalogue_view":"RELEVANT_ANNOTATIONS_V2", "annotation_version":selected_annotations['version'],
+                           "annotation_dimensions":selected_annotations['selected_dimension_ids'], "annotation_items":selected_annotations['selected_item_ids']}
+    if mode == "g1_llm_unconstrained" and not mechanism_flags(mode)["catalogue_annotation"]:
+        catalogue_trace = {
+            "catalogue_view": "QUESTIONNAIRE_ONLY_ABLATION",
+            "catalogue_fields": list(_QUESTIONNAIRE_FIELDS),
+        }
     from packages.llm_gateway.gateway import GatewayError, ChatRequest, call_detailed, route
     from packages.experiment_protocol.trace import stage_event
 
@@ -3436,7 +4019,7 @@ def parse_semantic_route(
     )
     from time import perf_counter
     parser_started = perf_counter()
-    stage_event("parser_call_started", model=selected.get("model"), task=parser_task)
+    stage_event("parser_call_started", model=selected.get("model"), task=parser_task, **catalogue_trace)
     try:
         detail = call_detailed(ChatRequest(
             provider=selected["provider"],
@@ -3456,7 +4039,7 @@ def parse_semantic_route(
                 {
                     "role": "user",
                     "content": _parser_empty_retry_prompt(
-                        question, public_context, catalogue
+                        question, public_context, catalogue, mode=mode
                     ),
                 },
             ],
@@ -3493,16 +4076,31 @@ def parse_semantic_route(
                      "usage": detail.get("usage") or {}, "attempts": primary_attempts}]
 
     def resolve_candidate(content: Any, *, repair_response: bool = False):
-        nonlocal preflight_trace
+        nonlocal preflight_trace, requirement_trace
         resolved_model_candidate = _json_object(content)
         if repair_response:
-
-            _validate_candidate_schema(
-                resolved_model_candidate, allow_evidence=False, validate_outputs=False
-            )
+            # The repair prompt deliberately omits optional evidence. Validate
+            # the raw response before alias normalization or scope transition so
+            # evidence/extra fields cannot be normalized into a valid TaskDraft.
+            # Output wire aliases are checked by the shared bounded decoder;
+            # _route_from_candidate rechecks the canonical output enum below.
+            format_candidate=dict(resolved_model_candidate)
+            _drop_redundant_topic_parent(format_candidate)
+            _validate_candidate_schema(format_candidate, allow_evidence=False, validate_outputs=False)
+        from packages.semantic_query.regional_capabilities import catalogue_missing_boundary
+        catalogue_missing=catalogue_missing_boundary(question,resolved_model_candidate)
+        if catalogue_missing:
+            _validate_candidate_schema(resolved_model_candidate)
+            return (resolved_model_candidate,{'applied':False},{'applied':False},
+                    resolved_model_candidate,{'applied':False},catalogue_missing)
         resolved_normalized, resolved_normalization = _normalize_model_candidate(
             question, resolved_model_candidate
         )
+        filter_boundary = _school_filter_clarification(question, resolved_normalized)
+        if filter_boundary:
+            _validate_candidate_schema(resolved_normalized)
+            return (resolved_model_candidate, resolved_normalization, {"applied": False},
+                    resolved_normalized, {"applied": False}, filter_boundary)
         if requirement_preservation_enabled():
             transition_candidate, resolved_transition = _apply_scope_transition(
                 question, resolved_normalized, public_context
@@ -3514,6 +4112,12 @@ def parse_semantic_route(
             resolved_candidate = resolved_normalized
             resolved_transition = {"applied": False, "gate": "OBSERVE_ONLY_ABLATION"}
             resolved_reconciliation = {"applied": False, "gate": "OBSERVE_ONLY_ABLATION"}
+        checklist = None
+        if requirement_preservation_enabled():
+            from packages.semantic_query.requirement_checklist import extract, reconcile
+            checklist = extract(question, public_context, resolved_model_candidate,resolved=resolved_candidate)
+            resolved_candidate, requirement_trace = reconcile(question,resolved_model_candidate,resolved_candidate,checklist,resolved_normalized)
+            stage_event('verified_requirements',trace=requirement_trace)
         coverage_binding = None
         if coverage_trace["enabled"]:
             from packages.semantic_query.original_task_binding import raw_pair_coverage_signature, repair_record_coverage
@@ -3551,6 +4155,11 @@ def parse_semantic_route(
         resolved_route = _route_from_candidate(
             question, resolved_candidate, by_id, context or {}, coverage_binding=coverage_binding
         )
+        from packages.semantic_query.topic_tasks import include_dimension_topics
+        resolved_route=include_dimension_topics(question,resolved_route,resolved_candidate,resolved_model_candidate,sys.modules[__name__])
+        if checklist is not None:
+            from packages.semantic_query.requirement_checklist import enrich_route
+            resolved_route = enrich_route(question,resolved_route,checklist,resolved_candidate)
         return (
             resolved_model_candidate,
             resolved_normalization,
@@ -3575,7 +4184,7 @@ def parse_semantic_route(
         stage_event("parser_repair_disabled", failure=initial_failure, protocol="g012-original100-first-attempt")
         raise
     allowed = {str(item) for item in (allowed_intents or ())}
-    if allowed and routed.get("intent") not in allowed and routed.get("intent") != "clarify":
+    if allowed and routed.get("intent") not in allowed and routed.get("intent") not in {"clarify", "unavailable"}:
         routed = {
             "intent": "clarify",
             "reason": "semantic_product_scope_n4_firstslice",
@@ -3595,15 +4204,26 @@ def parse_semantic_route(
     except SelectionError as exc:
         routed = {"intent":"clarify", "reason":str(exc), "missing":[str(exc)], "original":question,
                   "_selective_task_candidate": copy.deepcopy(routed.get("_selective_task_candidate"))}
+    if school_boundary:
+        queries=(routed.get('public_plan') or {}).get('queries') or []
+        regional=str(routed.get('intent') or '').startswith('region_') or (
+            routed.get('intent')=='public_task' and queries and all(q['kind'].startswith('region_') for q in queries))
+        if not regional:
+            return school_boundary,build_answer_spec(question,school_boundary),dict(
+                source='registered_school_boundary',model_calls=len(parser_calls),runtime_mode=mode)
+        notice=school_boundary['missing'][0]+'以下地区数据只回答你另外明确提出的地区问题。'
+        routed['program_notices']=list(dict.fromkeys([*(routed.get('program_notices') or []),notice]))
     answer_spec = build_answer_spec(question, routed)
     if not requirement_preservation_enabled():
         observation = _observe_requirement_preservation(
             question, model_candidate, routed, answer_spec, by_id, context or {})
         routed['requirement_preservation_observation'] = observation
         answer_spec['requirement_preservation_observation'] = copy.deepcopy(observation)
-        answer_spec['requirement_correspondence']['would_do'] = observation['would_do']
+        if routed.get('intent') != 'unavailable':
+            answer_spec['requirement_correspondence']['would_do'] = observation['would_do']
         stage_event('requirement_preservation_observation', trace=observation)
-
+    # AnswerSpec is the authoritative output scope for every treatment.  Keep
+    # G1/G2 comparable and prevent candidate JSON from widening presentation.
     routed["requested_outputs"] = list(answer_spec.get("required_outputs") or [])
     routed["requested_result_statistics"] = list(answer_spec.get("requested_result_statistics") or [])
     stage_event("parser_task_resolved", routed=routed, answer_spec=answer_spec)
@@ -3635,10 +4255,18 @@ def parse_semantic_route(
         "runtime_mode": mode,
         "profile_bound": bool(expected_profile_id),
     }
+    trace.update(catalogue_trace)
+    if requirement_preservation_enabled():
+        trace['requirement_preservation'] = requirement_trace
     return routed, answer_spec, trace
 
+
 def checker_effective_task_summary(question, candidate, by_id, context, *, coverage_binding=None):
-    pass
+    """Pure projection of the same public compiler used by both arms.
+
+    No execution, reference or response values. Raw parser fields remain intact.
+    A compilation failure is a system failure, never fabricated user ambiguity.
+    """
     try:
         routed = _route_from_candidate(question, candidate, by_id, context,
                                        coverage_binding=coverage_binding)
@@ -3658,8 +4286,14 @@ def checker_effective_task_summary(question, candidate, by_id, context, *, cover
     summary['basis'] = 'same common compiler; original question, actual context and raw parser fields; not a correctness certificate'
     return summary
 
+
 def _bind_native_subtraction_order(question: str, routed: Dict[str, Any]) -> None:
-    pass
+    """Bind explicit operand order before native execution/contract creation.
+
+    Native tools already compute primary-minus-secondary and derive labels,
+    detail rows and chart references from those same two objects. Reorder the
+    compiled objects once rather than negate a detached displayed number.
+    """
     intent = routed.get('intent')
     if intent not in {'region_compare', 'school_compare'} or routed.get('public_plan'):
         return
@@ -3680,7 +4314,7 @@ def _bind_native_subtraction_order(question: str, routed: Dict[str, Any]) -> Non
         wanted = 'UNKNOWN'
     positional = re.search(r'(?:前者\s*减(?:去)?\s*后者|后者\s*减(?:去)?\s*前者)', _scope_assertion_text(question))
     if wanted is None and not positional:
-        return
+        return  # No explicit direction: retain existing order and capability.
     literals = _literal_region_spans(question) if intent == 'region_compare' else _literal_school_name_spans(question)
     identity_key = lambda s: re.sub(r'\s+', '', s) if intent=='region_compare' else s
     keys = [identity_key(e) for e in entities]
@@ -3709,6 +4343,7 @@ def _bind_native_subtraction_order(question: str, routed: Dict[str, Any]) -> Non
         operation='subtract', direction='primary_minus_secondary',
         requirement_ids=[a['id'] for a in requirements['atoms'] if a['kind']=='result' and a['value']=='difference'])
 
+
 def _preservation_operand_order(routed, spec):
     plan = routed.get('public_plan') or spec.get('semantic_plan') or {}
     queries = plan.get('queries') or []
@@ -3724,8 +4359,9 @@ def _preservation_operand_order(routed, spec):
     return [(routed[k], routed.get('year'), routed.get('target_dimension'), None)
             for k in fields if routed.get(k)]
 
+
 def _preservation_outcome(actual, actual_spec, expected, expected_spec):
-    pass
+    """Compare execution/output fields only; provenance does not imply a repair."""
     route_fields = (
         'intent', 'school', 'school_a', 'school_b', 'region', 'region_a', 'region_b',
         'year', 'year_a', 'year_b', 'years', 'target_dimension', 'target_dimensions',
@@ -3755,6 +4391,7 @@ def _preservation_outcome(actual, actual_spec, expected, expected_spec):
             'changed_fields': changed, 'enabled_intent': expected.get('intent'),
             'enabled_reason': expected.get('reason')}
 
+
 def _observe_answer_spec(question, routed, spec):
     expected = copy.deepcopy(routed)
     try:
@@ -3763,8 +4400,9 @@ def _observe_answer_spec(question, routed, spec):
         return {'gate': 'OBSERVE_ONLY_ABLATION', 'would_do': 'reject', 'enabled_error': str(exc)}
     return _preservation_outcome(routed, spec, expected, expected_spec)
 
+
 def _observe_requirement_preservation(question, model, routed, spec, by_id, context):
-    pass
+    """Compile the enabled treatment on copies; never execute tools or models."""
     from packages.core.research_data import bind_public_constraints, SelectionError
     from packages.semantic_query.selective_clarification import capture_bindings, set_binding_context
     with requirement_preservation_scope(True), capture_bindings():
@@ -3793,8 +4431,11 @@ def _observe_requirement_preservation(question, model, routed, spec, by_id, cont
     observation['enabled_result_statistics'] = expected_spec.get('requested_result_statistics')
     return observation
 
+
 def build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
-    pass
+    """Consume preserved original requirements through the existing AnswerSpec."""
+    if routed.get('intent') == 'unavailable':
+        return _build_answer_spec(question, routed)
     import hashlib
     from packages.semantic_query.semantic_preflight import atomic_requirements, requirement_correspondence, public_requirement_coverage_enabled
     preserve = requirement_preservation_enabled()
@@ -3807,6 +4448,10 @@ def build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     if preserve:
         _bind_native_subtraction_order(question, routed)
     spec = _build_answer_spec(question, routed)
+    spec["program_notices"] = list(routed.get("program_notices") or [])
+    if preserve and routed.get('requirements_checklist'):
+        spec['requirements_checklist'] = copy.deepcopy(routed['requirements_checklist'])
+        spec['required_outputs'] = list(dict.fromkeys([*spec.get('required_outputs',[]),*routed.get('requested_outputs',[])]))
     spec['atomic_requirements'] = copy.deepcopy(requirements)
     correspondence = requirement_correspondence(requirements, routed, spec)
     correspondence['gate'] = 'ENFORCED' if preserve and public_requirement_coverage_enabled() else 'OBSERVE_ONLY_ABLATION'
@@ -3824,21 +4469,26 @@ def build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     if routed.get('intent') != 'clarify':
         from packages.semantic_query.typed_plan import bind_routed_plan
         catalogue, _ = _catalogue()
-
+        # Keep type binding; the original-text direction veto is part of RP.
         plan_route = routed if preserve else {**routed, 'original': ''}
         semantic_plan = bind_routed_plan(plan_route, spec, {i['id']: i for i in catalogue})
         if semantic_plan is not None:
             spec['semantic_plan'] = semantic_plan
     return spec
 
+
 def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
+    school_extrema = routed.get('intent')=='school_eval' and _school_dimension_extrema_request(question)
+    if routed.get('intent') == 'unavailable':
+        return dict(operation='unavailable', business_status='UNAVAILABLE', required_outputs=['direct_answer'],
+                    requested_result_statistics=[], program_notices=[])
     if routed.get("intent") == "public_task":
         from packages.semantic_query.public_tasks import answer_spec
         return answer_spec(routed)
     outputs = list(routed.get("requested_outputs") or ["direct_answer"])
     preserve = requirement_preservation_enabled()
     if not preserve:
-        question = ""
+        question = ""  # Compile the existing task fields without literal additions.
     restoring = bool(routed.get("revision_restore")) or not preserve
     operation = routed.get("intent")
     raw_metric = routed.get("metric") or routed.get("metric_info") or routed.get("metric_set")
@@ -3879,7 +4529,9 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     analysis_text = re.sub(r"(?:不解释|不说明)[^，,。；;：:！？!?\n]*", " ", analysis_text)
     explicit_analysis = any(token in analysis_text for token in analysis_tokens)
     analysis_excluded = not explicit_analysis and any(token in question for token in analysis_tokens)
-
+    # A model-supplied output preference must not turn a plain fact lookup into
+    # an unsolicited essay.  Item facts expand only when the user asks for it.
+    # A wholly negated analysis request also overrides a model output hint.
     wants_analysis = False if summary_only or analysis_excluded else (
         explicit_analysis
         if granularity in {"item", "item_set"}
@@ -3888,7 +4540,8 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     if not preserve:
         wants_analysis = "analysis" in outputs
     explicit_chart_request = _explicit_chart_request(question)
-
+    # Charts are optional artifacts and must be explicitly requested by the
+    # user; a model draft cannot silently widen a text answer into a chart.
     wants_charts = explicit_chart_request is True or restoring and "charts" in outputs
     assertion = _scope_assertion_text(question)
     chart_derived_result = bool(
@@ -3905,7 +4558,8 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     scoring_method_comparison_requested = bool(
         operation == "school_eval"
         and granularity == "overall"
-
+        # The scope mask intentionally removes explanatory clauses containing
+        # 口径, so read this explicit explanation request from the original text.
         and re.search(r"(?:请|并|同时)(?:同时)?(?:说明|解释|比较).{0,80}(?:83题|全部题|所有题).{0,12}(?:直接求均值|直接均值|平均).{0,25}(?:口径|一样|相同|同一种|区别|不同)", question)
     )
     causal_attribution_requested = bool(
@@ -3916,7 +4570,8 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
                 r"|(?:造成|导致|引起|影响|归因).{0,20}(?:政策|措施|干预)",
                 assertion,
             )
-
+            # The generic negation mask also catches the “不是” inside
+            # “是不是”; retain this affirmative causal question explicitly.
             or re.search(
                 r"(?:是不是|是否|能否|能不能).{0,30}(?:政策|措施|干预).{0,20}(?:造成|导致|引起|影响)",
                 question,
@@ -3925,7 +4580,7 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
     )
     dimension_extrema_requested = (
         operation == "school_eval" and granularity == "overall"
-        and _school_dimension_extrema_request(question)
+        and school_extrema
     )
     include_dimensions = bool(
         granularity == "overall" and not count_only
@@ -4032,10 +4687,17 @@ def _build_answer_spec(question: str, routed: Dict[str, Any]) -> Dict[str, Any]:
         "bind_to_question": True,
     }
 
+
 def bind_rule_output_scope(
     question: str, routed: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    pass
+    """Bind explicit rule-mode output requirements before contract creation.
+
+    The legacy rule router does not own presentation defaults.  Recompute the
+    AnswerSpec from the current question so a previous semantic/model output
+    preference cannot leak into this request, and so an absent legacy field is
+    never interpreted as "charts by default".
+    """
     bound = dict(routed)
     from packages.semantic_query.semantic_preflight import atomic_requirements
     requirements = atomic_requirements(question)
@@ -4048,20 +4710,22 @@ def bind_rule_output_scope(
             and len(_scope_years(question)) == 1
             and len(_literal_school_name_spans(question)) + len(_literal_region_spans(question)) == 1
             and not (bound.get('metric') or bound.get('metric_set') or bound.get('metric_info'))):
-
+        # G0 consumes the same explicit pair as G1/G2. Execution already supports it.
         bound.update(target_dimension=None, target_dimensions=list(pair))
     answer_spec = build_answer_spec(question, bound)
     if bound.get("intent") == "region_ranking" and not re.search(
         r"有效候选学校|候选学校数|有效学校数|学校数|多少所(?:有效)?学校|样本数|参与学校数",
         _scope_assertion_text(question),
     ):
-
+        # G0 keeps the full trusted ranking population for computation and
+        # replay, but the public answer must not add an unrequested count.
         answer_spec["rule_hide_unrequested_ranking_population"] = True
     bound["requested_outputs"] = list(
         answer_spec.get("required_outputs") or ["direct_answer"]
     )
     bound["requested_result_statistics"] = list(answer_spec.get("requested_result_statistics") or [])
     return bound, answer_spec
+
 
 _DROP_KEYS = {
     "base64",
@@ -4074,6 +4738,7 @@ _DROP_KEYS = {
     "execution_receipt",
     "transaction_trace",
 }
+
 
 def _evidence_value(value: Any, depth: int = 0) -> Any:
     if depth > 6:
@@ -4090,9 +4755,12 @@ def _evidence_value(value: Any, depth: int = 0) -> Any:
         return value
     return str(value)
 
+
 def common_evidence_packet(result: Dict[str, Any]) -> Dict[str, Any]:
     keep = {
+        "program_notices",
         "task_outputs",
+        "profile_required_elements",
         "task_analysis",
         "plan_fingerprint",
         "catalogue_coverage",
@@ -4189,8 +4857,13 @@ def common_evidence_packet(result: Dict[str, Any]) -> Dict[str, Any]:
         if result.get(key) is not None
     }
 
+
 def _only_mean_and_school_count(question: str) -> bool:
     return bool(re.search(r"只(?:给|报|列).{0,18}(?:均分|得分).{0,18}(?:学校数|学校数量)", question))
+
+
+DIMENSION_COMPONENT_WRITING_RULE='一级维度事实卡的dimension_components说明组成与采集状态：已覆盖的组成部分不得写“未提供”，可写“已包含在××维度得分中”或“当年未采集，不计入”；组成关系不代表二级维度的单独分数，单独分数只使用对应topic事实。\n'
+
 
 def _writer_prompt(
     question: str,
@@ -4316,7 +4989,10 @@ def _writer_prompt(
             scope_instruction += "单题学校排名逐校报告该指标的登记值或标准分及单位，不含跨校均值，不得称为校均或学校等权平均；正文不要抄写内部字段名或枚举值。\n"
         if any(q.get("statistic") == "template_weighted_score" for q in (answer_spec.get("public_plan") or {}).get("queries", [])):
             scope_instruction += "学校得分是模板加权分：维度内有效题项平均，总体按有效维度权重汇总；不是对多所学校等权平均。\n"
-        scope_instruction += "逐项报告task_outputs中每个所问对象、年份、指标、统计量及单位；派生差值按标签中的左右操作数方向说明，排名同分按证据规则。不要遗漏中间学校或第二年度。\n"
+        if not (requirement_preservation_enabled() and evidence.get('requirement_cards')):
+            scope_instruction += "开放式评估必须逐项写出profile_required_elements四张事实卡：整体得分和有效学校数、全国比较、省级排名、最强和最弱维度（并列均列出，缺失须说明）。两地区水平比较以得分为主，学校数只在AnswerSpec明确要求时追加。未采集题项明确写当年未采集。逐项报告task_outputs中每个所问对象、年份、指标、统计量及单位；派生差值按标签中的左右操作数方向说明，排名同分按证据规则。不要遗漏中间学校或第二年度。\n"
+        else:
+            scope_instruction += "逐项报告task_outputs及requirement_cards中的工具事实和单位；未采集题项明确写当年未采集，派生差值按左右操作数方向说明，同分按工具规则。\n"
     if answer_spec.get("operation") == "school_compare" and answer_spec.get("include_dimensions"):
         scope_instruction += "并列给出两校综合分、前校减后校分差，以及证据中每个维度的两校分数。\n"
     if answer_spec.get("granularity") == "dimension_pair":
@@ -4335,6 +5011,19 @@ def _writer_prompt(
         scope_instruction += "列出要求的每条记录及候选数，说明按证据中的指标和口径排名。\n"
     if "教师培训" in question and "教育教学" in str(evidence.get("target_dimension") or ""):
         scope_instruction += "说明教育教学衡量课堂组织与考试评价，教师培训属于不同维度，不能代替其得分。\n"
+    scope_instruction += '名次必须照ranking_scope.label限定范围：comparison_set只是在所比较的N个地区中第k，不能写全国第k；只有31省级行政区完整名册的排名可称全国名次。R11当年未采集只指单个题项；整体和维度得分仍按当年已采集题项计算，不得写得分未采集或维度未采集。\n'
+    if any(n.get('all_items_uncollected') for n in evidence.get('task_outputs') or []):
+        scope_instruction += '二级维度所含题项当年全部未采集的条目，只说明该年题项未采集；不报告有效学校数，也不作样本过少判断。其余年份按各自的有效事实报告。\n'
+    if answer_spec.get('include_dimensions') and answer_spec.get('operation')=='school_eval':
+        scope_instruction += '按六维事实卡明确指出所问最强或最弱方面及得分，并列均列出；不得说没有维度拆分。\n'
+    scope_instruction += "逐项回答所问事实，数值以 required_facts 和 task_outputs 为准。事实中已有数值的题项、学校数和分项必须逐项写出名称、数值与单位，不得称未提供或无法判断；指标名称照实际查询的题项、二级或一级维度，不得换成其父级或别的维度。只在执行结果确实缺失时说明无数据；不要把需求卡、内部状态或字段名写进正文。\n"
+    scope_instruction += "数值0是有效填报值，逐项按证据单位写出，例如0台；不能写成无数据、未填或未采集。只有对应项为null或明确标为缺失/未采集时才说明无数据，另一项缺失不能覆盖已有的0值。\n"
+    if any(f.get('dimension_components') for f in evidence.get('required_facts') or []):
+        scope_instruction += DIMENSION_COMPONENT_WRITING_RULE
+    if evidence.get('profile_required_elements'):
+        from packages.semantic_query.requirement_checklist import PROFILE_ELEMENTS
+        scope_instruction += '必须写入正文的要素：'+ '；'.join(str(i+1)+'）'+label for i,(_,label) in enumerate(PROFILE_ELEMENTS))+'。四项各写成正文句子，最强和最弱维度均列名称和分数，并列均列出；不能仅放在表格。缺数据的项明确说明。\n'
+    scope_instruction += '评价词必须有对应比较卡片：偏高、偏低、领先、落后、较好只可依据实际返回的全国/省内/比较地区基准或名次，并写明比较对象。没有对应比较卡片时只陈述分数，不自行设定高低阈值。\n'
     return (
         "你是教育数字化分析助手。普通产品与G1/G2使用同一语义实现、证据投影和生成器。\n"
         f"{treatment}\n"
@@ -4346,9 +5035,11 @@ def _writer_prompt(
         "直接输出中文最终答复。"
     )
 
+
 _MEASURED_NUMBER_RE = re.compile(
     r"(?<![A-Za-z0-9])(-?\d+(?:\.\d+)?)\s*(人/台|台/人|Mbps|课时|年|分|台|所|人|个|项|名|位|%|％|次|间)"
 )
+
 
 def _normalized_number(value: str) -> str:
     try:
@@ -4359,18 +5050,20 @@ def _normalized_number(value: str) -> str:
         number = 0.0
     return format(number, ".15g")
 
+
 def _allowed_numbers(question: str, evidence: Dict[str, Any]) -> set[str]:
     raw = json.dumps(evidence, ensure_ascii=False) + " " + question
     return {
-
+        # This pattern has no capture groups; the whole match is the number.
         _normalized_number(match.group(0))
         for match in re.finditer(r"(?<![A-Za-z0-9])-?\d+(?:\.\d+)?", raw)
     }
 
+
 def _supported_absolute_difference_measurement(
     answer: str, match: re.Match[str], evidence: Dict[str, Any]
 ) -> bool:
-    pass
+    """Accept a correctly directed magnitude such as '低0.65分' for diff=-0.65."""
     difference = evidence.get("diff")
     if not isinstance(difference, (int, float)) or not difference:
         return False
@@ -4391,8 +5084,9 @@ def _supported_absolute_difference_measurement(
     direction = r"(?:低|少|下降|减少)(?:了|约)?$" if difference < 0 else r"(?:高|多|上升|增加)(?:了|约)?$"
     return bool(re.search(direction, preceding))
 
+
 def _states_not_teacher_ratio(answer: str) -> bool:
-    pass
+    """Accept ordinary negations while keeping the Q59 score/ratio boundary."""
     for denial in re.finditer(r"不是|并非|不等于|不代表|不能|不可|非", answer):
         clause = re.split(r"[，。；;!?！？]", answer[denial.end():denial.end() + 30], maxsplit=1)[0]
         ratio = re.search(r"教师.{0,8}(?:比例|占比)|(?:比例|占比).{0,8}教师", clause)
@@ -4400,12 +5094,14 @@ def _states_not_teacher_ratio(answer: str) -> bool:
             return True
     return False
 
+
 def _states_each_year_filter(answer: str) -> bool:
     return bool(re.search(
         r"各自当年|分别按.{0,24}当年|"
         r"(?:两年|两期|各年|每年|各期|分别|20\d{2}年(?:和|与|、|及)20\d{2}年).{0,24}(?:各自)?当年",
         answer,
     ))
+
 
 def verify_answer_text(
     text: str,
@@ -4422,9 +5118,12 @@ def verify_answer_text(
     answer = str(text or "").strip().replace("−", "-").replace("－", "-").replace("减去", "减")
     if verify_new_constraints:
         from packages.semantic_query.fact_assertions import _SUBTRACTION_FORMULA
-
+        # Lexical scanners must not read a binary minus as the right operand's
+        # sign. The complete parsed equation still receives Decimal checking.
         answer = _SUBTRACTION_FORMULA.sub(lambda m: m[1]+(m[2] or '')+'减'+m[3]+(m[4] or '')+m[5]+m[6]+(m[7] or ''), answer)
-
+    # Reuse the public parser's generic affirmative dimension aliases for
+    # verification. Keep the provider/page text unchanged; values must still
+    # bind to the correct measurement, not merely occur somewhere in the body.
     if answer_spec.get('granularity') == 'dimension_pair':
         for name, span in sorted(_explicit_dimension_aliases(answer), key=lambda p:len(p[1]), reverse=True):
             if name in (evidence.get('target_dimensions') or []) and span != name:
@@ -4464,7 +5163,8 @@ def verify_answer_text(
     typed_allowed = None if typed_values is None else {
         unit: {_normalized_number(token) for value in values for token in (str(value), f"{value:.2f}")}
         for unit, values in typed_values.items()}
-
+    # Calendar years are scope identities, not measurement values.  Only a
+    # year actually present in the request/execution contract is accepted.
     scope_years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", question))
     for key in ("year", "year_a", "year_b", "requested_year"):
         if evidence.get(key) is not None:
@@ -4478,7 +5178,7 @@ def verify_answer_text(
         if (verify_new_constraints and match.group(2)=='位' and match.group(1).isdigit()
                 and re.search(r'(?:保留|精确到|舍入到)$',answer[:match.start()])
                 and re.match(r'(?:小数)?[）)]?(?:[，,。；;\n]|$)',answer[match.end():])):
-            return True
+            return True  # Explicit precision syntax, not a measured person count.
         if match.group(2) == "年" and match.group(1) in scope_years:
             return True
         if any(_normalized_number(match.group(1))==_normalized_number(p['token']) and match.group(2)==p['unit'] for p in arithmetic_allowances):
@@ -4521,13 +5221,15 @@ def verify_answer_text(
     if answer_spec.get("prohibit_unsupported_causal_claims"):
         for token in causal_tokens:
             for claim in re.finditer(re.escape(token), answer):
-
+                # Negation belongs to this clause; a disclaimer elsewhere
+                # must not hide an affirmative causal statement.
                 prefix = re.split(r"[。；;！!？?\n，,]|但是|然而|但", answer[:claim.start()])[-1]
                 denied = re.search(r"(?:不能|不可|不应|不宜|不据此|无法|没有证据|未有证据|未证实|不代表|不表示|不支持|不证明|不推断|不用于推断|不用来推断|不作为推断|不解释为|不是|不作|不做|并非)(?:[^。；;！!？?\n]{0,22})$", prefix)
                 suffix = re.split(r"[。；;！!？?\n，,]|但是|然而|但", answer[claim.end():])[0]
                 denied = denied or (re.search(r"(?:不对|未对)[^。；;！!？?\n]*$", prefix)
                                      and re.search(r"(?:作|做|进行).{0,6}(?:推断|推测|归因|判断|分析)", suffix))
-
+                # In "不对两者作因果推断", the action precedes the claim
+                # token. Keep negation local to the same clause/contrast span.
                 denied = denied or (
                     re.search(r"(?:不对|未对)[^。；;！!？?\n]{0,22}(?:作|做|进行)\s*$", prefix)
                     and re.match(r"\s*(?:关系)?(?:推断|推测|归因|判断|分析)", suffix)
@@ -4719,7 +5421,8 @@ def verify_answer_text(
                 for p in arithmetic_allowances)
             if expected_diff is None or (_normalized_number(str(expected_diff)) not in answer_numbers and not proved_relation):
                 failures.append("dimension_pair_answer_difference_missing")
-
+            # Check an explicitly stated direction without rejecting an
+            # equivalent signed formula or inferring a missing model judgment.
             for left, right in ((names[0], names[1]), (names[1], names[0])):
                 relative = float(rows[left]) - float(rows[right])
                 for claim in re.finditer(re.escape(left) + r'(?:的)?(?:维度)?(?:得分)?(?:为)?[【】]*'
@@ -4801,7 +5504,9 @@ def verify_answer_text(
         if verify_new_constraints and arithmetic_allowances and not arithmetic_failures:
             comparison_failures=[f for f in comparison_failures if f!='dimension_compare_answer_difference_direction']
         if verify_new_constraints and 'unconfirmed:request_operand_precision_unavailable' in failures:
-
+            # The slot verifier already distinguishes wrong value/unit/missing
+            # facts from compatible but unproven extra decimal places. The
+            # legacy literal-number check cannot upgrade that unknown to FAIL.
             comparison_failures=['unconfirmed:dimension_operand_precision_unavailable' if f=='dimension_compare_answer_side_value_or_count_mismatch' else f for f in comparison_failures]
         failures.extend(comparison_failures)
     if answer_spec.get("operation") == "school_compare" and answer_spec.get("granularity") == "dimension":
@@ -4842,13 +5547,14 @@ def verify_answer_text(
         "unsupported_numbers": unsupported_numbers,
         "required_facts": facts,
         "new_fact_constraints_enabled": verify_new_constraints,
-        "constraint_rule_version": "executed-facts-1.0" if verify_new_constraints else None,
+        "constraint_rule_version": "g2-executed-facts-20261011-r7-checker-roles" if verify_new_constraints else None,
     }
+
 
 def _verify_ordered_quotient_answer(
     answer: str, evidence: Dict[str, Any], derived: Dict[str, Any],
 ) -> List[str]:
-    pass
+    """Check both named operands and the written direction of a trusted quotient."""
     failures: List[str] = []
     items = [item for item in (evidence.get("item_results") or []) if isinstance(item, dict)]
     by_qid = {item.get("question_id"): item for item in items}
@@ -4860,7 +5566,8 @@ def _verify_ordered_quotient_answer(
     from packages.semantic_query.required_facts import _distinct_labels
     aliases = {qid:_distinct_labels(by_qid[qid],by_qid[right_qid if qid==left_qid else left_qid])
                for qid in (left_qid,right_qid)}
-
+    # Preserve ordinary lexical equivalents, bound to the executed metric
+    # meaning rather than a numeric identifier. A shared role stays ambiguous.
     vocabulary=(('学生',('学生',)),('教师',('教师','老师')),
                 ('交互式多媒体设备',('交互式多媒体设备','多媒体设备','交互设备','电子白板','一体机')),
                 ('班级教室总数',('班级教室',)))
@@ -4894,7 +5601,8 @@ def _verify_ordered_quotient_answer(
             tail = segment.group(0)[end:next_label]
             numbers = [m for m in number_pattern.finditer(tail)
                        if not any(a<=segment.start()+end+m.start()<b for a,b in division_spans)]
-
+            # A physical count is the statement being checked; a later quotient
+            # in the same clause (1.103448倍 / 91.43%) is not another item count.
             claimed = [
                 match for match in numbers
                 if re.match(r"\s*(?:"+physical_units+r")(?!数比)", tail[match.end():])
@@ -4902,7 +5610,8 @@ def _verify_ordered_quotient_answer(
             if not claimed:
                 for match in numbers:
                     if re.match(r'\s*[÷/]\s*\d',tail[match.end():]):
-
+                        # Division operands have an ordered formula check
+                        # below; do not bind the numerator to the nearest item.
                         continue
                     if re.match(r"\s*(?:倍|%|％)", tail[match.end():]):
                         continue
@@ -4987,14 +5696,15 @@ def _verify_ordered_quotient_answer(
             failures.append("ordered_ratio_unit_or_relation_missing")
     return failures
 
+
 def _verify_dimension_compare_answer(
     answer: str, evidence: Dict[str, Any], answer_spec: Dict[str, Any], question: str = ""
 ) -> List[str]:
-    pass
+    """Verify ordered entity/value claims; writer has no observed chart geometry."""
     failures = []
     compact = re.sub(r"[\s*`]", "", answer).replace("−", "-").replace("负", "-")
     names = [str(evidence.get("region_name_a") or ""), str(evidence.get("region_name_b") or "")]
-
+    # Administrative suffix omission is ordinary language, not an entity change.
     aliases = [re.sub(r"(?:市|省)$", "", name) for name in names]
     requested_statistics = set(answer_spec.get("requested_result_statistics") or [])
     require_counts = bool(requested_statistics & {"school_count", "school_count_a", "school_count_b"})
@@ -5069,8 +5779,9 @@ def _verify_dimension_compare_answer(
         failures.append("dimension_compare_unobserved_chart_or_extra_scope_claim")
     return list(dict.fromkeys(failures))
 
+
 def direct_answer_with_filter_scope(text, evidence, answer_spec):
-    pass
+    """Common delivery of the executed cohort; no model or verification."""
     answer=str(text or '').strip()
     school_filter=str(evidence.get('school_filter') or '')
     if school_filter and school_filter!='all' and school_filter not in answer:
@@ -5079,6 +5790,7 @@ def direct_answer_with_filter_scope(text, evidence, answer_spec):
                   else f'本次仅含登记为{school_filter}的学校。')
         answer=' '.join([answer,sentence]).strip()
     return answer
+
 
 def generate_semantic_answer(
     question: str,
@@ -5094,7 +5806,8 @@ def generate_semantic_answer(
     if mode not in _LLM_MODES:
         raise ValueError("semantic_llm_mode_required")
     constrained = mode != "g1_llm_unconstrained"
-
+    # Common, compiler-owned type/requirement metadata survives into the writer.
+    # This is scope/type binding for all groups, not a G2-only value replay.
     if answer_spec.get('semantic_plan') is not None:
         from packages.semantic_query.typed_plan import bind_types
         catalogue, _ = _catalogue()
@@ -5104,8 +5817,12 @@ def generate_semantic_answer(
     delivery_policy = mechanisms.get("delivery_policy", "block") if mode == "g2_llm_constrained" and mechanisms is not None else "block"
     from packages.semantic_query.answer_scope import project_result_scope
 
+    # Every writer sees only the current AnswerSpec value view.  This pure
+    # presentation projection does not add contract or answer verification to G1.
     evidence_result = project_result_scope(result, answer_spec, question)
     evidence = common_evidence_packet(evidence_result)
+    evidence['program_notices']=list(dict.fromkeys([
+        *(evidence.get('program_notices') or []),*(answer_spec.get('program_notices') or [])]))
     if constrained:
         from packages.semantic_query.fact_assertions import constraint_inputs, executed_population_scope, executed_arithmetic_precision
         population_scope=executed_population_scope(result)
@@ -5118,10 +5835,17 @@ def generate_semantic_answer(
         answer_spec,evidence=constraint_inputs(question,evidence,answer_spec)
     from packages.semantic_query.required_facts import required_facts
     evidence["required_facts"] = required_facts(evidence, answer_spec)
+    if requirement_preservation_enabled() and answer_spec.get('requirements_checklist'):
+        from packages.semantic_query.requirement_checklist import fact_cards
+        evidence['requirement_cards'] = fact_cards(evidence,answer_spec)
+        evidence['writing_requirements'] = [dict(requirement_id=c['requirement_id'],label=c['label'],status=c['status']) for c in evidence['requirement_cards']]
+    evidence['collection_semantics']={'uncollected_applies_to':'individual_question_items_only',
+        'score_rule':'整体和维度得分按当年已采集题项计算；不得称得分或维度未采集；无有效值只说没有有效数据。'}
     from packages.semantic_query.unit_delivery import policy, only_unit_unknown, project_text, delivery_allowed
     unit_policy = policy(evidence, answer_spec)
     if _only_mean_and_school_count(question) and answer_spec.get("operation") == "region_eval":
-
+        # The raw tool answer includes an answer count by default. Remove it
+        # from this request's writer evidence, including the prose shortcut.
         score = evidence.get("target_dimension_score") if answer_spec.get("granularity") == "dimension" else evidence.get("total_score")
         if score is None:
             score = evidence.get("total_score")
@@ -5150,6 +5874,17 @@ def generate_semantic_answer(
                 direct_additions.append(f"{row['dimension']}：前校{row['score_a']}分，后校{row['score_b']}分。")
     if direct_additions:
         evidence["direct_answer"] = " ".join([str(evidence.get("direct_answer") or "").strip(), *direct_additions]).strip()
+    from packages.semantic_query.regional_capabilities import INFERENCE, INFERENCE_NOTE, append_notices
+    evidence = append_notices(evidence, answer_spec)
+    from packages.semantic_query.request_semantics import inference_text
+    if INFERENCE.search(inference_text(question)):
+        text = evidence.get('direct_answer') or '当前请求没有可提供的描述性结果。'
+        if INFERENCE_NOTE not in text:
+            text += ' '+INFERENCE_NOTE
+        response = dict(text=text, model_invoked=False, is_fallback=False, query_mode=mode,
+                        delivery_status='ANSWER', answer_verification={'status': 'NOT_APPLICABLE_PROGRAM_DESCRIPTION'}, repaired=False)
+        return response, dict(first_answer=None, final_answer=text, calls=[], answer_spec=answer_spec,
+                              delivery_source='deterministic_descriptive_tools')
     from packages.llm_gateway.gateway import ChatRequest, call_detailed, route
     from packages.experiment_protocol.trace import stage_event
 
@@ -5162,7 +5897,7 @@ def generate_semantic_answer(
     def invoke(prompt: str, task: str) -> Dict[str, Any]:
         from time import perf_counter
         started = perf_counter()
-        stage_event("writer_call_started", task=task, model=selected.get("model"), prompt=prompt)
+        stage_event("writer_call_started", task=task, model=selected.get("model"), prompt=prompt, max_tokens=WRITER_MAX_TOKENS)
         try:
             detail = call_detailed(ChatRequest(
                 provider=selected["provider"],
@@ -5170,7 +5905,7 @@ def generate_semantic_answer(
                 task=task,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=WRITER_MAX_TOKENS,
                 expected_profile_id=expected_profile_id,
                 max_attempts=1, transport_attempts=1, single_endpoint=True,
             ))
@@ -5184,6 +5919,7 @@ def generate_semantic_answer(
                     elapsed_ms=round((perf_counter() - started) * 1000, 2))
         calls.append({
             "stage": task,
+            "max_tokens": WRITER_MAX_TOKENS,
             "provider": detail.get("provider"),
             "model": detail.get("model"),
             "finish_reason": detail.get("finish_reason"),
@@ -5237,7 +5973,9 @@ def generate_semantic_answer(
         verification = verify_answer_text(final_text, question, evidence, answer_spec, verify_new_constraints=constrained)
         stage_event("repaired_output_verification", verification=verification)
         repaired = True
-
+    # Shared presentation: an unresolved catalogue label is not a physical
+    # unit. G2 may use this path only after all factual assertions were checked;
+    # a disclaimer cannot rescue a wrong unit/value/object or other violation.
     unit_projection = None
     if unit_policy and final_text and (not output_verification or only_unit_unknown(verification)):
         before_projection = final_text
@@ -5245,11 +5983,13 @@ def generate_semantic_answer(
         unit_projection = dict(status='UNCONFIRMED', basis=unit_policy['reason'],
                                before=before_projection, after=final_text,
                                deferred_nodes=unit_policy['deferred_nodes'])
-
+    # Recheck exactly the delivered candidate, including common presentation.
     if output_verification:
         verification = verify_answer_text(final_text, question, evidence, answer_spec, verify_new_constraints=constrained)
         stage_event('final_body_verification', verification=verification)
-
+    # Empty supplier content is a common transport/delivery validity failure,
+    # not a G2 fact check. Reasoning is never promoted to an answer; no retries
+    # or unconditionally accepted first-draft fallback are introduced.
     last_detail=repair if repaired else first
     content_status={
         'status':'CONTENT' if final_text else 'EMPTY_CONTENT',
@@ -5260,7 +6000,7 @@ def generate_semantic_answer(
     }
     stage_event('writer_content_delivery', **content_status)
     limited = delivery_allowed(verification, final_text, unit_policy)
-    delivery_status = "ANSWER" if final_text and not content_status['length_exhausted'] and (verification.get("status") in {"PASS", "NOT_APPLICABLE_UNCONSTRAINED", "NOT_CHECKED_ABLATION_A2"} or limited) else "BLOCKED"
+    delivery_status = "ANSWER" if final_text and (mode=="g1_llm_unconstrained" or not content_status['length_exhausted']) and (verification.get("status") in {"PASS", "NOT_APPLICABLE_UNCONSTRAINED", "NOT_CHECKED_ABLATION_A2"} or limited) else "BLOCKED"
     public_text = final_text if delivery_status == "ANSWER" else ""
     delivery_notice = {"applied": False}
     if (delivery_policy == "warn" and output_verification
@@ -5280,6 +6020,10 @@ def generate_semantic_answer(
         delivery_status = "ANSWER"
         delivery_notice = {"applied": True, "categories": categories,
                            "first_verification_status": first_verification["status"], "codes": codes}
+    if public_text:
+        for notice in evidence.get('program_notices') or []:
+            if notice not in public_text:
+                public_text += '\n'+notice
     repair_delivery.update(selected_candidate=final_text,selected_candidate_validation=verification,
                            final_delivery_status=delivery_status,delivered_text=public_text)
     stage_event('answer_delivery_decision',delivery_status=delivery_status,verification=verification,
@@ -5297,8 +6041,10 @@ def generate_semantic_answer(
         "repaired": repaired,
         "content_delivery": content_status,
         "unit_delivery": unit_projection,
-        "delivery_completeness": "UNIT_UNRESOLVED" if unit_projection else "FULL" if delivery_status == "ANSWER" else "BLOCKED",
+        "delivery_completeness": "PARTIAL_LENGTH" if mode=="g1_llm_unconstrained" and final_text and content_status["length_exhausted"] else "UNIT_UNRESOLVED" if unit_projection else "FULL" if delivery_status == "ANSWER" else "BLOCKED",
     }
+    if mode == "g1_llm_unconstrained":
+        response["finish_reason"] = last_detail.get("finish_reason")
     trace = {
         "common_path_version": COMMON_PATH_VERSION,
         "prompt_version": WRITER_PROMPT_VERSION,

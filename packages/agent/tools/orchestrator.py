@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+"""AgentToolOrchestrator · Agent 工具调用编排执行器。
+
+职责：
+1. 分析评估结果对象类型（微观事实/排位对比/区域宏观/整校评估/教师评估）；
+2. 调度 EducationalChartBuilder 自动编写 Matplotlib 绘图脚本；
+3. 调度 ToolRegistry / PythonInterpreterTool 执行代码并捕获高清图表物料；
+4. 组装标准化的 tool_calls 轨迹与 charts 产物，无缝注入 API 报告。
+"""
+
 from typing import Any, Dict, List, Optional
 import json
 import math
@@ -5,8 +15,9 @@ import re
 from packages.agent.tools.chart_builder import EducationalChartBuilder
 from packages.agent.tools.registry import default_registry
 
+
 class AgentToolOrchestrator:
-    pass
+    """Agent 工具调用编排器。"""
 
     def __init__(self, registry=None):
         self.registry = registry or default_registry
@@ -16,7 +27,14 @@ class AgentToolOrchestrator:
         self, result: Dict[str, Any], question: Optional[str] = None,
         answer_spec: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        pass
+        """对评估结果进行工具调用编排，自动生成 Python 作图任务并执行。
+
+        返回:
+          {
+            "tool_calls": List[dict],
+            "charts": List[dict],
+          }
+        """
         tool_calls = []
         charts = []
 
@@ -28,6 +46,7 @@ class AgentToolOrchestrator:
         code = ""
         chart_title = ""
 
+        # 场景 1：学校微观指标客观事实（如平板电脑台数）
         if obj_type == "structured_task":
             from packages.semantic_query.public_tasks import chart_code
             code = chart_code(result, answer_spec)
@@ -95,6 +114,7 @@ class AgentToolOrchestrator:
                     history=history,
                 )
 
+        # 场景 2：区域学校相对排位与综合对比
         elif obj_type == "school_ranking":
             school_name = overview.get("school_name") or "目标学校"
             target_score = overview.get("total_score") or 0.0
@@ -114,6 +134,7 @@ class AgentToolOrchestrator:
                 total_schools=total_schools,
             )
 
+        # 场景 3：区域宏观数字化评估（如武汉市、新兴区大盘）
         elif obj_type == "region":
             is_region_ranking = overview.get("analysis_operation") == "region_ranking"
             contract = overview.get("contract") or result.get("contract") or {}
@@ -301,6 +322,7 @@ fig.tight_layout()
                     target_rank=target_rank,
                 )
 
+        # 场景 3.5：双校数字化多维对比评估
         elif obj_type == "school_compare":
             name_a = overview.get("school_name_a") or result.get("school_name_a") or "学校A"
             name_b = overview.get("school_name_b") or result.get("school_name_b") or "学校B"
@@ -371,6 +393,7 @@ fig.tight_layout()
                     year_desc=year_desc,
                 )
 
+        # 场景 3.55：双校具体指标事实对比
         elif obj_type == "school_item_compare":
             name_a = overview.get("school_name_a") or result.get("school_name_a") or "学校A"
             name_b = overview.get("school_name_b") or result.get("school_name_b") or "学校B"
@@ -403,14 +426,16 @@ ax.spines['right'].set_visible(False)
 fig.tight_layout()
 '''
 
+        # 场景 3.6：双区域宏观数字化横向对比评估
         elif obj_type == "region_compare":
             name_a = overview.get("region_name_a") or result.get("region_name_a") or "区域A"
             name_b = overview.get("region_name_b") or result.get("region_name_b") or "区域B"
-
+            # These are the contract-bound selected values.  A broader overall
+            # score or absent sample count must never replace a dimension value.
             selected_a = overview.get("comparison_value_a")
             selected_b = overview.get("comparison_value_b")
             if answer_spec is None:
-
+                # Legacy callers predate the selected-value public projection.
                 selected_a = selected_a if selected_a is not None else overview.get("total_score_a")
                 selected_b = selected_b if selected_b is not None else overview.get("total_score_b")
             if selected_a is None or selected_b is None:
@@ -467,6 +492,7 @@ fig.tight_layout()
                     difference=overview.get("diff"),
                 )
 
+        # 场景 3.7：单区域两期年度重复截面变化
         elif obj_type == "region_longitudinal":
             reg_name = overview.get("region_name") or result.get("region_name") or "目标区域"
             y_a = str(overview.get("year_a") or result.get("year_a") or "基准年")
@@ -513,6 +539,7 @@ fig.tight_layout()
                 target_dimension=target_dimension,
             )
 
+        # 场景 3.8：全国各省份教育数字化水平横向排行榜
         elif obj_type == "national_ranking":
             year = str(overview.get("year") or result.get("year") or "2023")
             dim = overview.get("target_dimension") or result.get("target_dimension")
@@ -537,11 +564,12 @@ fig.tight_layout()
                     tiers=tiers,
                 )
 
+        # 场景 4：整校数字化综合评估 或 教师多维评估
         else:
             name = overview.get("school_name") or overview.get("teacher_id") or "评估对象"
             tid = overview.get("teacher_id")
             if tid:
-                teacher_alias = {"T001": "示例教师一", "T002": "示例教师二", "T003": "示例教师三", "T004": "示例教师四"}.get(tid, "")
+                teacher_alias = {"T001": "张老师", "T002": "李老师", "T003": "王老师", "T004": "赵老师"}.get(tid, "")
                 if teacher_alias:
                     name = f"教师 {tid}（{teacher_alias}）"
             dims = []
@@ -608,6 +636,7 @@ fig.tight_layout()
                     values=vals,
                 )
 
+        # 若生成了有效的作图代码，则调用本地 python_interpreter 工具执行
         if code:
             tool_res = self.registry.call(
                 "python_interpreter",
@@ -623,7 +652,10 @@ fig.tight_layout()
             "charts": charts,
         }
 
+
+# 全局编排器单例
 orchestrator = AgentToolOrchestrator()
+
 
 def get_orchestrator() -> AgentToolOrchestrator:
     return orchestrator

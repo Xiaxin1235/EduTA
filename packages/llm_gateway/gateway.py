@@ -1,3 +1,15 @@
+"""模型网关（M06）：统一多厂商接入、任务路由、降级容错。
+
+设计：
+- 供应商配置在 providers.json（密钥只来自环境变量 key_env，禁止硬编码）。
+- route(task)：按 capable_tasks + priority 选主供应商；失败自动切换备份。
+- cross_check(prompt, n=2)：双模型交叉校验（高利害评估题用），返回各响应与是否一致。
+- 依赖 OpenAI 兼容客户端：有 openai 库用之，否则退化为 httpx；两者都没有时抛清晰的
+  GatewayUnavailable 提示而非烂堆栈。
+
+本模块验收只要求可导入、路由逻辑正确（不需要真实 API key）。
+"""
+
 import hashlib
 import json
 import os
@@ -16,28 +28,46 @@ try:
 except ImportError:
     httpx = None
 
+
 class GatewayError(Exception):
-    pass
+    """统一网关异常。"""
 
     def __init__(self, msg, provider=None, cause=None):
         super().__init__(msg)
         self.provider = provider
         self.cause = cause
 
+
 class GatewayUnavailable(GatewayError):
-    pass
+    """没有任何可用供应商/客户端（缺 key 或缺库）。"""
+
 
 class GatewayTLSVerificationError(GatewayError):
-    pass
+    """TLS validation failed; never change context or retry endpoints."""
+
 
 class GatewayTransientError(GatewayError):
-    pass
+    """上游连接被重置/中断等可重试的网络故障。
+
+    与普通 GatewayError 的区别在于：调用方应当快速重试，而不是在
+    「SSL 上下文 × 鉴权头组合」里把同一个长请求反复重发。长报告生成
+    单次耗时可达 1–3 分钟，无节制重发会把一次失败放大成数分钟等待。
+    """
+
 
 class GatewayConnectError(GatewayTransientError):
-    pass
+    """连接尚未建立就失败的套接字级错误（拒绝/权限/路由/DNS 解析）。
+
+    与 GatewayTransientError（连接建立后被中断）的区别：请求根本没有发出，
+    不存在长文本重发或重复计费风险，短退避重试即可。此类错误几乎都是本机
+    网络环境问题——代理软件未运行或正在切换模式、fake-ip DNS 无人接管、
+    防火墙拦截出站——而不是上游模型服务故障，错误信息应引导用户检查本机
+    代理/防火墙，而不是让用户误以为中转站挂了。
+    """
+
 
 def _guard_experiment_outbound(entry_point: str) -> None:
-    pass
+    """Fail closed for every configured experiment identity not allowing LLM I/O."""
     from packages.experiment_protocol import (
         experiment_allows_llm_entry_point,
         experiment_blocks_llm_outbound,
@@ -48,10 +78,12 @@ def _guard_experiment_outbound(entry_point: str) -> None:
         record_llm_blocked(entry_point)
         raise GatewayUnavailable("configured_experiment_mode_disallows_llm_entry_point")
 
+
 def _record_experiment_outbound(entry_point: str) -> None:
     from packages.experiment_protocol import record_llm_outbound
 
     record_llm_outbound(entry_point)
+
 
 _CONNECTION_ERROR_MARKERS = (
     "remotedisconnected",
@@ -66,6 +98,7 @@ _CONNECTION_ERROR_MARKERS = (
     "服务器中断连接",
 )
 
+
 def _is_connection_error(exc: BaseException) -> bool:
     name = type(exc).__name__.lower()
     if any(marker in name for marker in ("remotedisconnected", "connectionreset",
@@ -75,22 +108,27 @@ def _is_connection_error(exc: BaseException) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in _CONNECTION_ERROR_MARKERS)
 
+
+# “连接根本无法建立”的套接字级错误标记（Windows WinError / POSIX errno）。
+# 这类错误与 SSL 上下文、鉴权头组合无关，继续轮换组合重试没有意义，
+# 应按 GatewayConnectError 上抛，交给上层短退避重试并给出本机网络诊断。
 _SOCKET_CONNECT_MARKERS = (
-    "winerror 10013",
-    "winerror 10049",
-    "winerror 10061",
-    "winerror 10064",
-    "winerror 10065",
+    "winerror 10013",   # WSAEACCES：套接字访问被拒（本机代理/防火墙接管流量时常见）
+    "winerror 10049",   # WSAEADDRNOTAVAIL
+    "winerror 10061",   # WSAECONNREFUSED
+    "winerror 10064",   # WSAEHOSTDOWN
+    "winerror 10065",   # WSAEHOSTUNREACH
     "connection refused",
     "actively refused",
     "getaddrinfo failed",
     "no route to host",
     "network is unreachable",
-    "errno 111",
-    "errno 113",
-    "errno 101",
-    "errno 13]",
+    "errno 111",        # ECONNREFUSED
+    "errno 113",        # EHOSTUNREACH
+    "errno 101",        # ENETUNREACH
+    "errno 13]",        # EACCES
 )
+
 
 def _is_socket_connect_error(exc: BaseException) -> bool:
     text = str(exc).lower()
@@ -99,10 +137,15 @@ def _is_socket_connect_error(exc: BaseException) -> bool:
         text += " " + str(reason).lower()
     return any(marker in text for marker in _SOCKET_CONNECT_MARKERS)
 
+
+# 常见代理软件 fake-ip DNS 假地址段：Clash/Mihomo 默认 198.18.0.0/16（含 /15 兼容），
+# sing-box 默认 192.0.2.0/24，部分工具用 28.0.0.0/8。目标域名解析落在这些段里，
+# 说明系统 DNS 已被代理接管；此时连接失败大概率是代理内核没在接管流量。
 _FAKE_IP_NETWORKS = ("198.18.0.0/15", "192.0.2.0/24", "28.0.0.0/8")
 
+
 def _fakeip_hint(url: str) -> str:
-    pass
+    """连接失败时检测目标域名是否解析到 fake-ip 假地址段，是则附加排障提示。"""
     try:
         import ipaddress
         import socket
@@ -126,8 +169,13 @@ def _fakeip_hint(url: str) -> str:
         pass
     return ""
 
+
+# 超时与输出预算的可调下限。推理型模型（如 GLM-5.x-Flash / qwen3.8-max）在长报告
+# 解读上需要更长的墙钟时间和更大的输出预算，28s/2048 会把预算烧在 reasoning 上导致空应答。
+# 实测省域宏观长报告单次生成耗时 84–160 秒，故默认取 180。
 DEFAULT_TIMEOUT_S = int(os.environ.get("TEACHER_EVAL_LLM_TIMEOUT_S", "180"))
 MAX_TOKENS_CEILING = int(os.environ.get("TEACHER_EVAL_LLM_MAX_TOKENS_CEILING", "8192"))
+
 
 @dataclass
 class ChatRequest:
@@ -148,6 +196,7 @@ class ChatRequest:
     single_endpoint: bool = False
     http_event_sink: object = None
 
+
 def _builtin_providers_path():
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "providers.json")
     if os.path.isfile(here):
@@ -161,8 +210,10 @@ def _builtin_providers_path():
         pass
     return here
 
+
 def user_config_path():
     return str(secure_credentials.storage_path())
+
 
 def load_store() -> dict:
     try:
@@ -170,14 +221,16 @@ def load_store() -> dict:
     except secure_credentials.SecureCredentialError as exc:
         raise GatewayUnavailable(str(exc)) from None
 
+
 def _write_store(store: dict) -> None:
     try:
         secure_credentials.save_store(store, path=user_config_path())
     except secure_credentials.SecureCredentialError as exc:
         raise GatewayUnavailable(str(exc)) from None
 
+
 def load_user_config() -> dict:
-    pass
+    """当前启用的那一套（扁平，供发请求用）。"""
     store = load_store()
     profiles = store.get("profiles") or []
     if not profiles:
@@ -188,16 +241,20 @@ def load_user_config() -> dict:
             return dict(p)
     return dict(profiles[0])
 
-PRESETS = {
 
+PRESETS = {
+    # Endpoint addresses are user-profile data, not executable defaults.  A
+    # security-hardened package therefore carries model/key hints only and
+    # remains fail-closed until an explicit api_base is saved by the user.
     "deepseek": {"model": "deepseek-chat", "key_env": "DEEPSEEK_API_KEY"},
     "qwen": {"model": "qwen-plus", "key_env": "QWEN_API_KEY"},
     "kimi": {"model": "moonshot-v1-8k", "key_env": "KIMI_API_KEY"},
     "openai": {"model": "gpt-4o-mini", "key_env": "OPENAI_API_KEY"},
 }
 
+
 def normalize_key(raw: str) -> str:
-    pass
+    """去掉粘贴带来的引号、Bearer、空白、零宽字符。"""
     if raw is None:
         return ""
     s = str(raw)
@@ -206,11 +263,12 @@ def normalize_key(raw: str) -> str:
     s = s.strip().strip("\"'").strip()
     if s.lower().startswith("bearer "):
         s = s[7:].strip()
-    s = "".join(s.split())
+    s = "".join(s.split())  # 去掉中间换行/空格
     return s
 
+
 def normalize_base(raw: str) -> str:
-    pass
+    """统一成 OpenAI 兼容根地址（尽量落到 .../v1），不要带 /chat/completions。"""
     if not raw:
         return ""
     s = str(raw).strip().strip("\"'").rstrip("/")
@@ -233,10 +291,11 @@ def normalize_base(raw: str) -> str:
             raise GatewayError("gateway_unsafe_endpoint")
     except ValueError:
         raise GatewayError("gateway_unsafe_endpoint") from None
-
+    # 中转站填首页时自动补 /v1。
     if s and "/v1" not in lower:
         s = s.rstrip("/") + "/v1"
     return s
+
 
 def _ssl_context():
     import ssl
@@ -246,11 +305,13 @@ def _ssl_context():
     except Exception:
         return ssl.create_default_context()
 
+
 def _auth_header_sets(api_key: str):
     headers = {"Accept": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     return [headers]
+
 
 def _http_json(
     method: str, url: str, api_key: str, payload=None, timeout: int = 120,
@@ -272,7 +333,7 @@ def _http_json(
     except Exception:
         raise GatewayTLSVerificationError("gateway_tls_context_failed") from None
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
-    headers = {"Accept": "application/json", "User-Agent": "EduTA/1.0.1"}
+    headers = {"Accept": "application/json", "User-Agent": "TeacherEval/1.0"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     if body is not None:
@@ -299,7 +360,7 @@ def _http_json(
         except json.JSONDecodeError:
             raise GatewayError("gateway_response_not_json") from None
         if isinstance(data, dict) and data.get("error"):
-
+            # Never echo a remote response: it can reflect Authorization data.
             raise GatewayError("gateway_upstream_error")
         return data if isinstance(data, dict) else {"data": data}
     except GatewayError:
@@ -325,9 +386,11 @@ def _http_json(
             raise GatewayTransientError("gateway_connection_interrupted") from None
         raise GatewayError("gateway_request_failed") from None
 
+
 def _looks_html(raw: str) -> bool:
     s = (raw or "").lstrip().lower()
     return s.startswith("<!doctype") or s.startswith("<html")
+
 
 def _api_error_message(raw: str, status: int = 0) -> str:
     try:
@@ -349,8 +412,9 @@ def _api_error_message(raw: str, status: int = 0) -> str:
         return f"中转站限流（429）：{msg}。接口是通的，请稍后再试，不要改地址。"
     return msg
 
+
 def _candidate_bases(api_base: str) -> list:
-    pass
+    """用户已写 /v1 时只打这一条，避免落到网站前端 HTML。"""
     base = normalize_base(api_base)
     if not base:
         return []
@@ -371,15 +435,18 @@ def _candidate_bases(api_base: str) -> list:
     add(base + "/openai/v1")
     return out
 
+
 def _chat_url(api_base: str) -> str:
     base = _candidate_bases(api_base)[0] if _candidate_bases(api_base) else normalize_base(api_base)
     if base.lower().endswith("/chat/completions"):
         return base
     return base.rstrip("/") + "/chat/completions"
 
+
 def _new_id() -> str:
     import uuid
     return uuid.uuid4().hex[:10]
+
 
 def _public_profile(p: dict) -> dict:
     key = p.get("api_key") or ""
@@ -393,8 +460,14 @@ def _public_profile(p: dict) -> dict:
         "has_api_key": bool(normalize_key(key)),
     }
 
+
 def save_user_config(cfg: dict) -> dict:
-    pass
+    """按名称保存整套配置。
+
+    - 名称已存在：只更新这一套
+    - 名称不存在：新建一套（不会改其他档案）
+    - overwrite=True 且带 id：才覆盖下拉框选中的那一套
+    """
     from urllib.parse import urlsplit
     try:
         candidate = urlsplit(normalize_base(cfg.get("api_base") or ""))
@@ -445,6 +518,7 @@ def save_user_config(cfg: dict) -> dict:
     _write_store(store)
     return public_status()
 
+
 def activate_profile(profile_id: str) -> dict:
     store = load_store()
     if not any(p.get("id") == profile_id for p in store.get("profiles") or []):
@@ -452,6 +526,7 @@ def activate_profile(profile_id: str) -> dict:
     store["active"] = profile_id
     _write_store(store)
     return public_status()
+
 
 def delete_profile(profile_id: str) -> dict:
     store = load_store()
@@ -462,11 +537,13 @@ def delete_profile(profile_id: str) -> dict:
     _write_store({"active": active, "profiles": profiles})
     return public_status()
 
+
 def _mask(key: str) -> str:
     return "已加密" if key else ""
 
+
 def _endpoint_from_user(user: dict) -> Optional[dict]:
-    pass
+    """Resolve one already-selected profile without re-reading the config store."""
     provider = (user.get("provider") or "custom").strip() or "custom"
     preset = PRESETS.get(provider, {})
     key = normalize_key(user.get("api_key") or "")
@@ -485,12 +562,14 @@ def _endpoint_from_user(user: dict) -> Optional[dict]:
         return None
     return {"provider": provider, "api_base": base, "api_key": key, "model": model}
 
+
 def active_endpoint() -> Optional[dict]:
-    pass
+    """当前真正用来发请求的地址/密钥（用户配置优先，不依赖供应商 id 匹配）。"""
     return _endpoint_from_user(load_user_config())
 
+
 def public_status() -> dict:
-    pass
+    """Return metadata without decrypting any saved credential."""
     storage = secure_credentials.storage_status(path=user_config_path())
     try:
         store = secure_credentials.public_store(path=user_config_path())
@@ -524,10 +603,13 @@ def public_status() -> dict:
         "note": "配置已用 Windows 当前用户 DPAPI 加密；旧明文配置不会读取或迁移，请本人重新填写保存。",
     }
 
+
 def _load_providers(path=None):
     if path is None:
         path = _builtin_providers_path()
-
+    # Security-hardened distributions intentionally omit providers.json so an
+    # upstream URL is not baked into the package.  An active user profile still
+    # supplies provider/model/base at runtime; no profile means no LLM route.
     if os.path.isfile(path):
         with open(path, encoding="utf-8") as f:
             providers = json.load(f)["providers"]
@@ -544,7 +626,7 @@ def _load_providers(path=None):
             "priority": 0,
             "capable_tasks": ["chat", "reasoning", "analysis"],
         }
-
+        # 若用户选了内置供应商，覆盖其 api_base/model/key
         replaced = False
         out = []
         for p in providers:
@@ -566,8 +648,9 @@ def _load_providers(path=None):
         return out
     return providers
 
+
 def _get_key(provider_cfg) -> Optional[str]:
-    pass
+    """优先用户配置文件，其次环境变量。"""
     if provider_cfg.get("api_key"):
         return provider_cfg["api_key"]
     user = load_user_config()
@@ -580,16 +663,18 @@ def _get_key(provider_cfg) -> Optional[str]:
         return os.environ.get(env)
     return None
 
+
 def _client_for(provider_cfg):
-    pass
+    """按可用库构造客户端。返回 (client, kind)。kind ∈ {'openai','httpx','urllib'}"""
     if openai is not None:
         return openai, "openai"
     if httpx is not None:
         return httpx, "httpx"
     return None, "urllib"
 
+
 def _content_text(value) -> str:
-    pass
+    """Normalize common OpenAI-compatible content shapes without guessing prose."""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -616,8 +701,9 @@ def _content_text(value) -> str:
         return ""
     return str(value)
 
+
 def _strict_json_object_text(value) -> str:
-    pass
+    """Return canonical JSON only when the whole value is one JSON object."""
     if isinstance(value, dict):
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     raw = _content_text(value).strip()
@@ -634,8 +720,13 @@ def _strict_json_object_text(value) -> str:
         return ""
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
+
 def _extract_payload(data, *, allow_reasoning_json: bool = False) -> dict:
-    pass
+    """解析上游响应，保留正文与完成状态（finish_reason / usage / 推理字符数）。
+
+    保留这些字段是为了区分「上游真的返回空」和「输出预算被 reasoning 吃光而截断」，
+    两者需要不同的处置：前者是上游异常，后者应扩容重试。
+    """
     if not isinstance(data, dict):
         raise GatewayError("gateway_response_invalid_object")
     if data.get("error"):
@@ -672,11 +763,13 @@ def _extract_payload(data, *, allow_reasoning_json: bool = False) -> dict:
         "reasoning_chars": len(str(reasoning)),
     }
 
+
 def _extract_content(data) -> str:
     return _extract_payload(data)["content"]
 
+
 def _request_payload(req: ChatRequest) -> dict:
-    pass
+    """Keep short official DeepSeek structured calls out of default thinking mode."""
     from urllib.parse import urlparse
     payload = {
         "model": req.model,
@@ -690,11 +783,12 @@ def _request_payload(req: ChatRequest) -> dict:
         payload["thinking"] = {"type": "disabled"}
     return payload
 
+
 def _urllib_call(req: ChatRequest) -> dict:
     import time
     payload = _request_payload(req)
     if req.single_endpoint:
-
+        # Explicit one-transport requests never try aliases, fallback bases or retries.
         url = req.api_base.rstrip("/") + "/chat/completions"
         if req.http_event_sink:
             req.http_event_sink("started", {"url": url, "payload": payload})
@@ -714,7 +808,8 @@ def _urllib_call(req: ChatRequest) -> dict:
     for base in _candidate_bases(req.api_base):
         url = base.rstrip("/") + "/chat/completions"
         tried.append(url)
-
+        # 对临时上游不可用（502/503/504/temporarily unavailable/overloaded）自动重试；
+        # 超时多为长报告 + 推理型模型的正常耗时，先原预算重试一次再判定失败。
         transport_attempts = max(1, min(2, int(req.transport_attempts)))
         for attempt in range(transport_attempts):
             try:
@@ -761,12 +856,15 @@ def _urllib_call(req: ChatRequest) -> dict:
                 if is_transient and attempt + 1 < transport_attempts:
                     time.sleep(2.0)
                     continue
-
+                # 已经打到真 API（限流直接报出，不盲目切换路径）
                 if "限流" in str(e) or "rate_limit" in msg:
                     raise
                 if is_transient:
                     if isinstance(e, GatewayConnectError):
-
+                        # Preserve the socket-level class after the bounded
+                        # retry.  The public ping endpoint uses this class to
+                        # distinguish a local route/proxy failure from an
+                        # ordinary request error.
                         raise GatewayConnectError(
                             f"{e}（已自动重试 1 次仍失败。请求尚未到达上游，通常是本机网络或代理软件状态问题，"
                             f"而非模型服务故障；请检查代理软件与系统代理设置后点击「重试云端大模型」。）",
@@ -784,8 +882,9 @@ def _urllib_call(req: ChatRequest) -> dict:
                 break
     raise GatewayError((str(last) if last else "调用失败") + "；已尝试：" + " 、 ".join(tried))
 
+
 def _http_call(client, req: ChatRequest):
-    pass
+    """httpx 路径：OpenAI 兼容 /chat/completions。"""
     entry_point = f"httpx:{req.task or 'chat'}"
     _guard_experiment_outbound(entry_point)
     url = _chat_url(req.api_base)
@@ -800,8 +899,9 @@ def _http_call(client, req: ChatRequest):
         allow_reasoning_json=req.task in {"semantic_parser", "experiment_parser"},
     )
 
+
 def _openai_call(client, req: ChatRequest):
-    pass
+    """openai 库路径（OpenAI 兼容 api_base）。"""
     entry_point = f"openai:{req.task or 'chat'}"
     _guard_experiment_outbound(entry_point)
     c = client.OpenAI(api_key=req.api_key, base_url=normalize_base(req.api_base), timeout=float(req.timeout))
@@ -833,8 +933,14 @@ def _openai_call(client, req: ChatRequest):
         "reasoning_chars": len(_content_text(reasoning)),
     }
 
+
 def call_detailed(req: ChatRequest) -> dict:
-    pass
+    """调用单个供应商，返回正文与上游完成状态。
+
+    空应答且 `finish_reason=length`（或存在 reasoning 内容）时，按推理预算被吃光处理，
+    自动扩容重试一次；重试仍为空才交回调用方回退。这样可避免把「推理占满预算」
+    误报为「网络超时」这类错误归因。
+    """
     user_cfg = load_user_config()
     ep = _endpoint_from_user(user_cfg)
     if req.expected_profile_id:
@@ -854,7 +960,8 @@ def call_detailed(req: ChatRequest) -> dict:
         }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
         if not bind_experiment_profile_fingerprint(profile_fingerprint):
             raise GatewayUnavailable("experiment_bound_profile_changed")
-
+        # The bound profile is one atomic credential/model source. Never mix a
+        # model selected before a concurrent overwrite with a newer key/base.
         req.provider = ep["provider"]
         req.api_key = normalize_key(ep["api_key"])
         req.api_base = normalize_base(ep["api_base"])
@@ -894,7 +1001,7 @@ def call_detailed(req: ChatRequest) -> dict:
         if retry_prompt_used:
             req.messages = list(req.empty_retry_messages or ())
         try:
-
+            # 中转站对 openai SDK 的 base_url 更挑剔，默认走 urllib，兼容性最好
             result = _urllib_call(req)
         except GatewayError:
             raise
@@ -930,12 +1037,14 @@ def call_detailed(req: ChatRequest) -> dict:
     result["truncated"] = result.get("finish_reason") == "length"
     return result
 
+
 def call(req: ChatRequest) -> str:
-    pass
+    """调用单个供应商，只返回正文。缺 key / 网络错误抛 GatewayError（含 provider）。"""
     return call_detailed(req).get("content") or ""
 
+
 def route(task: str = "chat", fallback: bool = True) -> Optional[dict]:
-    pass
+    """按任务选主供应商。用户 llm_config.json 优先于内置列表。"""
     ep = active_endpoint()
     if ep:
         return {"provider": ep["provider"], "model": ep["model"]}
@@ -950,8 +1059,13 @@ def route(task: str = "chat", fallback: bool = True) -> Optional[dict]:
             return {"provider": p["id"], "model": p["model"]}
     return None
 
+
 def cross_check(prompt: str, n: int = 2) -> dict:
-    pass
+    """双模型交叉校验：取前 n 个 capable 供应商各自独立作答。
+
+    返回 {responses: [{provider, text}], agreed: bool}。
+    高利害评估题默认开启（M07 调用）。无可用模型返回 responses=[]。
+    """
     providers = sorted(_load_providers(), key=lambda p: p.get("priority", 99))
     picked = [p for p in providers if "chat" in p.get("capable_tasks", [])][:n]
     responses = []
@@ -966,8 +1080,9 @@ def cross_check(prompt: str, n: int = 2) -> dict:
     agreed = len(responses) >= 2 and responses[0]["text"].strip() == responses[1]["text"].strip()
     return {"responses": responses, "agreed": agreed}
 
+
 def interpret_report(markdown: str, question: str, result: Optional[dict] = None) -> dict:
-    pass
+    """用已配置模型解读评估或事实报告。数字仍以引擎为准，模型只写说明。"""
     routed = route("chat")
     if not routed:
         raise GatewayUnavailable("未配置模型：请在「接口配置」填写官方或中转站 API 地址与密钥")
@@ -1095,8 +1210,9 @@ def interpret_report(markdown: str, question: str, result: Optional[dict] = None
         except Exception:
             raise e
 
+
 def _empty_reason(detail: dict) -> str:
-    pass
+    """把「上游返回空」细分为可区分的归因，避免一律归因为网络超时。"""
     finish = detail.get("finish_reason")
     attempts = detail.get("attempts") or []
     reasoning = attempts[-1].get("reasoning_chars") if attempts else 0
@@ -1110,6 +1226,7 @@ def _empty_reason(detail: dict) -> str:
         return f"上游仅返回推理内容、正文为空（reasoning_chars={reasoning}，max_tokens={used}）。"
     return f"上游模型返回正文为空（finish_reason={finish or 'empty'}，max_tokens={used}）。"
 
+
 def _model_id(item) -> str:
     if isinstance(item, str):
         return item.strip()
@@ -1117,8 +1234,14 @@ def _model_id(item) -> str:
         return str(item.get("id") or item.get("name") or item.get("model") or "").strip()
     return ""
 
+
 def list_models(api_base: str = "", api_key: str = "", profile_id: str = "") -> dict:
-    pass
+    """拉取 OpenAI 兼容 /models 列表，并保持地址与密钥来自同一凭据源。
+
+    提交了明文 ``api_key`` 时使用本次请求的地址和密钥；密钥为空时忽略页面
+    提交的地址，由服务端原子读取当前活动 profile。``profile_id`` 是页面看到的
+    活动配置版本标识，若已过期则拒绝请求，避免把已保存密钥发往陈旧或临时地址。
+    """
     submitted_key = normalize_key(api_key)
     expected_profile_id = (profile_id or "").strip()
     profile_id_used = ""
@@ -1203,8 +1326,9 @@ def list_models(api_base: str = "", api_key: str = "", profile_id: str = "") -> 
         "profile_id_used": profile_id_used,
     }
 
+
 def ping(*, expected_profile_id: str = "", official_only: bool = False) -> dict:
-    pass
+    """One HTTP attempt; retain safe usage, never retry or return raw content."""
     if expected_profile_id:
         public = secure_credentials.public_store(path=user_config_path())
         if public["active"] != expected_profile_id:
@@ -1246,7 +1370,8 @@ def ping(*, expected_profile_id: str = "", official_only: bool = False) -> dict:
         data = _http_json("POST", _chat_url(ep["api_base"]), ep["api_key"], payload,
                           timeout=30, experiment_entry_point="urllib:experiment_diagnostic")
         response_received = True
-
+        # Authorization must never come back through diagnostics, including
+        # JSON-escaped echoes or the transport's redaction placeholder.
         key = normalize_key(ep["api_key"])
         variants = {key, json.dumps(key, ensure_ascii=True)[1:-1],
                     json.dumps(key, ensure_ascii=False)[1:-1]} - {""}
@@ -1278,7 +1403,9 @@ def ping(*, expected_profile_id: str = "", official_only: bool = False) -> dict:
                 "returned_model": data.get("model") if isinstance(data.get("model"), str) and len(data["model"]) <= 200 else None,
                 "cost": None, "cost_status": "NOT_ESTIMATED"}
     except GatewayError as e:
-
+        # Public diagnostics must not echo upstream URLs, raw gateway bodies,
+        # local paths, or proxy details.  Keep the real failure state, but make
+        # the reason stable enough for the UI and acceptance reports to classify.
         text = str(e).lower()
         if isinstance(e, GatewayTLSVerificationError):
             error_code = "gateway_tls_verification_failed"
@@ -1339,6 +1466,7 @@ def ping(*, expected_profile_id: str = "", official_only: bool = False) -> dict:
             "usage": {}, "usage_status": "UNAVAILABLE",
             "cost": None, "cost_status": "NOT_ESTIMATED",
         }
+
 
 if __name__ == "__main__":
     print("可用模型路由（chat 任务）：", route("chat"))

@@ -1,9 +1,12 @@
+"""Deterministic projection of reports to the user's requested answer scope."""
+
 from __future__ import annotations
 
 import copy
 import math
 import re
 from typing import Any, Dict
+
 
 _REGION_WIDE_FIELDS = {
     "bottom_schools",
@@ -71,9 +74,13 @@ _REGION_COUNT_ONLY_REMOVE_FIELDS = {
     "weakest_dim",
 }
 
-def _coded_meaning_unavailable(result: Dict[str, Any]) -> bool:
 
+def _coded_meaning_unavailable(result: Dict[str, Any]) -> bool:
+    # Without the source coding table, even a boolean/category-looking value
+    # must remain an opaque raw code.  Do not infer meaning from a partial
+    # fixture or a stale catalogue annotation.
     return result.get("coding_status") == "source_missing"
+
 
 def _school_fact_direct_answer(result: Dict[str, Any], value_view: str) -> str:
     school = str(result.get("school_name") or "该校")
@@ -98,8 +105,10 @@ def _school_fact_direct_answer(result: Dict[str, Any], value_view: str) -> str:
     suffix = f"{value}{unit}" if unit else str(value)
     return f"{school}{year}年“{metric}”的原始作答值为{suffix}。"
 
+
 _ITEM_RESULT_FIELDS = {"question_id", "metric_name", "target_value", "unit", "fact_data_status", "coding_status"}
 _DERIVED_RESULT_FIELDS = {"operation", "left_qid", "right_qid", "value", "unit"}
+
 
 def _school_item_set_direct_answer(result: Dict[str, Any]) -> str:
     school = str(result.get("school_name") or "该校")
@@ -137,6 +146,7 @@ def _school_item_set_direct_answer(result: Dict[str, Any]) -> str:
         text += "缺少相应题项的编码表，原始编码不作数量或类别解释。"
     return text
 
+
 def _region_item_direct_answer(result: Dict[str, Any]) -> str:
     region = str(result.get("region_name") or result.get("short_name") or "该区域")
     year = str(result.get("year") or "所选年份")
@@ -170,6 +180,7 @@ def _region_item_direct_answer(result: Dict[str, Any]) -> str:
     if value_view == "raw_value":
         return f"{region}{year}年各校“{metric}”的平均值为{score}{unit}{count_text}。"
     return f"{region}{year}年“{metric}”的学校等权问卷归一平均得分为{score}分{count_text}。"
+
 
 def _region_overall_direct_answer(result: Dict[str, Any], question: str = "") -> str:
     region = str(result.get("region_name") or result.get("short_name") or "该区域")
@@ -207,6 +218,7 @@ def _region_overall_direct_answer(result: Dict[str, Any], question: str = "") ->
     agg_label = "全部作答池化均分" if result.get("aggregation") == "answer_pooled_mean" else "学校等权均分"
     return f"{region}{year}年数字化综合{agg_label}为{score}分{denominator_text}。"
 
+
 def _region_median_direct_answer(result: Dict[str, Any], granularity: str, target_stat: str) -> str:
     region = str(result.get("region_name") or result.get("short_name") or "该区域")
     year = str(result.get("year") or result.get("requested_year") or "所选年份")
@@ -231,6 +243,7 @@ def _region_median_direct_answer(result: Dict[str, Any], granularity: str, targe
         text += f"有效作答{result['answer_count']}条。"
     return text
 
+
 def _region_school_count_direct_answer(result: Dict[str, Any]) -> str:
     region = str(result.get("region_name") or result.get("short_name") or "该区域")
     year = str(result.get("year") or result.get("requested_year") or "所选年份")
@@ -244,10 +257,11 @@ def _region_school_count_direct_answer(result: Dict[str, Any]) -> str:
         return f"{region}{year}年{scope}没有可核验的有效学校数。"
     return f"{region}{year}年{scope}的有效学校数为{school_count}所。"
 
+
 def _project_scalar_scope(
     result: Dict[str, Any], answer_spec: Dict[str, Any]
 ) -> Dict[str, Any]:
-    pass
+    """Project the public result and writer evidence without altering verification input."""
     projected = copy.deepcopy(result)
     granularity = str(answer_spec.get("granularity") or "overall")
     operation = str(answer_spec.get("operation") or "")
@@ -372,7 +386,14 @@ def _project_scalar_scope(
 
     if operation == "school_fact" and granularity == "item":
         value_view = str(answer_spec.get("value_view") or "raw_value")
-
+        # ``fact_engine`` uses ``dimension`` for the catalogue classification
+        # of a question (for example q1 belongs to 数字资源).  The semantic
+        # contract uses the same field name for the requested analysis scope.
+        # Once an overall/dimension conversation switches to one item, exposing
+        # the catalogue classification as ``dimension`` makes a correctly
+        # cleared item scope look as though it inherited the previous dimension.
+        # Keep the catalogue fact as metadata and reserve the public scope fields
+        # for the actual item request.
         metric_dimension = str(projected.get("metric_dimension") or projected.get("dimension") or "").strip() or None
         projected["metric_dimension"] = metric_dimension
         projected["dimension"] = None
@@ -556,6 +577,9 @@ def _project_scalar_scope(
             projected["conclusion"] = projected["direct_answer"]
     return projected
 
+
+
+# These are public data fields, not a recursive dump of execution evidence.
 _IDENTITY_FIELDS = {
     "_id", "object_type", "analysis_operation", "operation", "semantic_operation",
     "school_id", "school_name", "region_name", "short_name", "region_type",
@@ -579,8 +603,10 @@ _OPERATIONS = {
 }
 _ALIASES = {"school_evaluation": "school_eval", "region_evaluation": "region_eval"}
 
+
 def _pick(payload: Dict[str, Any], fields: set) -> Dict[str, Any]:
     return {key: copy.deepcopy(value) for key, value in payload.items() if key in fields}
+
 
 def _rows(rows: Any, fields: set, target: str = "") -> list:
     return [
@@ -588,11 +614,13 @@ def _rows(rows: Any, fields: set, target: str = "") -> list:
         if isinstance(row, dict) and (not target or row.get("dimension") == target)
     ]
 
+
 def _effective_spec(answer_spec: Dict[str, Any]) -> Dict[str, Any]:
     spec = copy.deepcopy(answer_spec)
     operation = _ALIASES.get(spec.get("operation"), spec.get("operation"))
     spec["operation"] = operation
-
+    # Evaluation and comparison scores are never raw questionnaire answers.
+    # The parser/AnswerSpec owner must also bind this before contract creation.
     if operation in _OPERATIONS - {"school_fact"}:
         spec["value_view"] = "normalized_score"
     elif not spec.get("value_view") or spec.get("value_view") == "raw":
@@ -603,16 +631,19 @@ def _effective_spec(answer_spec: Dict[str, Any]) -> Dict[str, Any]:
         spec["output_focus"] = "school_count"
     return spec
 
-def _boundary_result(result: Dict[str, Any], status: str) -> Dict[str, Any]:
 
+def _boundary_result(result: Dict[str, Any], status: str) -> Dict[str, Any]:
+    # A pending clarification is not a business AnswerSpec or an old answer.
     public = _pick(result, {"reason", "missing", "next_prompt"})
     public["business_status"] = status
     if status == "CLARIFY":
         public["clarify"] = True
     return public
 
+
 def _scope_status(result: Dict[str, Any]) -> str:
     return str(result.get("business_status") or result.get("fact_data_status") or "ANSWER")
+
 
 def _include_dimensions(spec: Dict[str, Any]) -> bool:
     return bool(
@@ -621,8 +652,10 @@ def _include_dimensions(spec: Dict[str, Any]) -> bool:
         or "dimension_scores" in (spec.get("requested_result_statistics") or [])
     )
 
+
 def _number(value: Any) -> str:
     return "无数据" if value is None else str(value)
+
 
 def _requested_count_fields(spec: Dict[str, Any], question: str) -> set:
     requested = set(spec.get("requested_result_statistics") or [])
@@ -631,6 +664,7 @@ def _requested_count_fields(spec: Dict[str, Any], question: str) -> set:
     if re.search(r"有效作答(?:数|条数)|作答分母|多少条有效作答", question):
         requested.add("answer_count")
     return requested
+
 
 def _pair_answer(public: Dict[str, Any], operation: str, count_only: bool) -> str:
     unit = "所" if count_only else "分"
@@ -702,15 +736,26 @@ def _pair_answer(public: Dict[str, Any], operation: str, count_only: bool) -> st
     if not count_only:
         for label, key in (("有效学校数", "school_count"), ("有效作答数", "answer_count")):
             if operation == "region_compare" and key == "school_count":
-                continue
+                continue  # Already attached to each named region above.
             if public.get(f"{key}_a") is not None or public.get(f"{key}_b") is not None:
                 text += f"两侧{label}分别为{_number(public.get(key + '_a'))}、{_number(public.get(key + '_b'))}。"
     if operation == "region_longitudinal":
         text += "两期为独立年度截面，不代表同一批学校。"
     return text
 
+
 def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], question: str = "") -> Dict[str, Any]:
-    pass
+    from packages.semantic_query.regional_capabilities import append_notices
+    return append_notices(_project_result_scope_impl(result, answer_spec, question), answer_spec)
+
+
+def _project_result_scope_impl(result: Dict[str, Any], answer_spec: Dict[str, Any], question: str = "") -> Dict[str, Any]:
+    """Project verified computation into a fresh, allowlisted public value view.
+
+    G1 calls the same pure projection without acquiring a production contract.
+    Contract/replay verification remains the caller's pre-projection obligation.
+    Neither a hidden complete result nor an old report is a public-scope oracle.
+    """
     if result.get("object_type") == "structured_task":
         from packages.semantic_query.public_tasks import project
         public=project(result,answer_spec)
@@ -727,7 +772,8 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
     if operation not in _OPERATIONS:
         raise ValueError("unsupported_public_projection_operation")
     from packages.analysis_contract.schema import validate_projection_binding
-
+    # Check the supplied contract view before compatibility normalization can
+    # erase a mismatched public request (for example raw vs normalized).
     validate_projection_binding(result, answer_spec)
     base = _project_scalar_scope(result, spec)
     public = _pick(base, _IDENTITY_FIELDS | _CONTROL_FIELDS)
@@ -777,11 +823,12 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
             public.pop("difference_basis", None)
             left, right = base.get("school_count_a"), base.get("school_count_b")
             if operation == "region_longitudinal":
-
+                # Keep actual execution values so alias tampering remains detectable.
                 left, right = base.get("comparison_value_a", left), base.get("comparison_value_b", right)
             for key in ("total_score_a", "total_score_b", "total_diff", "score_diff", "answer_count_a", "answer_count_b", "target_value_a", "target_value_b"):
                 public.pop(key, None)
-
+            # Legacy compare's diff is a score delta even for count. Derive the
+            # requested count delta only from the verified side counts.
             if operation == "region_compare":
                 public["diff"] = left - right if left is not None and right is not None else None
             public["comparison_value_type"] = "effective_school_count"
@@ -789,10 +836,14 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
             left = base.get("comparison_value_a", base.get("total_score_a"))
             right = base.get("comparison_value_b", base.get("total_score_b"))
             if granularity == "dimension":
-
+                # Existing chart/page consumers call these total_score_a/b,
+                # but region_compare stores the SELECTED dimension here.
+                # Keep these aliases; the unrelated overall_score fields and
+                # nested complete evaluations are excluded by the whitelist.
                 public.update(_pick(base, {"target_dimension_score_a", "target_dimension_score_b"}))
                 if operation == "school_compare":
-
+                    # Keep legacy chart aliases scoped to the selected dimension.
+                    # The full-template overall scores stay private replay inputs.
                     public["total_score_a"] = left
                     public["total_score_b"] = right
                     public["diff"] = round(left - right, 2) if left is not None and right is not None else None
@@ -810,9 +861,13 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
             if (operation == "region_compare" and granularity == "dimension" and not count_only
                     and "difference" in (spec.get("requested_result_statistics") or [])
                     and base.get("difference_basis") == "raw_means_then_round" and public.get("diff") is not None):
-
+                # One selected dimension is the primary executed statistic.
+                # Old packets may carry a display-means subtraction in its row;
+                # reuse the executed delta without masking other binding errors.
                 selected = public["dimensions_comparison"]
-
+                # region_compare's bound a/b operands define its default order.
+                # Absence is normal for engine receipts; an explicit conflicting
+                # direction remains an error rather than being overwritten.
                 direction = base.get("comparison_direction", public["comparison_direction"])
                 if len(selected) != 1 or direction != "primary_minus_secondary" or public.get("value_unit") != "分":
                     raise ValueError("public_dimension_delta_scope_binding_mismatch")
@@ -828,7 +883,8 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
             if spec.get("chart_requested"):
                 public["radar_data_a"] = {row["dimension"]: row.get("score_a") for row in public["dimensions_comparison"]}
                 public["radar_data_b"] = {row["dimension"]: row.get("score_b") for row in public["dimensions_comparison"]}
-
+        # A comparison route still computes a signed delta for verification.
+        # Publish it only when the question actually asks for that statistic.
         if (operation == "region_compare" and granularity == "dimension" and question and not count_only
                 and "difference" not in (spec.get("requested_result_statistics") or [])):
             for key in ("diff", "total_diff", "score_diff", "difference_basis"):
@@ -839,11 +895,12 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
         if operation == "region_longitudinal" and status == "ANSWER" and spec.get("causal_attribution_requested"):
             public["direct_answer"] += "仅凭两期独立年度截面数据，无法判断变化是否由该政策造成。"
     elif operation == "school_ranking":
-
+        # Existing rule-only school placement query, not a new contract or
+        # semantic operation. Never publish the executor's neighbouring schools.
         public["answer_scope"]["include_dimensions"] = False
         public.update(_pick(base, {"rank", "total_schools", "top_pct", "beat_pct", "percentile", "total_score"}))
         if spec.get("chart_requested"):
-
+            # The existing ranking chart draws this population reference line.
             public.update(_pick(base, {"region_avg", "diff"}))
         school = public.get("school_name") or "该校"
         region = public.get("region_name") or public.get("short_name") or "该区域"
@@ -856,13 +913,15 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
         public.update(_pick(base, {"target_rank", "target_top_n", "school_count", "ranking_spec"}))
         if hide_population:
             public.pop("school_count", None)
-        public.pop("school_name", None)
+        public.pop("school_name", None)  # A returned ranked school is not a new focus.
         public["ranking_items"] = _rows(base.get("ranking_items"), _RANK_FIELDS)
         target_rank, top_n = base.get("target_rank"), base.get("target_top_n")
         if target_rank is not None:
             rank = base.get("school_count") if target_rank == -1 else target_rank
             if rank is None and target_rank == -1 and len(public["ranking_items"]) == 1:
-
+                # A second projection of an already scoped last-place answer
+                # has no public population count. Preserve only its selected
+                # row, never infer a last rank from an arbitrary partial list.
                 row = public["ranking_items"][0]
                 selected = base.get("target_school")
                 row_id = row.get("school_id", row.get("id"))
@@ -939,8 +998,11 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
             and re.search(r"多少分|均分|均值|平均|得分|分数|中位|正中间|中间位置", question)
         )
         if strict_score_scope:
-
-            if "school_count" not in requested_statistics:
+            # A dimension mean's already executed denominator is evidence for
+            # that same score, including when it was not a separate request.
+            if "school_count" not in requested_statistics and not (
+                granularity == 'dimension' and spec.get('target_stat') == 'mean'
+            ):
                 public.pop("school_count", None)
             if "answer_count" not in requested_statistics:
                 public.pop("answer_count", None)
@@ -961,18 +1023,28 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
                 public["direct_answer"] = f"{public.get('school_name')} {public.get('year')}年{label}得分为{_number(score)}分，覆盖{_number(public.get('answered'))}/{_number(public.get('total_metrics'))}项。"
                 if granularity == "overall" and "dimension_extrema" in (spec.get("requested_result_statistics") or []):
                     rows = public.get("dimensions") or []
+                    from packages.core.item_collection import enabled as r11_enabled, collected_ids
+                    valid_rows = [row for row in rows if isinstance(row.get('score'), (int,float)) and math.isfinite(float(row['score']))]
+                    uncollected_dimensions = set()
+                    if r11_enabled():
+                        from scripts.school_engine import load_school_template
+                        uncollected_dimensions = {d['name'] for d in load_school_template()['dimensions']
+                            if not collected_ids(public.get('year'), [m['id'] for m in d.get('metrics', [])])}
                     if len(rows) != 6 or len({row.get("dimension") for row in rows}) != 6 or any(
-                        not isinstance(row.get("score"), (int, float)) or not math.isfinite(float(row["score"]))
+                        row.get('dimension') not in uncollected_dimensions and (
+                        not isinstance(row.get("score"), (int, float)) or not math.isfinite(float(row["score"])))
                         for row in rows
-                    ):
+                    ) or not valid_rows:
                         raise ValueError("public_projection_school_dimension_extrema_incomplete")
+                    if r11_enabled():
+                        rows = valid_rows
                     high = max(row["score"] for row in rows)
                     low = min(row["score"] for row in rows)
                     public["highest_dimensions"] = [row["dimension"] for row in rows if row["score"] == high]
                     public["lowest_dimensions"] = [row["dimension"] for row in rows if row["score"] == low]
                     public["direct_answer"] = (
                         f"{public.get('school_name')} {public.get('year')}年学校数字化综合分为{_number(score)}分，"
-                        f"六维中最高的是{'、'.join(public['highest_dimensions'])}（{high:.2f}分）。"
+                        f"{'有有效得分的维度中' if len(rows)<6 else '六维中'}最高的是{'、'.join(public['highest_dimensions'])}（{high:.2f}分）。"
                         f"最低的是{'、'.join(public['lowest_dimensions'])}（{low:.2f}分）。"
                     )
                 if granularity == "overall" and spec.get("scoring_method_comparison_requested"):
@@ -1051,8 +1123,9 @@ def project_result_scope(result: Dict[str, Any], answer_spec: Dict[str, Any], qu
     public['required_facts']=required_facts(public,spec)
     return public
 
+
 def public_numeric_evidence(result: Dict[str, Any]) -> Dict[str, Any]:
-    pass
+    """Business values only; contract IDs, weights and receipts are not answers."""
     if result.get('object_type') == 'structured_task':
         return {'task_outputs': copy.deepcopy(result.get('task_outputs') or [])}
     public = _pick(result, {
@@ -1077,7 +1150,8 @@ def public_numeric_evidence(result: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(result.get("derived_result"), dict):
         public["derived_result"] = _pick(result["derived_result"], _DERIVED_RESULT_FIELDS)
     if (result.get("answer_scope") or {}).get("operation") == "national_ranking":
-
+        # The public answer exposes only the winner. Keep the audit evidence
+        # on that same row rather than admitting numbers from the hidden list.
         winner_fields = {"province", "year", "rank", "score", "school_count", "sample_tier"}
         public["rankings"] = _rows((result.get("rankings") or [])[:1], winner_fields)
         champion = result.get("overall_champion") or {}
@@ -1087,8 +1161,9 @@ def public_numeric_evidence(result: Dict[str, Any]) -> Dict[str, Any]:
             public["total_provinces"] = result["total_provinces"]
     return public
 
+
 def project_report_scope(report: Dict[str, Any], result: Dict[str, Any], answer_spec: Dict[str, Any], question: str = "") -> Dict[str, Any]:
-    pass
+    """Rebuild public reports from the public result; discard stale composer prose."""
     public = project_result_scope(result, answer_spec, question)
     if public.get("business_status") in {"CLARIFY", "ERROR"}:
         return copy.deepcopy(public)
@@ -1098,7 +1173,7 @@ def project_report_scope(report: Dict[str, Any], result: Dict[str, Any], answer_
                 "task_analysis":public.get('task_analysis','')}
     overview = _pick(public, set(public) - _CONTROL_FIELDS - {"_id", "dimensions", "radar_data"})
     if public.get("semantic_operation") == "region_ranking" and public.get("target_rank") is not None:
-
+        # Display alias of the one selected record only; not a new school focus.
         selected = public.get("target_school") or {}
         if selected.get("school_name"):
             overview["school_name"] = selected["school_name"]
@@ -1115,16 +1190,20 @@ def project_report_scope(report: Dict[str, Any], result: Dict[str, Any], answer_
     for key in ("dimensions_comparison", "ranking_items", "radar_data_a", "radar_data_b"):
         if key in public:
             projected[key] = copy.deepcopy(public[key])
-
+    # Charts are attached and checked later by _finish against this public data.
+    # Copying pre-existing report artifacts could reintroduce a wider scope.
     return projected
 
+
 def render_scoped_markdown(result: Dict[str, Any], answer_spec: Dict[str, Any]) -> str:
-    pass
+    """Use the same projection as result/report, including pair and count views."""
     public = project_result_scope(result, answer_spec)
     if public.get("business_status") in {"CLARIFY", "ERROR"}:
         return str(public.get("next_prompt") or public.get("reason") or "请补充必要范围。")
     lines = ["# 定向回答", "", str(public.get("direct_answer") or "暂无可核验答案。")]
-
+    # The original request attached this trusted packet to the public result.
+    # Re-projecting for Markdown has no utterance and used to lose it.  Render
+    # the same catalogue explanation for rule and model modes without a call.
     packet = result.get("catalogue_coverage") or []
     requested_dims = set(answer_spec.get("target_dimensions") or [])
     if public.get("target_dimension"):

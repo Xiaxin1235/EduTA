@@ -1,5 +1,17 @@
+"""M08 · 证据合成器（Composer）：结果 + 证据 → 严谨可读报告。
+
+每维度输出：
+  - 结论句（含内联证据引用 [证据: source | period | formula]）
+  - 缺口披露（gap 显式列出）
+  - 低置信/小样本 → 只给"趋势性提示"，不给硬结论
+红线 → 显著提示，不参与评分。
+固定免责声明："辅助参考材料，供评审委员会人工复核使用"（考核性 R4）。
+两种出口：render_markdown() / render_json()。
+"""
+
 import json
 from typing import Dict, List, Optional
+
 
 def _fmt_evidence(e: dict) -> str:
     label = e.get("label") or e.get("metric", "指标依据")
@@ -15,8 +27,9 @@ def _fmt_evidence(e: dict) -> str:
         return f"[证据: {label} | 学年: {period_str}]"
     return f"[证据: {label} | {formula}]"
 
+
 def _dimension_conclusion(d: dict) -> str:
-    pass
+    """单维度叙事（不带维度名前缀，渲染层统一加）。score=None → 数据缺口；低置信 → 趋势提示。"""
     if d.get("is_redline"):
         if d.get("flagged"):
             return "已触发红线标记，本维度不参与评分，转独立人事流程。"
@@ -27,22 +40,26 @@ def _dimension_conclusion(d: dict) -> str:
     if score is None:
         gaps = "；".join(d.get("gap", [])) or "数据缺失"
         return f"数据不足以支持结论，无数据支撑（缺口：{gaps}）。"
-
+    # 低置信/小样本 → 趋势性提示
     if conf is not None and conf < 0.5:
         return f"仅作趋势性提示（置信度 {conf} 偏低，样本或覆盖不足），参考值约 {score} 分。"
     return f"得分 {score} 分（置信度 {conf}）。"
 
+
 def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
-    pass
+    """输入评估结果（M02/M07 结构），输出统一报告 dict。
+
+    证据优先级：result.dimensions[*].evidence > 外部 evidence 参数。
+    """
     if result.get("object_type") == "structured_task":
         return {"title":"定向回答", "overview":result, "task_outputs":result['task_outputs'],
-                "task_analysis":result.get('task_analysis',''), "direct_answer":result['direct_answer']}
+                "task_analysis":result.get('task_analysis',''), "program_notices":result.get('program_notices',[]), "direct_answer":result['direct_answer']}
     evidence = evidence or []
     dims = result.get("dimensions", [])
     ev_by_dim = {id(d): d.get("evidence", []) for d in dims}
-
+    # 外部证据作为兜底（同名维度合并）
     for e in evidence:
-        pass
+        pass  # 保留扩展点；当前从维度内取证据
 
     sections = []
     for d in dims:
@@ -62,14 +79,17 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
 
     redline = bool(result.get("redline_flagged"))
 
+    # 相对最弱维度提示（仅在有 ≥2 个可比维度时；低置信维度排除，避免误导）
     comparable = [s for s in sections
                   if not s["is_redline"] and s["score"] is not None
                   and (s["confidence"] or 0) >= 0.5]
     weakest = min(comparable, key=lambda s: s["score"]) if len(comparable) >= 2 else None
 
+    # 多学年趋势提示（仅列周期与总分，不做无据推断；单周期则无趋势段）
     years = result.get("school_years") or []
     obj_type = result.get("object_type") or "teacher"
 
+    # 1. 区域宏观报告
     if obj_type == "region":
         is_region_ranking = result.get("analysis_operation") == "region_ranking"
         ranking_items = result.get("ranking_items", []) if is_region_ranking else result.get("top_schools", [])
@@ -137,6 +157,7 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             ),
         }
 
+    # 1.5 双区域宏观对比报告
     if obj_type == "region_compare":
         name_a = result.get("region_name_a") or "区域A"
         name_b = result.get("region_name_b") or "区域B"
@@ -188,6 +209,7 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "disclaimer": "本横向对比报告基于两区域全量中小学在国家/省级教育数字化问卷填报的实际作答均分折算聚合生成，供宏观教育统筹与区域对标视导参考。",
         }
 
+    # 1.6 单区域两期年度重复截面变化报告
     if obj_type == "region_longitudinal":
         reg_name = result.get("region_name") or "区域大盘"
         y_a = result.get("year_a") or (years[0] if len(years) >= 1 else "基准年")
@@ -244,6 +266,7 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "disclaimer": "本报告比较同一区域两个年度的独立学校截面；学校样本可变化，仅描述观测差异，不代表同一批学校追踪、因果效应或趋势外推。",
         }
 
+    # 1.7 全国各省教育数字化水平排行榜报告
     if obj_type == "national_ranking":
         year = result.get("year", "2023")
         dim = result.get("target_dimension")
@@ -275,9 +298,10 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "overall_champion": result.get("overall_champion"),
             "charts_data": result.get("charts_data", {}),
             "sections": [],
-            "disclaimer": result.get("disclaimer", "本榜单基于各省在册中小学在全国教育数字化监测平台的接入问卷作答折算均分，供宏观教育决策与视导参考。"),
+            "disclaimer": result.get("disclaimer", "本榜单基于各省在册中小学在全国教育数字化监测平台的官方填报作答折算均分，供宏观教育决策与视导参考。"),
         }
 
+    # 2. 具体指标事实报告
     if obj_type == "school_fact":
         return {
             "title": f"学校指标事实查询 · {result.get('school_name')}",
@@ -316,9 +340,10 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "context_facts": result.get("context_facts", []),
             "history": result.get("history", []),
             "sections": [],
-            "disclaimer": "本数据源自学校在国家/省级教育数字化问卷的接入问卷作答库，供核查参考。",
+            "disclaimer": "本数据源自学校在国家/省级教育数字化问卷的官方填报作答库，供核查参考。",
         }
 
+    # 2.5 学校区域排位与对比报告
     if obj_type == "school_ranking":
         return {
             "title": f"学校区域数字化排位与对比 · {result.get('school_name')}",
@@ -348,9 +373,10 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "radar_region_data": result.get("radar_region_data", {}),
             "peer_schools": result.get("peer_schools", []),
             "sections": [],
-            "disclaimer": "本排名基于区域全量中小学在国家/省数字化问卷接入问卷作答折算均分，供教育视导与学校定位参考。",
+            "disclaimer": "本排名基于区域全量中小学在国家/省数字化问卷官方填报作答折算均分，供教育视导与学校定位参考。",
         }
 
+    # 2.8 双校数字化多维对比报告
     if obj_type == "school_compare":
         name_a = result.get("school_name_a") or "学校A"
         name_b = result.get("school_name_b") or "学校B"
@@ -390,6 +416,7 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
             "disclaimer": "本横向对比报告基于两校在国家/省级教育数字化问卷填报作答的真实评估得分生成，供学校对标互鉴与教育视导参考。",
         }
 
+    # 3. 学校或教师综合评估报告
     is_school = obj_type == "school"
     subject = "该校" if is_school else "该教师"
     report = {
@@ -422,14 +449,17 @@ def compose(result: dict, evidence: Optional[List[dict]] = None) -> dict:
     }
     return report
 
+
 def render_json(result: dict, evidence: Optional[List[dict]] = None) -> str:
     return json.dumps(compose(result, evidence), ensure_ascii=False, indent=2)
+
 
 def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
     r = compose(result, evidence)
     o = r["overview"]
     obj_type = o.get("object_type")
 
+    # 1. 区域报告
     if obj_type == "region":
         is_region_ranking = o.get("analysis_operation") == "region_ranking"
         lines = [
@@ -477,6 +507,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 1.5 双区域宏观对比报告
     if obj_type == "region_compare":
         name_a = o.get("region_name_a") or "区域A"
         name_b = o.get("region_name_b") or "区域B"
@@ -527,6 +558,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 1.6 单区域两期年度重复截面变化报告
     if obj_type == "region_longitudinal":
         name = o.get("region_name") or "区域大盘"
         y_a = o.get("year_a") or "基准年"
@@ -586,6 +618,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 2. 事实报告
     if obj_type == "school_fact":
         lines = [
             f"# {r['title']}",
@@ -615,7 +648,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
             r["disclaimer"],
             "",
         ])
-
+    # 2.5 学校区域排位报告
     if obj_type == "school_ranking":
         lines = [
             f"# {r['title']}",
@@ -652,6 +685,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 2.8 双校对比报告
     if obj_type == "school_compare":
         name_a = o.get("school_name_a") or "学校A"
         name_b = o.get("school_name_b") or "学校B"
@@ -692,6 +726,7 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 2.9 全国各省数字化大盘排行榜报告
     if obj_type == "national_ranking":
         year = o.get("year") or "2023"
         dim = o.get("target_dimension")
@@ -724,11 +759,12 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
         ])
         return "\n".join(lines)
 
+    # 3. 教师/学校综合评估
     if o.get('object_type') == 'school':
         header_target = f"学校：{o.get('school_name')}"
     else:
         tid = o.get('teacher_id') or "教师"
-        alias = {"T001": "示例教师一", "T002": "示例教师二", "T003": "示例教师三", "T004": "示例教师四"}.get(tid, "")
+        alias = {"T001": "张老师", "T002": "李老师", "T003": "王老师", "T004": "赵老师"}.get(tid, "")
         header_target = f"教师：{tid}（{alias} · {o.get('teacher_dept') or '任课组'}）" if alias else f"教师：{tid}（{o.get('teacher_dept') or ''}）"
     lines = [
         f"# {r['title']}",
@@ -758,8 +794,9 @@ def render_markdown(result: dict, evidence: Optional[List[dict]] = None) -> str:
     lines += ["", "## 免责声明", "", r["disclaimer"], ""]
     return "\n".join(lines)
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
+    # 最小拼接 demo：直接消费 M02 结果
     import os, sys
     for _s in (sys.stdout, sys.stderr):
         try:

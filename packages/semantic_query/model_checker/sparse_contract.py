@@ -1,8 +1,13 @@
+"""Sparse opinion contract. Bindings and selected public facts are checkable;
+free-text entailment and overall semantic correctness are not certified here.
+No I/O, answers, benchmark identifiers or private data.
+"""
 import copy
 import re
 
 ASPECTS=('objects','regions','indicator_hierarchy','years','statistical_scope',
          'comparison_direction','required_items','ellipsis_coreference')
+
 
 def public_facts(catalogue, schema):
     groups={}
@@ -31,6 +36,7 @@ def public_facts(catalogue, schema):
         facts[fact]=dict(state='item_specific',groups=[dict(value=v,ids=ii) for v,ii in grouped.items()])
     return facts
 
+
 def positive_matches(pattern,question,flags=0):
     matches=[]
     for m in re.finditer(pattern,question,flags):
@@ -39,9 +45,11 @@ def positive_matches(pattern,question,flags=0):
         matches.append(m)
     return matches
 
+
 def input_audit(question, candidate, catalogue, schema):
     facts=public_facts(catalogue,schema)
-
+    # Candidate values activate review of introduced restrictions; they never
+    # supply expected original requirements or prove themselves correct.
     stripped=question
     for school in candidate.get('schools',[]):
         stripped=stripped.replace(school,'学校实体')
@@ -82,7 +90,8 @@ def input_audit(question, candidate, catalogue, schema):
     if charts:add('required_items',charts[0].group(),'coarse_output','charts')
     tables=positive_matches(r'表格|制表',question)
     if tables:add('required_items',tables[0].group(),'coarse_output','table')
-
+    # Generic explicit restrictions remain literal requirements without guessing
+    # their geographic/type interpretation or inventing a database predicate.
     for clause in re.split(r'[，,。；;]',question):
         if re.search(r'仅|只|限定|不含|排除',clause):
             tokens=re.findall(r'公办|民办|农村|城市|小学|中学',clause)+[g for g in geos if g in clause]
@@ -105,8 +114,9 @@ def input_audit(question, candidate, catalogue, schema):
                             'Literal quote coverage does not prove semantic entailment.',
                             'No independent correctness certification from a model opinion.'])
 
+
 def task_summary(candidate):
-    pass
+    """Exact field projection, not a new parser, default or correctness claim."""
     outputs=copy.deepcopy(candidate.get('requested_outputs',[]))
     return dict(intent=candidate.get('intent'), schools=copy.deepcopy(candidate.get('schools',[])),
                 regions=copy.deepcopy(candidate.get('regions',[])), periods=copy.deepcopy(candidate.get('periods',[])),
@@ -116,6 +126,7 @@ def task_summary(candidate):
                 requested_outputs=outputs,
                 output_presence={name:name in outputs for name in ('direct_answer','analysis','table','charts')},
                 limitation='Summary repeats the supplied task. Null fields do not by themselves prove a missing requirement or an ambiguous user question.')
+
 
 def prompt(question,candidate,catalogue,schema,pack,json):
     audit=input_audit(question,candidate,catalogue,schema)
@@ -138,6 +149,7 @@ def prompt(question,candidate,catalogue,schema,pack,json):
         '需要引用目录条目时可增加catalogue_ids整数数组；无需引用时省略。不得根据参考或猜测补判断，不把输出类型存在性与图型/句数语义混淆。\n'
         '格式例（不是本题答案）：{"verdict":"cannot_determine","explanation":"缺少指代上下文。","issues":[{"aspect":"ellipsis_coreference","state":"uncertain","fields":["schools"],"quotes":["实际原句中的指代片段"],"reason":"未提供前文学校名称，无法核对对象。","missing_information":"所指学校名称或前文上下文"}]}\nINPUT_DATA_JSON='
         +json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(',',':')))
+
 
 def _legacy_rows(result,checker,question,normalization):
     checks=result.get('checks')
@@ -163,6 +175,7 @@ def _legacy_rows(result,checker,question,normalization):
     if isinstance(checks,dict) and set(checks)==set(ASPECTS):return checks
     raise checker.InvalidEvidence('incomplete_check_coverage')
 
+
 def validate(content,question,candidate,catalogue,schema,normalized,ids,checker,normalization):
     raw=checker._unique_json_object(content)
     normalization.update(applied=False,index_base=0,changes=[])
@@ -175,7 +188,7 @@ def validate(content,question,candidate,catalogue,schema,normalized,ids,checker,
         if not isinstance(rows,list):raise checker.InvalidEvidence('invalid_assessments')
         for row in rows:
             common={'aspect','state','fields','quotes','reason','basis'}
-
+            # Preserve old saved sparse bodies without fabricating observations.
             expected=common|({'observed','suggested'} if row.get('state')=='conflict' else ({'observed'} if 'observed' in row else set())) if isinstance(row,dict) else set()
             if not isinstance(row,dict) or set(row)!=expected:raise checker.InvalidEvidence('invalid_assessment_fields')
             aspect=row['aspect']
@@ -243,8 +256,9 @@ def validate(content,question,candidate,catalogue,schema,normalized,ids,checker,
     return dict(verdict=raw['verdict'],findings=findings,explanation=raw['explanation'],checks=checks,
                 wire_contract=wire,input_audit=audit,evidence_validation=evidence)
 
+
 def validate_issues(raw,question,candidate,catalogue,audit,normalized,ids,checker):
-    pass
+    """Problem-only wire contract; never invent aligned rows or verdicts."""
     if raw['verdict'] not in ('legal_equivalent','clearly_wrong','cannot_determine'):
         raise checker.InvalidEvidence('invalid_verdict')
     checker._reason(raw['explanation'],'empty_explanation')
@@ -299,7 +313,8 @@ def validate_issues(raw,question,candidate,catalogue,audit,normalized,ids,checke
                 if checker._same(proposal,candidate.get(field)):raise checker.InvalidEvidence('suggestion_equals_observed')
                 if field=='question_ids' and any(i not in ids for i in proposal):raise checker.InvalidEvidence('suggested_indicator_not_in_catalogue')
             else:proposals_complete=False
-
+            # This is an internal execution receipt of current task data,
+            # not an inferred observation or an added model judgment.
             findings.append(dict(field=field,observed=copy.deepcopy(candidate.get(field)),
                 original_quote=issue['quotes'][0],reason=issue['reason'],suggested_value=copy.deepcopy(proposal)))
             explicit=[c for c in audit['deterministic_candidate_contradictions'] if c['field']==field]
@@ -333,8 +348,9 @@ def validate_issues(raw,question,candidate,catalogue,audit,normalized,ids,checke
     return dict(verdict=raw['verdict'],findings=findings,explanation=raw['explanation'],checks=checks,
                 wire_contract='simple_v12',input_audit=audit,evidence_validation=evidence)
 
+
 def literal_claim_errors(text,audit,candidate):
-    pass
+    """Bounded direct fact denials, shared by old and new wire contracts."""
     errors=[];facts=audit['public_facts'];outputs=candidate.get('requested_outputs',[])
     for match in re.finditer(r'requested_outputs(?:字段)?\s*(?:仅|只)(?:含有|包含|含|有|是)\s*([A-Za-z_]+)',text):
         claimed=match[1]
@@ -349,6 +365,7 @@ def literal_claim_errors(text,audit,candidate):
         if n==facts['dimension_count']['value'] and facts['dimension_count']['state']=='present':errors.append('false_dimension_absence_in_text')
     if re.search(r'维度构成.{0,14}(?:目录|schema).{0,8}(?:均)?无依据',text) and facts['dimension_membership']['state']=='present':errors.append('false_dimension_membership_absence_in_text')
     return errors
+
 
 def evidence_audit(raw,checks,bases,audit,question,candidate,catalogue,wire):
     errors=[];unknown=[];limited=[]
@@ -390,12 +407,14 @@ def evidence_audit(raw,checks,bases,audit,question,candidate,catalogue,wire):
                 elif claim=='present':unknown.append('unproven_present_'+fact)
                 elif claim=='missing':unknown.append('absence_not_proven_'+fact)
                 else:limited.append('bounded_unknown_'+fact)
-
+    # A small explicit denial grammar, not general Chinese entailment. Match
+    # catalogue claims about dimension existence, not formula/weight gaps.
     text='\n'.join([raw['explanation']]+[c['reason'] for c in checks.values()])
     errors.extend(literal_claim_errors(text,audit,candidate))
     if wire.startswith('legacy'):
         unknown.append('legacy_missing_claims_untyped')
-
+        # Legacy responses can still be returned as model opinions. Their free
+        # prose gaps are not upgraded into typed, verified absence assertions.
     for aspect,c in checks.items():
         if c['status']=='uncertain' and wire=='sparse_v10' and not bases.get(aspect):errors.append('untyped_uncertainty_'+aspect)
     if any(r['kind'] in ('exact_chart_type','exact_sentence_count') for r in audit['requirements']):

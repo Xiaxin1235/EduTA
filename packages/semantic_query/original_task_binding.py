@@ -1,3 +1,9 @@
+"""Conservative, independent original-question binding for two school counts.
+
+This recognizer deliberately abstains outside a narrow catalogue-backed scope.
+It never reads a model candidate when forming the original-question signature.
+"""
+
 from __future__ import annotations
 
 import re
@@ -7,6 +13,7 @@ from typing import Any, Dict, Optional
 from packages.semantic_query.catalogue import load_semantic_catalogue
 from scripts.school_engine import connect
 
+
 _YEAR = re.compile(r"(?<!\d)(20\d{2})年?(?!\d)")
 _SCHOOL = re.compile(r"[\u4e00-\u9fffA-Za-z·（）()]{2,}?(?:小学|中学|幼儿园|学校)")
 _SUBTRACT = re.compile(r"前者\s*减\s*后者|前(?:一)?项\s*减\s*后(?:一)?项")
@@ -14,8 +21,9 @@ _REVERSE_SUBTRACT = re.compile(r"后者\s*减\s*前者|后(?:一)?项\s*减\s*�
 _FORWARD_PERCENT = re.compile(r"前(?:者|一?项)\s*(?:除以|÷)\s*后(?:者|一?项)\s*(?:乘以|×|\*)?\s*100\s*[%％]")
 _METHOD_OR_NEGATIVE_SCHOOL = re.compile(r"不问|不查|不看|不比较|不是|不要|别查|排除|仅举例|比如|例如|假设|假如|方法|口径|示例")
 
+
 def original_signature(question: str) -> Dict[str, Any]:
-    pass
+    """Return DETERMINATE or UNKNOWN; no candidate or conversation inheritance."""
     text = str(question or "")
     coverage = raw_pair_coverage_signature(text)
     if coverage is not None:
@@ -25,7 +33,7 @@ def original_signature(question: str) -> Dict[str, Any]:
         return pair
     if _FORWARD_PERCENT.search(text):
         return _school_device_percent_signature(text)
-
+    # Methodological/negative mentions are not a positive request.
     if re.search(r"不(?:是|要|看|问|计算|比较|展示).{0,35}(?:工作内容|多少种|前者减后者)|(?:仅|只是)(?:举例|示例|说明口径)", text):
         return {"status": "UNKNOWN", "reason": "negative_or_method_mention"}
     assertion = re.split(r"[。！？!?]", text, maxsplit=1)[0]
@@ -76,7 +84,7 @@ def original_signature(question: str) -> Dict[str, Any]:
         return {"status": "UNKNOWN", "reason": "explicit_question_id_conflict"}
     if re.search(r"(?:不是|不用|不要|排除|不含).{0,10}(?:Q\s*\d+|第\s*\d+\s*题)", text, re.I):
         return {"status": "UNKNOWN", "reason": "negated_question_id"}
-
+    # The operand phrase must occur after the two named subjects.
     subtract_mentions = list(_SUBTRACT.finditer(text))
     if len(subtract_mentions) != 1 or _REVERSE_SUBTRACT.search(text):
         return {"status": "UNKNOWN", "reason": "operand_direction_not_unique"}
@@ -98,8 +106,9 @@ def original_signature(question: str) -> Dict[str, Any]:
         "charts_required": chart_positive,
     }
 
+
 def _canonical_quantity_name(value):
-    pass
+    """Normalize bounded count paraphrases; keep actors, units and time scopes."""
     text = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", str(value or ""))
     text = text.replace("信息技术", "技术")
     text = re.sub(r"常态(?:化)?(?:教学)?应用", "常态应用", text)
@@ -107,8 +116,13 @@ def _canonical_quantity_name(value):
     text = text.replace("措施种类数", "措施数")
     return text
 
+
 def _quoted_quantity_pair(text, catalogue):
-    pass
+    """Every complete quoted count name must uniquely occur in the catalogue.
+
+    No fuzzy similarity threshold, answer values, candidate ids, or school list.
+    Units/type disambiguate count kinds from ratios, sessions and person-times.
+    """
     quotes = list(re.finditer(r'“([^“”]+)”|"([^"\n]+)"', text))
     if len(quotes) != 2:
         return None
@@ -128,20 +142,28 @@ def _quoted_quantity_pair(text, catalogue):
         if len(matches) != 1:
             return None
         item = matches[0]
-
+        # An omitted actor may use a unique catalogue measure; an explicit
+        # conflicting actor must never inherit that measure's school-leader scope.
         if 'school_leader' in (item.get('subjects') or []) and re.search(r'教师|老师|学生|教职工', text):
             return None
         result.append((quote.start(), item['id'], phrase))
     return result if result[0][1] != result[1][1] else None
 
+
 def raw_pair_coverage_signature(text):
-    pass
+    """Independent coverage of two explicitly named, catalogue-grounded records.
+
+    Only names and type metadata are read. No answer values, model draft or
+    benchmark identifiers participate in item selection. Short family aliases
+    require their management-content context; ambiguous paraphrases abstain.
+    """
     if not re.search(r"两项|两种|两条", text) or not re.search(r"原始值|照录两项值", text):
         return None
     if re.search(r"图表|画图|绘图|柱状|分析|建议|归一|标准化|综合得分|或者|或是|假设|例如|示例|为例|比较|对比", text):
         return None
     first_year = _YEAR.search(text)
-
+    # Task-extension words belong to the requested scope, not the literal
+    # institution name (for example a school containing "第三").
     scope_text = text[first_year.end():] if first_year else text
     if re.search(r"三项|第三|另外|另查|另加|再查|还有|顺便|再给|以及|不(?:要)?(?:查|查询|给出|核对|列出)|别查", scope_text):
         return None
@@ -149,7 +171,8 @@ def raw_pair_coverage_signature(text):
     if len(years) != 1:
         return None
     suffix = text[years[0].end():]
-
+    # A record label containing 学校 is not another entity. All other school
+    # mentions after the anchored school/year are outside this single-school scope.
     if _SCHOOL.search(suffix.replace('两项学校管理记录', '两项记录')):
         return None
     affirmative = re.sub(r"不(?:要)?加总(?:或说明编码含义)?|不合并|不解释编码", "", suffix)
@@ -162,7 +185,7 @@ def raw_pair_coverage_signature(text):
         rows = conn.execute("SELECT id, school_name FROM schools WHERE school_name=? AND year=?", (prefix, years[0].group(1))).fetchall()
     if len(rows) != 1:
         return None
-
+    # Keep item mentions, not instructions prohibiting interpretation/merging.
     body = re.split(r"两项原始值|两项学校管理记录|各登记了多少", text[years[0].end():], maxsplit=1)[0]
     if re.search(r"不|(?<!分)别(?:查|列|看|给)|排除|除了|三项|第三项|另加|另外", body):
         return None
@@ -219,12 +242,14 @@ def raw_pair_coverage_signature(text):
             'value_view': 'raw_value', 'derived': derived, 'charts_required': False,
             'source_fragments': [row[2] for row in grounded], 'matching_basis': matching_basis}
 
+
 def repair_record_coverage(signature, candidate, original_candidate=None):
-    pass
+    """Repair a valid draft only for the same explicitly grounded school/year."""
     identity = candidate if original_candidate is None else original_candidate
     if (signature and signature.get('matching_basis') == 'typed_catalogue_quantity_paraphrases'
             and set(identity.get('question_ids') or []) != set(signature['qids'])):
-
+        # Short paraphrases must agree with the original model's two-item set;
+        # the independent original order, rather than that array order, binds math.
         return None
     if not (signature and identity.get('schools') == [signature['school_name']]
             and [str(year) for year in identity.get('periods') or []] == [signature['year']]
@@ -249,8 +274,13 @@ def repair_record_coverage(signature, candidate, original_candidate=None):
         result['evidence'] = evidence
     return result
 
+
 def _literal_ratio_pair_signature(text):
-    pass
+    """Two unique catalogue descriptions, one explicit school/year and order.
+
+    This independent check reads neither the draft nor reference answer values.
+    It abstains when the original text cannot identify exactly two ratio items.
+    """
     if not re.search(r"第一项\s*减\s*第二项|前项\s*减\s*后项|前者\s*减\s*后者", text):
         return None
     if "百分点" not in text or re.search(r"不(?:要|算|计算|按)|示例|假设|或者|或是", text):
@@ -302,8 +332,9 @@ def _literal_ratio_pair_signature(text):
             'derived':{'operation':'subtract','left_qid':qids[0],'right_qid':qids[1],'unit':'百分点'},
             'charts_required':False, 'source_fragments':[row[2] for row in grounded]}
 
+
 def grounded_repair_candidate(signature, candidate):
-    pass
+    """Repair item mapping only when literal identity and units are determinate."""
     if not (signature.get('recoverable') and candidate.get('schools') == [signature.get('school_name')]
             and [str(year) for year in candidate.get('periods') or []] == [signature.get('year')]
             and candidate.get('value_view') == 'raw_value'
@@ -315,8 +346,9 @@ def grounded_repair_candidate(signature, candidate):
                   requested_outputs=['direct_answer'])
     return result
 
+
 def _school_device_percent_signature(text: str) -> Dict[str, Any]:
-    pass
+    """Bind an explicit ordered device percentage independently of the model."""
     if re.search(r"(?:不|无需|别)(?:要|用|计算|求|给出)?.{0,8}(?:前项|前者|百分比|比例)|后(?:者|一?项)\s*(?:除以|÷)\s*前", text):
         return {"status": "UNKNOWN", "reason": "percent_request_negated_or_conflicting"}
     assertion = re.split(r"[。！？!?]", text, maxsplit=1)[0]
@@ -354,6 +386,7 @@ def _school_device_percent_signature(text: str) -> Dict[str, Any]:
         "charts_required": False,
     }
 
+
 def route_matches(signature: Dict[str, Any], routed: Dict[str, Any], answer_spec: Dict[str, Any]) -> bool:
     if signature.get("status") != "DETERMINATE":
         return True
@@ -372,8 +405,9 @@ def route_matches(signature: Dict[str, Any], routed: Dict[str, Any], answer_spec
         and (not signature["charts_required"] or "charts" in (answer_spec.get("required_outputs") or []))
     )
 
+
 def candidate_matches(signature: Dict[str, Any], candidate: Dict[str, Any]) -> bool:
-    pass
+    """A candidate supplies identities and raw view; the question supplies direction."""
     try:
         qids = [int(qid) for qid in candidate.get("question_ids") or []]
     except (TypeError, ValueError):
@@ -388,6 +422,7 @@ def candidate_matches(signature: Dict[str, Any], candidate: Dict[str, Any]) -> b
     if declared:
         return declared == signature["derived"]
     return True
+
 
 def receipt_matches(signature: Dict[str, Any], contract: Any, result: Dict[str, Any], receipt: Any) -> bool:
     if signature.get("status") != "DETERMINATE":

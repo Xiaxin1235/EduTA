@@ -1,3 +1,5 @@
+"""Typed contract and execution-receipt schemas."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -16,6 +18,7 @@ from .capabilities import (
     SUPPORTED_STATISTICS,
 )
 
+
 @dataclass(frozen=True)
 class FieldSource:
     value: Any
@@ -23,6 +26,7 @@ class FieldSource:
     source_turn: str
     evidence_span: Optional[str] = None
     inherited_from: Optional[int] = None
+
 
 @dataclass(frozen=True)
 class AnalysisContract:
@@ -66,9 +70,12 @@ class AnalysisContract:
     secondary_period: Optional[str] = None
     temporal_mode: Optional[str] = None
     ranking_spec: Optional[Dict[str, Any]] = None
-
+    # None keeps historical contracts readable; only newly bound requests may
+    # claim a verified user-facing value view. Candidate versioning is owned
+    # by the integration lane, not by this schema implementation lane.
     value_view: Optional[str] = None
-
+    # Two requested dimensions retain the user's order; a single dimension
+    # continues to use ``dimension`` for historical contracts.
     target_dimensions: Tuple[str, ...] = ()
     region_identity: Optional[Dict[str, Any]] = None
 
@@ -326,7 +333,8 @@ class AnalysisContract:
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "AnalysisContract":
         data = dict(payload)
-
+        # Serialized contracts contain JSON integers. Coercion would hide a
+        # boolean, fractional ID or string tamper before validate() can reject it.
         data["indicator_ids"] = tuple(data.get("indicator_ids") or ())
         data["requested_outputs"] = tuple(data.get("requested_outputs") or ())
         data["requested_statistics"] = tuple(data.get("requested_statistics") or ())
@@ -339,8 +347,13 @@ class AnalysisContract:
         contract.validate()
         return contract
 
+
 def validate_projection_binding(result: Dict[str, Any], answer_spec: Dict[str, Any]) -> None:
-    pass
+    """Require completed computation checks before publishing an enforced result.
+
+    This does not create a contract, run replay, or certify scope by looking at
+    hidden data. G1 has no production identity and bypasses only this precondition.
+    """
     if result.get("contract_mode") != "enforced":
         return
     contract = result.get("contract")
@@ -409,6 +422,7 @@ def validate_projection_binding(result: Dict[str, Any], answer_spec: Dict[str, A
         raise ValueError("public_projection_statistic_mismatch")
     if contract.get("value_view") is not None and contract["value_view"] != answer_spec.get("value_view"):
         raise ValueError("public_projection_value_view_mismatch")
+
 
 @dataclass(frozen=True)
 class ExecutionReceipt:

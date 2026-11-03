@@ -1,1 +1,1 @@
-
+# apps/api 包：REST API（M09，FastAPI；未安装 fastapi 时降级为 BaseApp）

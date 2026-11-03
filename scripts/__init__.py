@@ -1,1 +1,1 @@
-
+# 占位：scripts 包（PyInstaller 对命名空间包更稳妥）。

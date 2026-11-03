@@ -1,3 +1,5 @@
+# 独立语义注释目录；评分权重与历史题面仍以 school_digitization_v1.yaml 为准。
+# 本文件不含学校作答、标准答案或归一化上下界，不改变既有计分口径。
 version: school-digitization-semantics-v1
 source_template: school_digitization_v1.yaml
 applicable_years: "2020-2023"

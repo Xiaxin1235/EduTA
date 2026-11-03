@@ -1,12 +1,15 @@
+"""Independent bounded repair targets, separate from optional model proposals."""
 import copy
 from packages.semantic_query.model_checker.sparse_contract import input_audit
+
 
 def authorize(question, candidate, catalogue, schema, validation, decision):
     out = dict(allowed=False, targets={}, original_quotes=[], basis=[],
                invalid_proposals_executable=False, model_opinion_preserved=True)
     if not validation.get('checker_available'):
         return out
-
+    # Optional proposals never supply execution targets. Their invalidity is
+    # retained, but cannot cancel a separately established literal/context fact.
     out['invalid_proposals_ignored'] = not validation.get('suggestion_validation', {}).get('valid', True)
     audit = input_audit(question, candidate, catalogue, schema)
     out['code_detected_conflicts'] = copy.deepcopy(audit['deterministic_candidate_contradictions'])
@@ -56,6 +59,7 @@ def authorize(question, candidate, catalogue, schema, validation, decision):
                     'no_independent_target_retains_original_parse_and_opinion')
     return out
 
+
 def validate_repair(question, before, after, authorization):
     if not authorization.get('allowed'): raise ValueError('no_independent_repair_authorization')
     changed = {k for k in set(before)|set(after) if before.get(k) != after.get(k)}
@@ -66,6 +70,6 @@ def validate_repair(question, before, after, authorization):
     for field, quote in (after.get('evidence') or {}).items():
         if isinstance(quote,str) and quote and quote not in question:
             raise ValueError('repair_evidence_not_original_'+field)
-
+    # Original evidence, including 前者, survives a school target correction.
     if after.get('evidence') != before.get('evidence'):
         raise ValueError('repair_changed_original_evidence')

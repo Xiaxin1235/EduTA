@@ -1,10 +1,13 @@
+"""Single source of truth for production contract capability slices."""
+
 from __future__ import annotations
 
 from typing import Optional
 
+
 SCHEMA_VERSION = "1.8"
-CATALOGUE_VERSION = "school-analytics-contract-1.0"
-RESOLVER_VERSION = "school-analytics-resolver-1.0"
+CATALOGUE_VERSION = "region-schoolfact-schooleval-regionitem-regioncompare-schoolcompare-regionlongitudinal-regionranking-contract-semanticn5adjboundaryfix-20260923"
+RESOLVER_VERSION = "region-schoolfact-schooleval-regionitem-regioncompare-schoolcompare-regionlongitudinal-regionranking-resolver-semanticn5adjboundaryfix-20260923"
 
 SUPPORTED_OPERATIONS = {
     "region_evaluation",
@@ -36,8 +39,10 @@ REGION_RANKING_SPEC = {
     "population_definition": "region_period_filter_schools_with_non_null_indicator_answers",
 }
 
+
 class CapabilityError(ValueError):
-    pass
+    """Raised when a request cannot be executed without changing its meaning."""
+
 
 def validate_region_request(
     *,
@@ -55,13 +60,15 @@ def validate_region_request(
             "不能用校名关键词把未知学校推断为公办或民办"
         )
 
+
 def filter_is_structured(school_filter: Optional[str]) -> bool:
     if not school_filter:
         return True
     return any(token in school_filter for token in SUPPORTED_STAGE_FILTERS + SUPPORTED_AREA_FILTERS)
 
+
 def public_manifest() -> dict:
-    pass
+    """Machine-readable capability catalogue shared by API clients and operators."""
     return {
         "catalogue_version": CATALOGUE_VERSION,
         "schema_version": SCHEMA_VERSION,

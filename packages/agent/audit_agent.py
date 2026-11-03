@@ -1,3 +1,17 @@
+"""质检审计智能体 (Data Audit & Critic Inspector Agent).
+
+独立负责：
+1. 数据源底座真实性溯源 (SQLite 题库/学校/作答记录物理核验)
+2. 符号计算防篡改审计 (六大维度均分、排位百分比及差值双向验算)
+3. 事实与数值零幻觉核验 (Zero-Hallucination Verified)
+4. 多模态图文互锁 (图表坐标数据点与报表事实一致性校验)
+5. 四大系统性能量化指标实时计算：
+   - Acc_Q2I: 问题到指标映射准确率
+   - Acc_calc: 指标查询与计算准确率
+   - SR_chart: 图表生成与有效画布成功率
+   - Rel_Q2MM: 多模态图文与问题相关率
+"""
+
 import ast
 import base64
 import difflib
@@ -13,16 +27,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+
 class DataAuditAgent:
-    pass
+    """质检审计智能体：专职执行数据真伪审计、计算防篡改双向校验与量化指标核算。"""
 
     def __init__(self):
-
+        # 兼容中文紧贴前后的正负数、浮点数与百分比数值提取
         self._numeric_re = re.compile(r"(?<![\d.])[-+]?\d+(?:\.\d+)?%?(?![\d.])")
 
     @staticmethod
     def _validate_image(path: Optional[str] = None, b64: Optional[str] = None) -> Tuple[bool, int, str]:
-        pass
+        """严格核验图像文件物理存在性或 Base64 解码后的格式魔数与分辨率。"""
         data = None
         if path and os.path.isfile(path):
             try:
@@ -69,22 +84,27 @@ class DataAuditAgent:
         routed_info: Optional[Dict[str, Any]] = None,
         writer_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        pass
+        """执行全链路可信度质检与学术指标量化审计。"""
         t0 = time.perf_counter()
 
         charts = charts or []
         obj_type = result.get("object_type") or report.get("object_type") or "teacher"
 
+        # 1. 数据底座物理核验 (SQLite 溯源)
         provenance = self._verify_provenance(obj_type, result, report)
 
+        # 2. 计算防篡改双向验算
         computation = self._verify_computations(obj_type, result, report)
 
+        # 3. 事实与数值零幻觉检测
         hallucination = self._verify_hallucination(result, report, llm_output, question=question, writer_context=writer_context)
 
+        # 4. 多模态图文互锁校验
         multimodal = self._verify_multimodal(report, charts)
 
         duration_ms = round((time.perf_counter() - t0) * 1000, 2)
 
+        # 5. 实时核算四大系统性能量化评价指标（动态真实核算）
         system_metrics = self._calculate_metrics(
             question=question,
             obj_type=obj_type,
@@ -133,6 +153,7 @@ class DataAuditAgent:
             verdict = "PASS"
             verdict_badge = "认证全通 · 100% 真实数据"
 
+        # 统一各检查项状态，杜绝一边写“未执行检验”一边标“通过”的自相矛盾
         c_comp_status = computation.get("status") or ("PASS" if computation.get("tamper_free") else "FAIL")
         c_hall_status = hallucination.get("status") or ("PASS" if hallucination.get("hallucination_count") == 0 else "FAIL")
         c_mm_status = multimodal.get("interlocked_status") or ("PASS" if multimodal.get("interlocked") else "NOT_APPLICABLE")
@@ -176,9 +197,11 @@ class DataAuditAgent:
         }
 
     def _verify_provenance(self, obj_type: str, result: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """连接 SQLite 检查实体、作答记录、题库与区域样本底座真实存在性。"""
         if result.get("answer_scope") and result.get("contract_mode") == "enforced":
-
+            # The production verifier already bound the execution and replay
+            # to one read snapshot. Do not open a broader, later sample here
+            # or disclose the other value view in the public audit narrative.
             from packages.analysis_contract.schema import validate_projection_binding
             try:
                 validate_projection_binding(result, result["answer_scope"])
@@ -200,7 +223,7 @@ class DataAuditAgent:
                     "summary": "未提供投影前契约溯源；不以全库在册数量替代目标范围核验"}
         verified = True
         evidence_chain = []
-        source_name = "已接入数据库 (SQLite)"
+        source_name = "本地真实数据库 (SQLite education_digitization.sqlite)"
 
         try:
             from scripts.school_engine import connect
@@ -223,7 +246,7 @@ class DataAuditAgent:
 
                     ans_c = cur.execute("SELECT count(*) FROM answers WHERE school_id = ?", (real_sid,)).fetchone()[0]
                     if ans_c > 0:
-                        evidence_chain.append(f"作答题库物理溯源: 学校 ID={real_sid} 命中 {ans_c} 条接入问卷作答记录")
+                        evidence_chain.append(f"作答题库物理溯源: 学校 ID={real_sid} 命中 {ans_c} 条教育部问卷真实作答记录")
 
                     reg = row["district"] or row["city"]
                     if reg:
@@ -243,7 +266,7 @@ class DataAuditAgent:
                     if qid:
                         q_row = cur.execute("SELECT id, content, level1_name FROM questions WHERE id = ?", (qid,)).fetchone()
                         if q_row:
-                            evidence_chain.append(f"指标题项定义核验: 题号 #{q_row['id']} [{q_row['level1_name']}] · {q_row['content']}")
+                            evidence_chain.append(f"教育部标准题库核验: 题号 #{q_row['id']} [{q_row['level1_name']}] · {q_row['content']}")
                         ans_row = None
                         if row:
                             ans_row = cur.execute("SELECT value, normalized_value FROM answers WHERE school_id = ? AND question_id = ?", (row["id"], qid)).fetchone()
@@ -316,12 +339,17 @@ class DataAuditAgent:
         }
 
     def _verify_computations(self, obj_type: str, result: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """双向验算各项均分、综合总分与排位，确保符号计算无篡改。
+        
+        每项检查具有显式 PASS / FAIL 状态；所有残差均参与阈值判定；
+        没有符合条件的检查项时返回 NOT_CHECKED，禁止虚构通过说明与伪造残差。
+        """
         if result.get("answer_scope"):
             return self._verify_scoped_computations(result, report)
         checks: List[Dict[str, Any]] = []
         residuals: List[float] = []
 
+        # 1. 检查双校/双区域/纵向对比综合总分与分差
         if obj_type in ("school_compare", "region_compare", "region_longitudinal"):
             sc_a = (
                 result.get("comparison_value_a")
@@ -377,6 +405,7 @@ class DataAuditAgent:
                             "desc": f"{dc.get('dimension')}分差核算异常 (残差={r:.4f})"
                         })
 
+        # 2. 检查单校排位与相对大盘分差
         if obj_type == "school_ranking":
             rank = result.get("rank")
             total = result.get("total_schools")
@@ -422,6 +451,7 @@ class DataAuditAgent:
                         "desc": f"相对大盘分差核算异常: {tot_sc} - {reg_avg} = {c_diff:+.2f} != {sc_diff:+.2f} (残差={res:.4f})"
                     })
 
+        # 3. 维度得分区间与均分自洽性
         dims = result.get("dimensions") or []
         if dims:
             dim_scores = []
@@ -468,6 +498,7 @@ class DataAuditAgent:
                         "desc": f"六大维度均分与总分不一致: 维度均值 {avg_dims} != 总分 {tot_sc} (残差={res_avg:.4f})"
                     })
 
+        # 4. 针对宏观区域总分的数据库独立重算验算
         if obj_type == "region" and result.get("total_score") is not None and not dims:
             reg_name = result.get("short_name") or result.get("region_name")
             years = result.get("school_years") or ([result["year"]] if result.get("year") else [])
@@ -504,6 +535,7 @@ class DataAuditAgent:
                 except Exception:
                     pass
 
+        # 5. 针对单题微观指标题项得分与存储归一值的双向验算
         if obj_type == "school_fact":
             qid = result.get("question_id")
             school_id = result.get("school_id")
@@ -551,6 +583,7 @@ class DataAuditAgent:
                         except Exception:
                             pass
 
+        # 6. 全国各省宏观排行榜防篡改与单调性验算
         if obj_type == "national_ranking":
             rankings = result.get("rankings") or []
             if len(rankings) >= 2:
@@ -573,10 +606,12 @@ class DataAuditAgent:
                     "desc": f"规模化样本榜首【{large_champ.get('province')}】在册学校数 {large_champ.get('school_count')} 所 ≥ 1000 所统计门槛"
                 })
 
+
         checks_count = len(checks)
         checks_passed = len([c for c in checks if c["status"] == "PASS"])
         details = [c["desc"] for c in checks]
 
+        # 没有进行实际数学检查时，显式返回 NOT_CHECKED，绝不伪造通过与残差
         if checks_count == 0:
             if result.get("status") == "empty_filter" or result.get("school_count") == 0:
                 return {
@@ -618,7 +653,7 @@ class DataAuditAgent:
         }
 
     def _verify_national_ranking_identity(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """Recheck the one published winner against SQLite in the legacy path."""
         conn = None
         try:
             from scripts.school_engine import connect
@@ -694,7 +729,7 @@ class DataAuditAgent:
                 conn.close()
 
     def _verify_school_ranking_identity(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """Bind the legacy rule result to its exact school/year, without a wider dump."""
         conn = None
         verified = False
         status = "FAIL"
@@ -723,7 +758,7 @@ class DataAuditAgent:
         }
 
     def _verify_scoped_computations(self, result: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
-        pass
+        """Check only published values, never infer a score from a hidden view."""
         scope = result["answer_scope"]
         operation = scope.get("operation")
         checks = []
@@ -745,13 +780,16 @@ class DataAuditAgent:
             else:
                 check("契约与公开数值视图一致", contract["value_view"] == scope.get("value_view"))
 
+        # This compares two PUBLIC surfaces. Passing it is not independent
+        # replay; replay belongs to the pre-projection contract verifier.
         from packages.semantic_query.answer_scope import public_numeric_evidence
         visible = public_numeric_evidence(result)
         overview = report.get("overview") or {}
         if overview:
             for key, value in visible.items():
                 if key in {"dimensions", "dimensions_comparison", "ranking_items"}:
-
+                    # Compare the same published fields, without weights
+                    # or other calculation-only metadata.
                     report_view = public_numeric_evidence({key: report.get(key)})
                     check(f"公开报告一致性:{key}", key in report and report_view.get(key) == value)
                 else:
@@ -830,7 +868,8 @@ class DataAuditAgent:
                 expected = round(right - left, 2) if operation == "region_longitudinal" else round(left - right, 2)
                 residual = None if delta is None else abs(delta - expected)
                 if operation == "region_compare" and not count_only and result.get("difference_basis") == "raw_means_then_round":
-
+                    # The contract replay checks the unrounded means independently.
+                    # Displayed side means can differ by one cent when subtracted.
                     verified = (result.get("contract_verification") or {}).get("status") == "PASS"
                     check("原始均值有向差值及显示精度", verified and residual is not None and residual <= 0.010000001, residual)
                 else:
@@ -867,7 +906,7 @@ class DataAuditAgent:
         llm_output: Optional[Dict[str, Any]],
         *, question: str = "", writer_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        pass
+        """事实与数值零幻觉校验。比对文本中的数字与年份是否存在于底层证据集中。"""
         text = ""
         if llm_output:
             if isinstance(llm_output, dict):
@@ -884,6 +923,9 @@ class DataAuditAgent:
                 "summary": "无生成文本，未执行文本事实与数值幻觉检验",
             }
 
+        # Recheck current text using the writer's executed-slot rules, never
+        # trust its saved PASS or permit arbitrary arithmetic over all numbers.
+        # Only the constrained writer supplies this internal server context.
         if result.get("answer_scope") and writer_context:
             spec = writer_context.get("answer_spec")
             packet = writer_context.get("evidence_packet")
@@ -891,6 +933,7 @@ class DataAuditAgent:
             if isinstance(spec, dict) and isinstance(packet, dict) and rule:
                 return self._verify_bound_text(text, question, result, spec, packet)
 
+        # 收集底座所有真实出现的合法年份与数字集合
         evidence_numbers = set()
         valid_years = set()
 
@@ -931,25 +974,30 @@ class DataAuditAgent:
         tokens_in_text = self._numeric_re.findall(text)
         for num in tokens_in_text:
             clean = num.rstrip("%")
-
+            # 基础语法常数（1-10 维度序数、100 分满分）直接放行
             if not scoped and clean in ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "100"):
                 continue
 
+            # 年份核验：4 位数且以 20 开头，必须在合法年份池或证据集中
             if len(clean) == 4 and clean.isdigit() and clean.startswith("20"):
                 if clean not in valid_years and clean not in evidence_numbers:
                     hallucinated.append(num)
                 continue
 
+            # 数值核验：比对浮点数值是否与证据库中某一数字吻合（容差 0.15）或属于合法衍生值（倍数/差值/比例）
             if clean not in evidence_numbers:
                 found = False
                 try:
                     f_val = float(clean)
-
+                    # 1. 直接比对底层证据原值（容差 0.15）
                     for ev_val in float_evidences:
                         if abs(ev_val - f_val) < 0.15:
                             found = True
                             break
 
+                    # The public view stores a signed difference.  A phrase
+                    # such as "江苏省低0.67分" is the same verified fact as
+                    # diff=-0.67, provided its direction and magnitude agree.
                     if scoped and not found:
                         from packages.semantic_query.runtime import (
                             _MEASURED_NUMBER_RE,
@@ -962,6 +1010,7 @@ class DataAuditAgent:
                             for match in _MEASURED_NUMBER_RE.finditer(text)
                         )
 
+                    # 2. 派生核验：差值 abs(x - y)
                     if not found and not scoped:
                         for x in float_evidences:
                             for y in float_evidences:
@@ -971,6 +1020,7 @@ class DataAuditAgent:
                             if found:
                                 break
 
+                    # 3. 派生核验：倍数/比值 x / y（如 11.36 / 4.55 ≈ 2.5 倍）
                     if not found and not scoped:
                         is_multiple = (
                             f"{clean}倍" in text or f"{clean} 倍" in text or
@@ -987,6 +1037,7 @@ class DataAuditAgent:
                             if found:
                                 break
 
+                    # 4. 派生核验：百分比比率 (x / y) * 100
                     if not found and not scoped and (num.endswith("%") or f"{clean}%" in text):
                         for x in float_evidences:
                             for y in float_evidences:
@@ -1024,7 +1075,8 @@ class DataAuditAgent:
         from packages.semantic_query.runtime import common_evidence_packet, verify_answer_text
         from packages.semantic_query.fact_assertions import constraint_inputs, measurements_by_unit, MEASURE
         evidence = common_evidence_packet(result)
-
+        # Only execution metadata supplements the CURRENT public values.
+        # Derived values are recalculated by constraint_inputs below.
         for key in ("executed_population_scope", "executed_arithmetic_precision"):
             if key in packet:
                 evidence[key] = packet[key]
@@ -1033,6 +1085,9 @@ class DataAuditAgent:
         violations = list(verification.get("violations") or [])
         inconclusive = list(verification.get("inconclusive") or [])
 
+        # Retain the legacy bare-number guard, with executed values and proved
+        # one-step arithmetic only. Measured numbers were already unit/scope
+        # bound above; prose numbers cannot seed an arithmetic closure.
         values = [float(v) for vs in (measurements_by_unit(evidence, spec) or {}).values() for v in vs]
         values += [float(p["token"]) for p in verification.get("arithmetic_proofs") or []]
         spans = [m.span() for m in MEASURE.finditer(text)]
@@ -1053,7 +1108,8 @@ class DataAuditAgent:
         status = "FAIL" if violations else "UNCONFIRMED" if inconclusive else "PASS"
         return {
             "status": status,
-
+            # Rule failures are not one-to-one hallucinated numeric tokens.
+            # Keep that count separate; do not fabricate a token-rate percent.
             "violation_count": len(violations),
             "hallucination_count": 0 if status == "PASS" else None,
             "hallucination_rate": 0.0 if status == "PASS" else None,
@@ -1065,7 +1121,7 @@ class DataAuditAgent:
         }
 
     def _ranking_chart_input_checks(self, report: Dict[str, Any], charts: List[Dict[str, Any]]) -> List[bool]:
-        pass
+        """Compare recorded ranking-plot inputs, never execute the recorded code."""
         overview = report.get("overview") or {}
         checks = []
         for chart in charts:
@@ -1085,7 +1141,8 @@ class DataAuditAgent:
                     name = getattr(node.targets[0], "id", None)
                     if name not in {"names", "scores", "is_targets", "region_avg"}:
                         continue
-
+                    # The chart builder reverses the series after its literal
+                    # input packet. Only that order-only transformation is allowed.
                     if isinstance(node.value, ast.Subscript) and ast.unparse(node.value) == f"{name}[::-1]":
                         continue
                     inputs[name] = ast.literal_eval(node.value)
@@ -1101,7 +1158,7 @@ class DataAuditAgent:
         return checks
 
     def _verify_multimodal(self, report: Dict[str, Any], charts: List[Dict[str, Any]]) -> Dict[str, Any]:
-        pass
+        """多模态图表真实性校验与报告表格数值互锁检测。"""
         has_chart = bool(charts)
         presentation = report.get("presentation_verification") or {}
         chart_requested = bool(presentation.get("chart_requested"))
@@ -1216,7 +1273,11 @@ class DataAuditAgent:
         duration_ms: float = 0.0,
         routed_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        pass
+        """实时动态核算当前问答的在线质检与对齐状态指标。
+        
+        严格基于具体检查状态呈现，未执行项或不适用项明确标注 NOT_CHECKED / NOT_APPLICABLE，
+        彻底取消伪准确率命名与无理由保底分数。
+        """
         charts = charts or []
 
         entities_to_check: List[str] = []
@@ -1243,7 +1304,7 @@ class DataAuditAgent:
             if tid:
                 entities_to_check.append(str(tid))
         elif obj_type == "national_ranking":
-
+            # The winner is an output, not an entity the user must name.
             for marker in ("全国", "各省", "省级地区"):
                 if marker in question:
                     entities_to_check.append(marker)
@@ -1252,6 +1313,9 @@ class DataAuditAgent:
             if year and year in question:
                 entities_to_check.append(year)
 
+        # -------------------------------------------------------------
+        # 1. 查询解析与意图实体映射置信度 (Query Resolution Confidence)
+        # -------------------------------------------------------------
         if not provenance.get("verified", False):
             q2i_score = 0.0 if not entities_to_check else 40.0
             q2i_desc = "目标实体未完全命中本地物理在册库，存在输入缺漏或歧义"
@@ -1337,6 +1401,9 @@ class DataAuditAgent:
                     q2i_status = "FAIL"
                     q2i_desc = "问题中的省份/省级地区范围与实际排名范围不一致"
 
+        # -------------------------------------------------------------
+        # 2. 符号计算双向验算一致率 (Symbolic Math Consistency)
+        # -------------------------------------------------------------
         checks_count = computation.get("checks_count", 0)
         checks_passed = computation.get("checks_passed", 0)
         mean_res = computation.get("mean_residual")
@@ -1361,6 +1428,9 @@ class DataAuditAgent:
             calc_status = "PERFECT" if calc_score >= 99.5 else "EXCELLENT"
             calc_desc = f"完成 {checks_passed}/{checks_count} 项符号数学约束验算，浮点残差 ε={mean_res:.4f}，确定性零计算漂移"
 
+        # -------------------------------------------------------------
+        # 3. 图表画布渲染完整度 (Canvas Render Integrity)
+        # -------------------------------------------------------------
         if multimodal.get("chart_required") and not multimodal.get("has_chart", False):
             chart_score = 0.0
             chart_status = "FAIL"
@@ -1387,6 +1457,9 @@ class DataAuditAgent:
                 chart_status = "PERFECT" if chart_score >= 99.0 else "GOOD"
                 chart_desc = f"已生成 {chart_count} 幅统计图（图元总计 {total_kb} KB），Active Canvas 100% 有效"
 
+        # -------------------------------------------------------------
+        # 4. 跨模态图文对齐与互锁率 (Multimodal Interlock)
+        # -------------------------------------------------------------
         h_count = hallucination.get("hallucination_count") or 0
         direct_answer = str(report.get("direct_answer") or report.get("summary") or "")
 
@@ -1438,6 +1511,9 @@ class DataAuditAgent:
             rel_status = "EXCELLENT" if rel_score >= 90 else ("GOOD" if rel_score >= 60 else "FAIL")
             rel_desc = f"文本回答与图表多维坐标对齐度 {rel_score}% (幻觉检出: {h_count})"
 
+        # -------------------------------------------------------------
+        # 5. 数值与事实幻觉率 (Hallucination Rate)
+        # -------------------------------------------------------------
         h_rate = round((hallucination.get("hallucination_rate") or 0.0) * 100, 1)
 
         return {
@@ -1486,7 +1562,9 @@ class DataAuditAgent:
             },
         }
 
+
 default_audit_agent = DataAuditAgent()
+
 
 def audit_query_result(
     question: str,
@@ -1497,7 +1575,7 @@ def audit_query_result(
     routed_info: Optional[Dict[str, Any]] = None,
     writer_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    pass
+    """快捷调用入口。"""
     return default_audit_agent.audit(
         question=question,
         result=result,
@@ -1508,13 +1586,14 @@ def audit_query_result(
         writer_context=writer_context,
     )
 
+
 def audit_output_only(
     result: Dict[str, Any],
     report: Dict[str, Any],
     charts: Optional[List[Dict[str, Any]]] = None,
     llm_output: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    pass
+    """A1 output checks without provenance, replay, or calculation checks."""
     started = time.perf_counter()
     chart_evidence = default_audit_agent._verify_multimodal(report, charts or [])
     text_evidence = default_audit_agent._verify_hallucination(result, report, llm_output)
