@@ -31,6 +31,8 @@ def prompt_text():
 
 def definitions():
     text = {'type': 'string'}
+    national_description = '全国指31个省级行政区，按学校等权统计，不含新疆生产建设兵团、香港、澳门和台湾。'
+    region_keyword = dict(text, description=national_description)
     year = {'type': 'string', 'enum': ['2020', '2021', '2022', '2023']}
     metric = {
         'target_dimension': dict(text, description='一级维度名称或目录别名'),
@@ -45,13 +47,14 @@ def definitions():
         aggregation={'type': 'string', 'enum': sorted(capabilities.SUPPORTED_AGGREGATIONS), 'default': 'school_equal_mean'})
     specs = [
         ('evaluate_region', '地区整体、一级、二级维度或题项统计，均值、中位数、极值、计数。',
-         dict(evaluation, region_keyword=text, year=year), ['region_keyword', 'year']),
+         dict(evaluation, region_keyword=region_keyword, year=year), ['region_keyword', 'year']),
         ('compare_regions', '两个及以上地区同年同口径比较。返回每个地区的原始计算结果。',
-         dict(evaluation, regions={'type': 'array', 'items': text, 'minItems': 2, 'maxItems': 31}, year=year), ['regions', 'year']),
+         dict(evaluation, regions={'type': 'array', 'items': text, 'minItems': 2, 'maxItems': 31,
+                                   'description': national_description}, year=year), ['regions', 'year']),
         ('region_series', '同一地区2至4年的独立年度截面，逐年返回计算结果。',
-         dict(evaluation, region_keyword=text, years={'type': 'array', 'items': year, 'minItems': 2, 'maxItems': 4, 'uniqueItems': True}), ['region_keyword', 'years']),
+         dict(evaluation, region_keyword=region_keyword, years={'type': 'array', 'items': year, 'minItems': 2, 'maxItems': 4, 'uniqueItems': True}), ['region_keyword', 'years']),
         ('region_change', '地区两年变化，整体/一级维度使用原纵向工具。二级/题项按两期工具值相减。',
-         dict(evaluation, region_keyword=text, year_a=year, year_b=year), ['region_keyword', 'year_a', 'year_b']),
+         dict(evaluation, region_keyword=region_keyword, year_a=year, year_b=year), ['region_keyword', 'year_a', 'year_b']),
         ('geographic_ranking', '全国31省级行政区排名或一个省内的城市排名，学校等权。兵团单列。',
          dict(metric, year=year, scope={'type': 'string', 'enum': ['national_31', 'province_cities']},
               province=text, top_n={'type': 'integer', 'minimum': 1},
@@ -115,7 +118,11 @@ class ToolExecutor:
         return values
 
     def evaluate_region(self, region_keyword, year, **values):
-        return self._region_value(region_keyword, year, self._metric(values))
+        values = self._metric(values)
+        if region_keyword == '全国':
+            identity = region_identity(dict(region_type='national'))
+            return region.evaluate_region(region_keyword, year=year, region_identity=identity, **values)
+        return self._region_value(region_keyword, year, values)
 
     def _region_value(self, entity, year, values, *, prefer_province=False, city_group=False):
         # Only the fixed geographic-path helper is used. No typed task is built.
@@ -125,7 +132,7 @@ class ToolExecutor:
 
     def compare_regions(self, regions, year, **values):
         values = self._metric(values)
-        if (len(regions) == 2 and not values.get('topic') and not values.get('indicator_ids')
+        if (len(regions) == 2 and '全国' not in regions and not values.get('topic') and not values.get('indicator_ids')
                 and values.get('value_view', 'normalized_score') == 'normalized_score'
                 and values.get('target_stat') in (None, 'mean', 'count')):
             for entity in regions:
@@ -144,11 +151,13 @@ class ToolExecutor:
         if year_a >= year_b:
             raise ValueError('year_a_must_precede_year_b')
         values = self._metric(values)
-        geography.resolve(region_keyword, active_year=year_a)
+        if region_keyword != '全国':
+            geography.resolve(region_keyword, active_year=year_a)
         if not values.get('topic') and not values.get('indicator_ids'):
             if values.pop('value_view', 'normalized_score') != 'normalized_score':
                 raise ValueError('overall_dimension_normalized_score_only')
-            return region.evaluate_region_longitudinal(region_keyword, year_a, year_b, **values)
+            if region_keyword != '全国':
+                return region.evaluate_region_longitudinal(region_keyword, year_a, year_b, **values)
         a = self.evaluate_region(region_keyword, year_a, **values)
         b = self.evaluate_region(region_keyword, year_b, **values)
         stat = values.get('target_stat', 'mean')
@@ -206,8 +215,8 @@ class ToolExecutor:
             raise ValueError('choose_target_rank_or_target_top_n')
         if target_rank is not None and target_rank != -1 and target_rank < 1:
             raise ValueError('target_rank_positive_or_minus_one')
-        return self.evaluate_region(region_keyword, year, target_rank=target_rank,
-                                    target_top_n=target_top_n, operation='region_ranking', **values)
+        return self._region_value(region_keyword, year, self._metric(dict(
+            values, target_rank=target_rank, target_top_n=target_top_n, operation='region_ranking')))
 
     def evaluate_school(self, school_keyword, year, **values):
         values = self._metric(values)

@@ -28,7 +28,7 @@
    "No-correction": "EduTA without question-grounded corrections",
    "Rule-based": "rule parser over EduTA's tools",
    "Tool-calling": "same model calling the registered tools freely (no chart function)",
-   "Tool-calling+chart": "Tool-calling plus EduTA's chart component; three separate runs, not repetitions of Tool-calling",
+   "Tool-calling+chart": "Tool-calling plus EduTA's chart component; regional functions also accept the nation; three separate runs, not repetitions of Tool-calling",
    "Direct-SQL": "single-prompt text-to-SQL",
    "MAC-SQL": "multi-agent text-to-SQL"
   }
@@ -265,7 +265,7 @@
    "No-correction": 79,
    "Rule-based": 51,
    "Tool-calling": 73,
-   "Tool-calling+chart": 88,
+   "Tool-calling+chart": 87,
    "Direct-SQL": 52,
    "MAC-SQL": 42
   },
@@ -302,13 +302,13 @@
    },
    "Tool-calling+chart": {
     "per_run": [
-     88,
-     90,
-     89
+     87,
+     83,
+     86
     ],
-    "all_three": 82,
-    "none": 7,
-    "some": 11
+    "all_three": 73,
+    "none": 5,
+    "some": 22
    }
   },
   "stages_run1": {
@@ -331,8 +331,8 @@
     "execution": 1
    },
    "Tool-calling+chart": {
-    "interpretation": 2,
-    "output": 9,
+    "interpretation": 5,
+    "output": 7,
     "execution": 1
    },
    "Direct-SQL": {
@@ -409,7 +409,8 @@
      },
      "stage": "interpretation",
      "core_correct": false,
-     "core_correct_no_chart": false
+     "core_correct_no_chart": false,
+     "level_relation": "same"
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -908,10 +909,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "FAIL",
-      "FAIL",
+      "PASS",
       "FAIL"
      ],
-     "correct_runs": 0
+     "correct_runs": 1
     }
    }
   },
@@ -1735,17 +1736,8 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "FAIL",
-     "correct": false,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": false,
-     "core_correct_no_chart": false
+     "status": "PASS",
+     "correct": true
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -1783,11 +1775,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "FAIL",
+      "PASS",
       "PASS",
       "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -1899,9 +1891,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "PASS"
+      "FAIL"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -1964,8 +1956,17 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "OK",
+      "M2": "OK",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "output",
+     "core_correct": false,
+     "core_correct_no_chart": false
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -2003,11 +2004,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
+      "FAIL",
       "PASS",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -2368,9 +2369,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "FAIL"
+      "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -2590,9 +2591,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "PASS"
+      "FAIL"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -3361,8 +3362,8 @@
       "M4": "WRONG"
      },
      "stage": "output",
-     "core_correct": true,
-     "core_correct_no_chart": true
+     "core_correct": false,
+     "core_correct_no_chart": false
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -3521,9 +3522,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "FAIL"
+      "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -3620,10 +3621,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -3720,10 +3721,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -3824,10 +3825,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
-      "PASS"
+      "FAIL",
+      "FAIL"
      ],
-     "correct_runs": 3
+     "correct_runs": 1
     }
    }
   },
@@ -3966,8 +3967,17 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "OK",
+      "M2": "OK",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "output",
+     "core_correct": false,
+     "core_correct_no_chart": false
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -4025,11 +4035,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
-      "PASS",
+      "FAIL",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 1
     }
    }
   },
@@ -4158,17 +4168,8 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "FAIL",
-     "correct": false,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": false,
-     "core_correct_no_chart": false
+     "status": "PASS",
+     "correct": true
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -4206,11 +4207,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "FAIL",
+      "PASS",
       "PASS",
       "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -4339,8 +4340,18 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "WRONG",
+      "M2": "WRONG",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "interpretation",
+     "core_correct": false,
+     "core_correct_no_chart": false,
+     "level_relation": "child"
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -4396,11 +4407,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
+      "FAIL",
       "PASS",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -4686,10 +4697,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "FAIL",
+      "PASS",
       "FAIL"
      ],
-     "correct_runs": 1
+     "correct_runs": 2
     }
    }
   },
@@ -4735,7 +4746,7 @@
      "correct": false,
      "layers": {
       "M1": "WRONG",
-      "M2": "OK",
+      "M2": "WRONG",
       "M3": "NA",
       "M4": "WRONG"
      },
@@ -4789,10 +4800,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "FAIL",
-      "FAIL",
+      "PASS",
       "FAIL"
      ],
-     "correct_runs": 0
+     "correct_runs": 1
     }
    }
   },
@@ -4825,8 +4836,17 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "OK",
+      "M2": "OK",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "output",
+     "core_correct": false,
+     "core_correct_no_chart": false
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -4873,11 +4893,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
-      "PASS",
+      "FAIL",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 1
     }
    }
   },
@@ -5770,9 +5790,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "FAIL"
+      "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -5863,10 +5883,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -6011,8 +6031,17 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "WRONG",
+      "M2": "NA",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "interpretation",
+     "core_correct": false,
+     "core_correct_no_chart": false
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -6068,11 +6097,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
-      "PASS",
+      "FAIL",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 1
     }
    }
   },
@@ -8306,10 +8335,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "FAIL",
+      "PASS",
       "PASS"
      ],
-     "correct_runs": 2
+     "correct_runs": 3
     }
    }
   },
@@ -8619,10 +8648,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -8799,10 +8828,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -8859,17 +8888,8 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "FAIL",
-     "correct": false,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": true,
-     "core_correct_no_chart": true
+     "status": "PASS",
+     "correct": true
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -8907,8 +8927,8 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "FAIL",
       "PASS",
+      "FAIL",
       "PASS"
      ],
      "correct_runs": 2
@@ -9016,9 +9036,9 @@
      "statuses": [
       "PASS",
       "PASS",
-      "PASS"
+      "FAIL"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
@@ -9175,17 +9195,8 @@
      "core_correct_no_chart": false
     },
     "Tool-calling+chart": {
-     "status": "FAIL",
-     "correct": false,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": false,
-     "core_correct_no_chart": false
+     "status": "PASS",
+     "correct": true
     },
     "Direct-SQL": {
      "status": "PASS",
@@ -9223,9 +9234,9 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "FAIL",
       "PASS",
-      "PASS"
+      "PASS",
+      "FAIL"
      ],
      "correct_runs": 2
     }
@@ -9294,8 +9305,18 @@
      "correct": true
     },
     "Tool-calling+chart": {
-     "status": "PASS",
-     "correct": true
+     "status": "FAIL",
+     "correct": false,
+     "layers": {
+      "M1": "WRONG",
+      "M2": "OK",
+      "M3": "NA",
+      "M4": "WRONG"
+     },
+     "stage": "interpretation",
+     "core_correct": false,
+     "core_correct_no_chart": false,
+     "level_relation": "child"
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -9353,11 +9374,11 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "PASS",
       "FAIL",
-      "PASS"
+      "PASS",
+      "FAIL"
      ],
-     "correct_runs": 2
+     "correct_runs": 1
     }
    }
   },
@@ -9419,17 +9440,8 @@
      "core_correct_no_chart": true
     },
     "Tool-calling+chart": {
-     "status": "FAIL",
-     "correct": false,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "OK",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": false,
-     "core_correct_no_chart": false
+     "status": "PASS",
+     "correct": true
     },
     "Direct-SQL": {
      "status": "FAIL",
@@ -9485,8 +9497,8 @@
     },
     "Tool-calling+chart": {
      "statuses": [
-      "FAIL",
       "PASS",
+      "FAIL",
       "PASS"
      ],
      "correct_runs": 2
@@ -9707,10 +9719,10 @@
     "Tool-calling+chart": {
      "statuses": [
       "PASS",
-      "PASS",
+      "FAIL",
       "PASS"
      ],
-     "correct_runs": 3
+     "correct_runs": 2
     }
    }
   },
