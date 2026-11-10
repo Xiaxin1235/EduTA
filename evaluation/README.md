@@ -15,6 +15,7 @@ This directory holds the public materials of the paper. The school assessment re
 | `reference_computation/` | 独立于系统的参考值计算脚本：`01_school_scores.py`（学校分，R11）、`01b_topic_scores.py`（二级维度分）、`02_compute.py` + `specs_v6.py`（逐题参考事实）、`full_research_view.sql`。需要保密数据库才能运行 |
 | `baselines/tool_calling/` | Tool-calling 基线（无图表函数）的系统提示与函数层 |
 | `baselines/tool_calling_chart/` | Tool-calling+chart 基线（第十个函数为 EduTA 图表组件）的系统提示、函数层、运行脚本、报告规则 |
+| `test_bank_index/eduta_test_bank_index.html` | 单文件离线题库索引：主结果表、三轮结果表、按题型/系统/三轮表现筛选、逐题卡片、状态矩阵、两系统对比。直接用浏览器打开；不发起任何网络请求。`build_public_site.py` 把 `site_data_v2_public.json` 嵌入页面模板 `page_template.html` 重新生成，并检查输出中没有参考值、评审理由和本地路径 |
 | `baselines/text_to_sql/` | Direct-SQL 与 MAC-SQL：运行脚本、MAC-SQL 适配器与相对上游的改动补丁、上游版本、两者共用的数据说明文档 |
 
 ## 系统名与代码配置
@@ -30,4 +31,4 @@ EduTA = G1（程序校正开启）；No-correction = G1（程序校正关闭）�
 
 ## 发布时的改动
 
-仅替换本地路径：评审规则中的目录改为 `<review_dir>`；`baselines/text_to_sql/paths.py` 的未采集题项路径改为环境变量 `TE_UNCOLLECTED_ITEMS`（默认 `research_rules/UNCOLLECTED_ITEMS_v1.json`）；`baselines/tool_calling_chart/paths.py` 的项目根默认值改为 `.`；`reference_computation/common.py` 删去一条含本地路径的注释。代码逻辑、提示词和规则文字未改。
+仅替换本地路径：评审规则中的目录改为 `<review_dir>`；`baselines/text_to_sql/paths.py` 的未采集题项路径改为环境变量 `TE_UNCOLLECTED_ITEMS`（默认 `research_rules/UNCOLLECTED_ITEMS_v1.json`）；`baselines/tool_calling_chart/paths.py` 的项目根默认值改为 `.`；`reference_computation/common.py` 删去一条含本地路径的注释。代码逻辑、提示词和规则文字未改。题库索引页面由 OpenAI 编码助手按作者给定的规格编写，数据与 `site_data_v2_public.json` 逐字节一致。X06 的 EduTA 与 No-correction 答案在归因后经作者签认为正确，公开数据中不再附带其失败字段。

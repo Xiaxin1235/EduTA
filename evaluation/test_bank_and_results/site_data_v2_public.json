@@ -929,29 +929,11 @@
    "systems": {
     "EduTA": {
      "status": "PASS",
-     "correct": true,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": true,
-     "core_correct_no_chart": true
+     "correct": true
     },
     "No-correction": {
      "status": "PASS",
-     "correct": true,
-     "layers": {
-      "M1": "OK",
-      "M2": "OK",
-      "M3": "NA",
-      "M4": "WRONG"
-     },
-     "stage": "output",
-     "core_correct": true,
-     "core_correct_no_chart": true
+     "correct": true
     },
     "Rule-based": {
      "status": "FAIL",
