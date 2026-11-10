@@ -1,0 +1,7 @@
+# Upstream core.agents imports these modules even where helpers are unused.
+# Its legacy openai dependency is not used: core.api is supplied by our adapter.
+PyYAML>=6.0,<7
+func_timeout>=4.3.5,<5
+pandas>=2.0,<3
+tiktoken>=0.5,<1
+tqdm>=4.66,<5

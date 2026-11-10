@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/wbbeyourself/MAC-SQL",
+  "commit": "31a9df5e0d520be4769be57a4b9022e5e34a14f4",
+  "tracked_and_untracked_status": "",
+  "upstream_modified": false,
+  "dataset_download_scripts_run": false,
+  "adapter_style": "external API hook, DB connection adapter, Refiner SQL I/O subclass, ChatManager ping suppression; official talk/prompt/routing/MAX_ROUND unchanged"
+}

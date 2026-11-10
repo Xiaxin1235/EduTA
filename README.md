@@ -10,7 +10,7 @@ EduTA turns school-digitization questions into typed analytical tasks, executes 
 
 本仓库更新至 v6 实验使用的 **Fix9 系统源码**。冻结源码标识为 `13a34b27f40357eb7bf07c34000f151b15c6f9e5877119c64be5dd1edbb910b5`，文件对应关系见 [PUBLIC_SOURCE_MANIFEST.json](PUBLIC_SOURCE_MANIFEST.json)。
 
-公开版保留完整应用代码、指标模板、语义目录、年度采集规则与合成数据生成器。真实数据库、包含真实地址和校名的地区登记明细、题库、参考答案、凭据和运行日志不随仓库分发。合成数据只用于安装和体验，不能代替论文实验数据或正式结果。
+公开版保留完整应用代码、指标模板、语义目录、年度采集规则与合成数据生成器。真实数据库、包含真实地址和校名的地区登记明细、参考答案、凭据和运行日志不随仓库分发；论文测试题库和逐题结果见下文“论文与评测材料”。合成数据只用于安装和体验，不能代替论文实验数据或正式结果。
 
 ## 功能
 
@@ -102,6 +102,27 @@ python run_app.py
 
 目录注释、程序校正、语义 checker、执行核验和答复修复是不同部件。研究中各组合以冻结配置为准；代码保留某项功能，不代表论文证明它能提升总体准确率。
 
+论文中的系统名与代码配置的对应：**EduTA** = G1（程序校正开启）；**No-correction** = G1（程序校正关闭）；**Rule-based** = G0。G2 未进入论文的正式比较。Tool-calling、Tool-calling+chart、Direct-SQL 和 MAC-SQL 是对照基线，代码在 `evaluation/baselines/`。
+
+## 论文与评测材料
+
+论文：*EduTA: Controlled LLM question answering over hierarchical school assessment data with typed tasks and registered tools*（投稿中）。
+
+`evaluation/` 收录论文实验的公开材料：
+
+| 内容 | 说明 |
+|---|---|
+| 测试题库（100 题） | 中文原题、应答 / 拒答 / 澄清类型、目标层级、口语指标映射、是否画图、规则提示 |
+| 逐题结果 | 7 个系统第 1 轮的签认状态；EduTA、No-correction、Tool-calling、Tool-calling+chart 的三轮状态；失败题的分层（M1–M4）、首次出错阶段和核心正确性 |
+| 评审规则 | 端到端评审、分层归因、核心正确性和层级混淆的规则原文，以及作者对边界题的处理原则 |
+| 参考值计算脚本 | 独立于系统、按冻结规则计算参考值的脚本（需要原始数据库才能运行） |
+| 基线配置 | Tool-calling 系列的提示词、函数定义与运行脚本，Text-to-SQL 基线的适配说明 |
+| 题库索引网页 | 单文件离线 HTML，可按题型、系统和三轮表现筛选并逐题对比 |
+
+**不公开**：学校评估原始数据库、由其计算的参考值、回答原文和运行日志。数据由数据所有方提供，作者无权再分发；公开材料可以逐题核对各系统的结果，但不能在原数据上重跑。
+
+Paper materials (test bank, question-level results of all systems, review rules, reference-computation scripts and baseline configurations) are in `evaluation/`. The school records and the reference values computed from them are confidential and not included.
+
 ## 目录导航
 
 | 目录 | 内容 |
@@ -115,6 +136,7 @@ python run_app.py
 | `evaluation_templates/` | 模板、83题目录与维度说明 |
 | `research_rules/` | 可公开的目录注释和年度采集规则；真实地区明细另配 |
 | `docs/` | [架构](docs/ARCHITECTURE.md)、[数据](docs/DATA.md)、[运行配置](docs/RUNNING.md) |
+| `evaluation/` | 论文测试题库、逐题结果、评审规则、参考值计算脚本、基线配置和题库索引网页 |
 
 ## 许可证与反馈
 

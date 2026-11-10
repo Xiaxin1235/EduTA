@@ -1,0 +1,326 @@
+--- /dev/null
++++ b/views.py
+@@ -0,0 +1,108 @@
++"""Two unaggregated TEMP views over the exact frozen research inputs."""
++import sqlite3
++import time
++from paths import CANDIDATE, read_json
++
++# research_data.attach: ID AND year joins, CASE (not COALESCE), no row exclusions.
++SCHOOLS_SQL = '''CREATE TEMP VIEW schools AS SELECT
++ b.id,b.year,
++ CASE WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_province ELSE b.normalized_province END AS province,
++ CASE WHEN f.source_school_year_id IS NOT NULL THEN f.new_value WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_city ELSE b.normalized_city END AS city,
++ CASE WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_district ELSE b.normalized_district END AS district,
++ b.school_name,b.school_type,b.school_area_type,b.class_num,b.teacher_num,b.student_num,b.data_mark,b.region,
++ b.province AS raw_province,b.city AS raw_city,b.district AS raw_district,
++ CASE WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_province ELSE b.normalized_province END AS query_province,
++ CASE WHEN f.source_school_year_id IS NOT NULL THEN f.new_value WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_city ELSE b.normalized_city END AS query_city,
++ CASE WHEN m.source_school_year_id IS NOT NULL THEN m.normalized_district ELSE b.normalized_district END AS query_district,
++ r.status AS research_status,
++ CASE WHEN m.source_school_year_id IS NOT NULL THEN 'V4_EVIDENCE_OVERLAY' ELSE 'V1_FORMAT_BASE' END AS metadata_source,
++ f.rule_id AS additional_format_rule
++ FROM research_base.school_records b
++ LEFT JOIN research_mapping.record_metadata m ON m.source_school_year_id=b.id AND m.year=b.year
++ LEFT JOIN research_mapping.format_extension_v5 f ON f.source_school_year_id=b.id AND f.year=b.year
++ LEFT JOIN research_mapping.research_review_v5 r ON r.source_school_year_id=b.id AND r.year=b.year'''
++
++# Flatten the public question dictionary into each answer, without aggregation.
++ANSWERS_SQL = '''CREATE TEMP VIEW answers AS SELECT
++ a.school_id,a.question_id,a.value,a.normalized_value,
++ q.level1_name AS dimension,q.content AS question_content
++ FROM raw_source.answers a LEFT JOIN raw_source.questions q ON q.id=a.question_id'''
++
++SCHOOL_COLUMNS = [
++ ('id','INTEGER','学校年度记录主键，不是跨年学校身份'),('year','TEXT','记录年度'),
++ ('province','TEXT','规范省级字段'),('city','TEXT','规范城市全称'),('district','TEXT','规范区县'),
++ ('school_name','TEXT','源记录学校名'),('school_type','TEXT','学段原字段'),
++ ('school_area_type','TEXT','城乡原字段'),('class_num','TEXT','班级数原字段'),
++ ('teacher_num','TEXT','教师数原字段'),('student_num','TEXT','学生数原字段'),
++ ('data_mark','INTEGER','源记录标记'),('region','TEXT','源记录区域'),
++ ('raw_province','TEXT','原始省份'),('raw_city','TEXT','原始城市'),('raw_district','TEXT','原始区县'),
++ ('query_province','TEXT','等于 province'),('query_city','TEXT','等于 city'),
++ ('query_district','TEXT','等于 district'),('research_status','TEXT','v5 研究状态，非排除条件'),
++ ('metadata_source','TEXT','元数据来源'),('additional_format_rule','TEXT','v5 城市格式规则')]
++ANSWER_COLUMNS = [('school_id','INTEGER','关联 schools.id'),('question_id','INTEGER','83 题的题号'),
++ ('value','REAL','原始数值，0 有效，NULL 缺失'),
++ ('normalized_value','REAL','已有归一化数值；分数乘 100'),
++ ('dimension','TEXT','题目所属一级维度'),('question_content','TEXT','原题目文本')]
++TABLES = {'schools': SCHOOL_COLUMNS, 'answers': ANSWER_COLUMNS}
++
++
++def connect():
++    cfg = read_json(CANDIDATE / 'config/research_dataset.json')
++    conn = sqlite3.connect(':memory:', uri=True)
++    for alias, key in [('raw_source','source'),('research_base','base_v1'),('research_mapping','mapping_v5')]:
++        from pathlib import Path
++        conn.execute('ATTACH DATABASE ? AS ' + alias,
++                     (Path(cfg['data'][key]['path']).as_uri() + '?mode=ro',))
++    conn.execute(SCHOOLS_SQL)
++    conn.execute(ANSWERS_SQL)
++    conn.execute('PRAGMA query_only=ON')
++    return conn
++
++
++def public_read_only(action, table, column, database, origin):
++    if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_RECURSIVE):
++        return sqlite3.SQLITE_OK
++    if action == sqlite3.SQLITE_READ:
++        if database == 'temp' and table in TABLES:
++            return sqlite3.SQLITE_OK
++        if origin == 'schools' and database in ('research_base','research_mapping'):
++            return sqlite3.SQLITE_OK
++        if origin == 'answers' and database == 'raw_source' and table in ('answers','questions'):
++            return sqlite3.SQLITE_OK
++        # SQLite's view flattener attributes an unused LEFT JOIN row-presence
++        # read to the enclosing CTE (empty column), rather than to answers.
++        if database == 'raw_source' and table == 'questions' and column == '':
++            return sqlite3.SQLITE_OK
++    return sqlite3.SQLITE_DENY
++
++
++def execute_sql(sql, parameters=(), seconds=120):
++    """Fetch one sentinel row beyond 50, and retain at most 50 result rows."""
++    conn = connect()
++    denied = []
++    def authorize(*args):
++        decision = public_read_only(*args)
++        if decision == sqlite3.SQLITE_DENY:
++            denied.append(list(args))
++        return decision
++    conn.set_authorizer(authorize)
++    started = time.monotonic()
++    deadline = started + seconds
++    conn.set_progress_handler(lambda: int(time.monotonic() >= deadline), 1000)
++    out = {'sql': sql, 'columns': [], 'rows': [], 'over_50_rows': False,
++           'error': None, 'timed_out': False}
++    try:
++        cursor = conn.execute(sql, parameters)
++        if cursor.description is None:
++            raise sqlite3.OperationalError('SQL did not return a result set')
++        rows = cursor.fetchmany(51)
++        out.update(columns=[d[0] for d in cursor.description], rows=[list(r) for r in rows[:50]],
++                   over_50_rows=len(rows) > 50)
++    except sqlite3.Error as exc:
++        out.update(error=str(exc), timed_out=time.monotonic() >= deadline)
++        if denied:
++            out['denied_access'] = denied
++    finally:
++        out['elapsed_s'] = time.monotonic() - started
++        conn.close()
++    return out
+--- /dev/null
++++ b/model_adapter.py
+@@ -0,0 +1,90 @@
++"""One HTTP transmission per call; the frozen DPAPI profile is the only key source."""
++import json
++import http.client
++import re
++import sys
++import time
++import urllib.error
++import urllib.request
++from paths import FORMAL, read_json
++
++
++class TransportFailure(BaseException):
++    """Bypass MAC-SQL Selector's catch-and-continue on transport exceptions."""
++
++
++class ModelClient:
++    def __init__(self, ledger):
++        cfg = read_json(FORMAL / 'plan/CONFIG.json')
++        self.identity = cfg['model_identity']
++        self.parameters = read_json(FORMAL / 'plan/RUN_PROTOCOL.json')['parameters']
++        sys.path.insert(0, str(FORMAL / 'frozen/candidate'))
++        from packages.core.secure_credentials import load_profile
++        self.profile = load_profile(self.identity['profile_id'],
++                                   path=cfg['common_environment']['TEACHER_EVAL_CREDENTIAL_STORE_PATH'])
++        for key in ('provider','api_base','model'):
++            if self.profile[key] != self.identity[key]:
++                raise ValueError('frozen_profile_changed:' + key)
++        self.key = self.profile['api_key'].strip()
++        if self.key.lower().startswith('bearer '):
++            self.key = self.key[7:].strip()
++        if not self.key:
++            raise ValueError('frozen_profile_key_missing')
++        self.ledger = ledger
++        self.calls = []
++        self.qid = None
++
++    def begin(self, qid):
++        self.qid, self.calls = qid, []
++
++    def redact(self, text):
++        return str(text).replace(self.profile['api_key'], '[REDACTED]').replace(self.key, '[REDACTED]')
++
++    def call(self, prompt, stage='generate', messages=None):
++        repair = stage in ('repair','Refiner')
++        role = 'repair' if repair else 'parser'
++        payload = {'model': self.identity['model'],
++                   'temperature': self.parameters[role + '_temperature'],
++                   'max_tokens': self.parameters[role + '_max_tokens'],
++                   'messages': messages or [{'role':'user','content':prompt}], 'stream':False}
++        url = self.identity['api_base'].rstrip('/') + '/chat/completions'
++        request = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'),
++                    headers={'Authorization':'Bearer ' + self.key, 'Content-Type':'application/json'}, method='POST')
++        if not self.calls:
++            self.ledger.admit(self.qid)
++        receipt = {'call_index':len(self.calls)+1, 'stage':stage, 'model_requested':payload['model'],
++                   'endpoint':url, 'temperature':payload['temperature'], 'max_tokens':payload['max_tokens'],
++                   'transport_attempts':1, 'usage':None, 'status':'SENT'}
++        self.calls.append(receipt)
++        self.ledger.event(self.qid, {'type':'model_request', **receipt,
++                                    'messages': self.redact(json.dumps(payload['messages'], ensure_ascii=False))})
++        started = time.monotonic()
++        try:
++            with urllib.request.urlopen(request, timeout=120) as response:
++                body = response.read().decode('utf-8')
++                receipt['http_status'] = response.status
++        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, UnicodeError) as exc:
++            # No alias, fallback endpoint, SDK retry, ping, or second transmission.
++            receipt.update(status='NE', error=self.redact(exc), elapsed_s=time.monotonic()-started)
++            self.ledger.event(self.qid, {'type':'model_response', **receipt})
++            raise TransportFailure(receipt['error']) from None
++        receipt['elapsed_s'] = time.monotonic() - started
++        receipt['raw_response'] = self.redact(body)
++        try:
++            data = json.loads(body)
++            receipt.update(usage=data.get('usage'), model_returned=data.get('model'),
++                           response_id=data.get('id'), status='RECORDED')
++            choice = data['choices'][0]
++            content = choice['message'].get('content') or ''
++            receipt.update(content=self.redact(content), finish_reason=choice.get('finish_reason'))
++        except (ValueError, KeyError, IndexError, TypeError) as exc:
++            receipt.update(status='NE', error='invalid_model_response:' + type(exc).__name__)
++            self.ledger.event(self.qid, {'type':'model_response', **receipt})
++            raise TransportFailure(receipt['error']) from None
++        self.ledger.event(self.qid, {'type':'model_response', **receipt})
++        return receipt['content']
++
++
++def extract_sql(text):
++    blocks = re.findall(r'```sql\s*(.*?)```', text, re.I | re.S)
++    return (blocks[-1] if blocks else text).strip()
+--- /dev/null
++++ b/mac_sql_adapter.py
+@@ -0,0 +1,119 @@
++"""MAC-SQL adapter: model transport, read-only connection, bounded SQL I/O.
++
++The upstream prompts, talk methods, routing, pruning and MAX_ROUND are unchanged.
++"""
++import importlib
++import sqlite3
++import sys
++import time
++import types
++from paths import ROOT, VENDOR
++from views import connect
++
++
++class SQLTimeout(BaseException):
++    pass
++
++
++class SampleCursor:
++    def __init__(self, connection):
++        self.connection = connection
++        self.cursor = connection.cursor()
++
++    def execute(self, sql):
++        deadline = time.monotonic() + 120
++        self.connection.set_progress_handler(lambda: int(time.monotonic() >= deadline), 1000)
++        self.cursor.execute(sql)
++        return self
++
++    def fetchall(self):
++        return self.cursor.fetchall()
++
++    def close(self):
++        self.cursor.close()
++
++
++class SampleConnection:
++    def __init__(self):
++        self.connection = connect()
++
++    @property
++    def text_factory(self):
++        return self.connection.text_factory
++
++    @text_factory.setter
++    def text_factory(self, value):
++        self.connection.text_factory = value
++
++    def cursor(self):
++        return SampleCursor(self.connection)
++
++    def close(self):
++        self.connection.close()
++
++
++def run_mac_sql(question, client, record_sql):
++    sys.path.insert(0, str(VENDOR))
++    # Supply the official API hook before import, so upstream's legacy retrying
++    # core.llm and its openai==0.28 transport are never loaded.
++    api = types.ModuleType('core.api')
++    def safe_call_llm(prompt, **info):
++        return client.call(prompt, stage=info.get('send_to') or 'Selector')
++    api.safe_call_llm = safe_call_llm
++    api.init_log_path = lambda path: None  # receipts are written by ModelClient
++    sys.modules['core.api'] = api
++    agents = importlib.import_module('core.agents')
++    chat = importlib.import_module('core.chat_manager')
++    agents.LLM_API_FUC = safe_call_llm
++    connections = []
++
++    def connect_views(ignored_path):
++        conn = SampleConnection()
++        connections.append(conn)
++        return conn
++
++    # Replace only agents' module-local DB handle, never sqlite3.connect globally.
++    agents.sqlite3 = types.SimpleNamespace(connect=connect_views, Error=sqlite3.Error)
++    client.sql_recorder = record_sql
++
++    class AdaptedRefiner(agents.Refiner):
++        def _execute_sql(self, sql, db_id):
++            result = client.sql_recorder(sql)
++            if result['timed_out']:
++                raise SQLTimeout('SQL exceeded 120 seconds')
++            # The official Refiner receives the same first-five-row interface.
++            out = {'sql':sql, 'sqlite_error':result['error'] or '',
++                   'exception_class':"<class 'sqlite3.Error'>" if result['error'] else ''}
++            if result['error'] is None:
++                out['data'] = [tuple(row) for row in result['rows'][:5]]
++            return out
++
++    class AdaptedManager(chat.ChatManager):
++        def ping_network(self):
++            # Do not spend an unrequested 'Hello world!' model call per question.
++            return
++
++        def _chat_single_round(self, message):
++            super()._chat_single_round(message)
++            client.ledger.event(client.qid, {'type':'mac_sql_state', 'message':message})
++
++    # Override the execution boundary via subclass; Refiner.talk remains upstream.
++    old_refiner = chat.Refiner
++    chat.Refiner = AdaptedRefiner
++    message = {'idx':question['baseline_ordinal'], 'db_id':'teachereval',
++               'query':question['question'],
++               'evidence':(ROOT/'SCHEMA_DOC.md').read_text(encoding='utf-8'),
++               'extracted_schema':{}, 'difficulty':'', 'ground_truth':'',
++               'send_to':chat.SYSTEM_NAME}
++    try:
++        if not hasattr(client, 'mac_manager'):
++            client.mac_manager = AdaptedManager(data_path=str(ROOT), tables_json_path=str(ROOT/'tables.json'),
++                                               log_path='', model_name=client.identity['model'],
++                                               dataset_name='bird', lazy=True, without_selector=False)
++        manager = client.mac_manager
++        manager.start(message)
++    finally:
++        chat.Refiner = old_refiner
++        for conn in connections:
++            conn.close()
++    return message.get('pred', message.get('final_sql', '')), message
