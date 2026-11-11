@@ -71,6 +71,8 @@ Examples from the test bank, translated from Chinese (moved from the appendix of
 
 ## Paired effect sizes (run 1)
 
+Run-1 accuracy with 95% Wilson intervals: EduTA 86 (78–91%), No-correction 79 (70–86%), Rule-based 51 (41–61%), Tool-calling 73 (64–81%), Tool-calling+chart 87 (79–92%), Direct-SQL 52 (42–62%), MAC-SQL 42 (33–52%).
+
 EduTA against each system: both correct / only EduTA / only the other / neither; difference in accuracy (EduTA minus other, percentage points) with Newcombe's hybrid-score 95% interval for the difference of paired proportions (Newcombe 1998, method 10: Wilson score limits of the two marginal proportions combined with the within-question correlation phi of the 2x2 table, continuity-corrected when ad > bc); the intervals are not adjusted for multiplicity, only the sign-test p values are Holm-adjusted; exact sign test; Holm-adjusted over the six comparisons (evaluation/scoring/paired_effects.py).
 
 | Other system | Both | Only EduTA | Only other | Neither | Difference (95% CI) | p | p (Holm) |
