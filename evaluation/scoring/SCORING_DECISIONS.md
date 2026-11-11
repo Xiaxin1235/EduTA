@@ -11,9 +11,9 @@
 | System code and configuration | sealed and fingerprinted before each run | no |
 | Model outputs | recorded once per run | no; nothing was re-run to change a verdict |
 
-Answers lost to infrastructure faults were retested once in a separate run and are counted as failures in the main results.
+Infrastructure faults: for the configurations run through the web front end and for Direct-SQL, answers lost to an infrastructure fault are counted as failures in the main results (one Direct-SQL call, one rule-based page). For the tool-calling baselines the pre-specified protocol retests a transport failure once; one Tool-calling+chart call (run 3, X07) was retested and passed.
 
-## Principles used for borderline cases (Appendix B), applied to every system
+## Principles used for borderline cases (supplementary methods), applied to every system
 
 1. Requirements follow the question and the definition of its intent: an open question requires the profile elements; a position question requires the rank or the gap to the benchmark, not the dimension breakdown.
 2. A clarification is accepted when the wording is genuinely ambiguous and the question offers the reading the reference expects.
@@ -49,7 +49,7 @@ Resulting counts: EduTA 86 / 86 / 86, No-correction 79 / 81 / 80, Tool-calling 7
 
 ## Where the evidence is
 
-Question-level verdicts, reviewer reasons and the masked review packets are released with the code. The external expert's verdicts and the agreement analysis are provided alongside them.
+Question-level statuses (and, for failed answers, layers, first failure stage and core-correctness views) are released with the code. Reviewer reasons, masked review packets, answer text and reference values are not released, because they contain or reveal confidential school data; the external expert's agreement statistics are reported in the supplementary methods.
 
 ## Sensitivity of the main comparisons to the author decisions (run 1)
 

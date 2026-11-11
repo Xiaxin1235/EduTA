@@ -13,7 +13,7 @@ This directory holds the public materials of the paper. The school assessment re
 | `scoring/SCORING_DECISIONS.md` | 冻结记录、作者对边界题的决定及其对结果的影响（用评审原判时的成绩与检验）、R11 逐年未采集题项 |
 | `scoring/SUPPLEMENTARY_METHODS.md` | 补充方法：数据与 R11 敏感性、基线配置、评审流程、外部专家抽查、数字可追溯性、token 明细、阶段归因、纠错消融边界、配对效果量、MAC-SQL 配置、R11 合理性检验（与论文正文同一版本）|
 | `scoring/paired_effects.py` | 第 1 轮 EduTA 对各系统的配对效果量：四格计数、Newcombe 配对 95% 区间（未校正）、精确符号检验与 Holm 校正；只读公开数据，直接可运行 |
-| `reference_computation/r11_plausibility.py`、`r11_ambiguous.py` | R11 合理性检验：排除项的题号分布、零假设下“当年全部学校为 0”的概率，以及把 7 个无法判定的题×年份按真 0 计入时的全国均值与省份方向；需要保密数据，不能在公开环境运行 |
+| `reference_computation/r11_plausibility.py`、`r11_ambiguous.py`、`r11_common_items.py` | R11 合理性检验：排除项的题号分布、零假设下“当年全部学校为 0”的概率，以及把 7 个无法判定的题×年份按真 0 计入时的全国均值与省份方向；共同题项（四年都采集的 23 题）口径下的跨年方向；需要保密数据，不能在公开环境运行 |
 | `reference_computation/` | 独立于系统的参考值计算脚本：`01_school_scores.py`（学校分，R11）、`01b_topic_scores.py`（二级维度分）、`02_compute.py` + `specs_v6.py`（逐题参考事实）、`full_research_view.sql`。需要保密数据库才能运行 |
 | `baselines/tool_calling/` | Tool-calling 基线（无图表函数）的系统提示与函数层 |
 | `baselines/tool_calling_chart/` | Tool-calling+chart 基线（第十个函数为 EduTA 图表组件；地区函数也接受“全国”，与 EduTA 用同一全国口径）的系统提示、函数层、运行脚本、报告规则 |

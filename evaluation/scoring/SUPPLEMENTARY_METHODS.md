@@ -125,3 +125,16 @@ Nine questions were handled by fixed rules before the model was called (X44, X45
 ## The author's decisions on borderline cases (principles)
 
 The author decided borderline cases by three principles, applied to every system alike (moved from the appendix of the paper). (1) Requirements follow the question and its intent: an open question requires the profile elements, a position question only the rank or the gap to the benchmark. (2) A clarification is accepted when the wording is genuinely ambiguous and it offers the expected reading (bare "Jilin", X29). (3) What the page shows counts: an empty plot (Y23) or a school count stated as "no data" (Y03) fails.
+
+
+## Comparisons across years on the common items
+
+Read-only (evaluation/reference_computation/r11_common_items.py; needs the confidential data). Only 23 items were collected in all four years. National school-equal mean, R11 / common items: 2020 22.27 / 9.49; 2021 21.24 / 9.83; 2022 17.64 / 10.61; 2023 19.71 / 10.32. The national direction of change is opposite in every transition (R11 down/down/up, common items up/up/down). Provinces whose direction differs: 20/31 (2020→2021), 29/31 (2021→2022), 26/31 (2022→2023); cities with at least 30 schools: 97/198, 203/231, 155/237. Year-to-year changes in the paper's scores therefore describe the items available in each year and the schools registered in it; they are not a measure of improvement on a fixed instrument.
+
+## Coverage of the rule-based baseline
+
+The rule router of the rule-based baseline resolves dimensions (with aliases) and items, but has no rules for sub-dimensions, so it cannot represent a sub-dimension task; its 0/19 on sub-dimension questions reflects this missing coverage. Excluding the 19 sub-dimension questions, EduTA answered 70 of 81 and Rule-based 51 (only EduTA correct 19, only Rule-based 0; exact sign test p = 3.8e-6).
+
+## Expert disagreements by kind (second batch)
+
+Of the seven Tool-calling+chart answers the expert passed but the review failed, three omitted rule-mandated profile elements of an open question (X02, X03, X05: national comparison or provincial rank), which the user did not name; two labelled a dimension or sub-dimension score as the overall score (X36, X40); and two added an extrapolated forecast (X45) or causal attributions (X44) to questions that should be declined. The last four are failures under core correctness as well. No independent adjudication of these ten disagreements was performed.
