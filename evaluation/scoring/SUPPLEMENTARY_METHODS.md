@@ -120,3 +120,8 @@ No new runs or reviews: an answer counts as core-correct if it passed end to end
 ## Intents of the model drafts (EduTA, run 1)
 
 Nine questions were handled by fixed rules before the model was called (X44, X45, X49–X54 declined; X58 clarification). The drafts for the other 91 used 13 of the 15 intents: regional assessment 32, region comparison 12, clarification 11, regional profile 7, school item 7, regional position 4, regional series 4, school assessment 4, province ranking 3, regional change 2, school ranking 2, multi-region comparison 2, school comparison 1 (national assessment and national ranking, the alias of province ranking, were not used). Example plans: a comparison of two cities (Y02) became two regional-value nodes, a four-year series of a sub-dimension (X40) one node per year, and the regional profile X01 eight nodes with a directed subtraction for the gap to the national mean; the provincial rank is returned with the province's node, from which the program chooses the strongest and weakest dimensions.
+
+
+## The author's decisions on borderline cases (principles)
+
+The author decided borderline cases by three principles, applied to every system alike (moved from the appendix of the paper). (1) Requirements follow the question and its intent: an open question requires the profile elements, a position question only the rank or the gap to the benchmark. (2) A clarification is accepted when the wording is genuinely ambiguous and it offers the expected reading (bare "Jilin", X29). (3) What the page shows counts: an empty plot (Y23) or a school count stated as "no data" (Y03) fails.
