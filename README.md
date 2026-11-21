@@ -1,10 +1,12 @@
 # EduTA
 
-**Education Typed-task Analyst · 教育数据的带类型任务分析助手**
+**EduTA: A typed-task LLM framework beyond text-to-SQL for adaptive analysis of school and regional educational digitization levels**
 
-EduTA 面向教师与学校数字化评价，把自然语言问题转换为结构化分析任务，通过注册工具执行只读查询和确定性计算，再生成回答、数据卡片和图表。模型负责理解与表达，数值来自实际工具执行。
+Education Typed-task Analyst · 面向学校与区域教育数字化水平的自适应分析
 
-EduTA turns school-digitization questions into typed analytical tasks, executes registered read-only tools, and presents grounded answers with data cards and charts.
+EduTA 把学校和地区管理者的自然语言问题转换为带类型的分析任务，将问题映射到整体、一级维度、二级维度和题项四层指标。程序依据原问题校正对象和范围，用注册算子执行只读查询和确定性计算，并把回答所需的要素绑定到计算事实。模型据此解释结果，页面交付数据卡片、表格与图表。
+
+EduTA maps natural-language questions about school and regional educational digitization to typed tasks. Registered operators compute the values, and the system binds reporting requirements to computed facts before answer generation.
 
 ## 当前版本
 
@@ -27,7 +29,7 @@ EduTA turns school-digitization questions into typed analytical tasks, executes 
 
 ## 工作流程
 
-问题与上下文 → 结构化任务草稿 → 对照目录与原问题绑定对象、年度、指标和筛选 → 注册执行计划 → 只读 SQL 和确定性计算 → 工具事实、回答与图表。
+问题与上下文 → 带类型任务草稿 → 按四层指标目录和原问题校正对象、年度、指标及筛选 → 判断能否作答 → 注册算子执行只读查询和确定性计算 → 逐项绑定写作要求与计算事实 → 回答、数据卡片、表格与图表。
 
 模型不直接生成任意 SQL 执行。目录或执行能力外的请求按情况说明无数据或澄清；正文生成与可选核验是执行后的独立环节。
 
@@ -114,7 +116,7 @@ python -X utf8 scripts/smoke_synthetic.py
 
 ## 论文与评测材料
 
-论文：*EduTA: Controlled LLM question answering over hierarchical school assessment data with typed tasks and registered tools*（投稿中）。
+论文在 100 道留出题上按完整页面评审。第 1 轮 EduTA 答对 86 题，Direct-SQL 答对 52 题，MAC-SQL 答对 42 题。使用相同算子和图表组件的自由工具调用对照三轮答对 83–87 题，与 EduTA 的准确率差异未达到显著。三轮间状态发生变化的题数分别为 EduTA 2 题、自由工具调用对照 22 题。
 
 `evaluation/` 收录论文实验的公开材料：
 

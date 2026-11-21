@@ -1,6 +1,6 @@
 # EduTA 论文评测材料 / Evaluation materials
 
-本目录收录论文 *EduTA: Controlled LLM question answering over hierarchical school assessment data with typed tasks and registered tools* 的公开实验材料。学校评估原始数据库、由其计算的参考值、系统回答原文和运行日志属于保密数据，不在此发布：可以逐题核对各系统的判定，但不能在原数据上重跑。
+本目录收录论文 *EduTA: A typed-task LLM framework beyond text-to-SQL for adaptive analysis of school and regional educational digitization levels* 的公开实验材料。学校评估原始数据库、由其计算的参考值、系统回答原文和运行日志属于保密数据，不在此发布：可以逐题核对各系统的判定，但不能在原数据上重跑。
 
 This directory holds the public materials of the paper. The school assessment records, the reference values computed from them, the answer texts and the run logs are confidential and not included.
 
@@ -22,7 +22,7 @@ This directory holds the public materials of the paper. The school assessment re
 
 ## 系统名与代码配置
 
-EduTA = G1（程序校正开启）；No-correction = G1（程序校正关闭）；Rule-based = G0；Tool-calling / Tool-calling+chart / Direct-SQL / MAC-SQL 为对照基线。Tool-calling+chart 的三轮是独立运行，不是 Tool-calling 的重复。所有模型调用为 DeepSeek-V4.1-Flash（官方 API，别名 `deepseek-flash`）。
+EduTA = G1（程序校正开启）；No-correction = G1（程序校正关闭）；Rule-based = G0；Tool-calling / Tool-calling+chart / Direct-SQL / MAC-SQL 为对照基线。论文中的自由工具调用对照对应这里的 Tool-calling 系列。带图版本 Tool-calling+chart 共独立运行三轮，使用与 EduTA 相同的注册算子与图表组件。所有模型调用为 DeepSeek-V4.1-Flash（官方 API，别名 `deepseek-flash`）。
 
 ## 判定口径
 
